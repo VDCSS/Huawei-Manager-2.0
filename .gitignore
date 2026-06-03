@@ -1,0 +1,13 @@
+.env
+secrets.yaml
+__pycache__/
+*.pyc
+.pytest_cache/
+sessions/
+archive/
+*.swp
+*.swo
+*.swn
+*.log
+*.jsonl
+.gitignore
