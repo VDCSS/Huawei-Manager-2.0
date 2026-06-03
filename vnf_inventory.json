@@ -1,0 +1,18 @@
+{
+  "vnfs": [
+    {
+      "id": "vnf-001-roteador-gredes",
+      "name": "Roteador Gredes",
+      "host": "10.100.74.254",
+      "port": 2222,
+      "type": "ROUTER",
+      "status": "unknown",
+      "version": "",
+      "location": "",
+      "username": "",
+      "password": "",
+      "ssh_key": "",
+      "extra": {}
+    }
+  ]
+}

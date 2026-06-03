@@ -1,3 +1,16 @@
+Metadata-Version: 2.4
+Name: huawei-manager
+Version: 1.0.4
+Summary: Huawei SSH/CLI Manager via Netmiko + SDN + VNFs
+License: Proprietary
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: netmiko>=4.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: cryptography>=42.0.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: pyyaml>=6.0
+
 # HUAWEI MANAGER — Netmiko/CLI + SDN + VNF
 
 > Interface gráfica corporativa para administração de equipamentos Huawei via **Netmiko (SSH/CLI)**, com suporte a **multi-VNF**, **topologia SDN**, **catálogo de serviços** e **modo lab** sem necessidade de iMaster NCE.

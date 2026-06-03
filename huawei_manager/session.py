@@ -1,0 +1,303 @@
+from __future__ import annotations
+
+import logging
+import os
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from netmiko import ConnectHandler
+from netmiko.base_connection import BaseConnection as NetmikoConnection
+
+from huawei_manager.audit_log import AuditLogger
+from huawei_manager.utils import clean_output, sanitize_command
+from huawei_manager.vault import SecretsBackend
+
+log = logging.getLogger("huawei.session")
+
+
+class NetmikoSession:
+    """
+    Sessao SSH via Netmiko (transporte principal).
+
+    Seguranca:
+      - Credenciais via SecretsBackend (nunca hardcoded)
+      - hostkey_verify configuravel (true em producao)
+      - Auditoria de cada operacao via AuditLogger
+      - Suporte a reconexao com host/porta de VNF alternativo
+      - Session log gravado em sessions/
+    """
+
+    def __init__(
+        self,
+        backend: SecretsBackend,
+        audit_logger: AuditLogger,
+        override_host: Optional[str] = None,
+        override_port: Optional[int] = None,
+        override_username: Optional[str] = None,
+        override_password: Optional[str] = None,
+        override_ssh_key: Optional[str] = None,
+    ) -> None:
+        self._backend = backend
+        self._audit   = audit_logger
+        self._conn: Optional[NetmikoConnection] = None
+        self._lock = threading.Lock()
+        self.override_host = override_host
+        self.override_port = override_port
+        self.override_username = override_username
+        self.override_password = override_password
+        self.override_ssh_key = override_ssh_key
+
+    # ── credenciais dinamicas ─────────────────────────────────────────
+    @property
+    def _host(self) -> str:
+        return self.override_host or self._backend.get("ROUTER_HOST")
+
+    @property
+    def _port(self) -> int:
+        return self.override_port or int(self._backend.get("ROUTER_PORT", "2222"))
+
+    @property
+    def _user(self) -> str:
+        if self.override_username:
+            return self.override_username
+        return self._backend.get("ROUTER_USERNAME")
+
+    @property
+    def _pass(self) -> str:
+        if self.override_password:
+            return self.override_password
+        return self._backend.get("ROUTER_PASSWORD")
+
+    @property
+    def _ssh_key(self) -> Optional[str]:
+        if self.override_ssh_key:
+            p = Path(os.path.expanduser(self.override_ssh_key)).resolve()
+            return str(p) if p.is_file() else None
+        key_str = self._backend.get("ROUTER_SSH_KEY", "").strip()
+        if not key_str:
+            return None
+        p = Path(os.path.expanduser(key_str)).resolve()
+        return str(p) if p.is_file() else None
+
+    @property
+    def _hk_verify(self) -> bool:
+        return self._backend.get("ROUTER_HOSTKEY_VERIFY", "true").lower() == "true"
+
+    @property
+    def _session_id(self) -> Optional[str]:
+        return f"{self._host}:{self._port}" if self._conn else None
+
+    # ── validacao pre-conexao ─────────────────────────────────────────
+    def _validate_credentials(self) -> None:
+        missing = []
+        if not self._host:
+            missing.append("ROUTER_HOST")
+        if not self._user:
+            missing.append("ROUTER_USERNAME")
+        pw = self._pass
+        key = self._ssh_key
+        if not pw and not key:
+            missing.append("ROUTER_PASSWORD ou ROUTER_SSH_KEY")
+        if missing:
+            raise ValueError(
+                "Credenciais incompletas — verifique secrets backend: "
+                + ", ".join(missing)
+            )
+
+    # ── conexao ──────────────────────────────────────────────────────
+    def connect(self) -> None:
+        self._validate_credentials()
+
+        kwargs = dict(
+            device_type="huawei_vrp",
+            host=self._host,
+            port=self._port,
+            username=self._user,
+            password=self._pass,
+            timeout=30,
+            ssh_strict=self._hk_verify,
+        )
+
+        key = self._ssh_key
+        if key:
+            kwargs["use_keys"] = True
+            kwargs["ssh_private_key_file"] = key
+            log.info("Auth com chave SSH: %s", key)
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sess_dir = Path("sessions")
+        sess_dir.mkdir(exist_ok=True)
+        sess_log = sess_dir / f"{self._host}_{self._port}_{ts}.log"
+        kwargs["session_log"] = str(sess_log)
+        log.info("Session log: %s", sess_log)
+
+        with self._audit.timed("connect", user=self._user, host=self._host) as ctx:
+            self._conn = ConnectHandler(**kwargs)
+            ctx.set_status("ok")
+
+        log.info("Sessao SSH aberta via Netmiko — %s:%d", self._host, self._port)
+        self._audit.log_operation(
+            "connect", user=self._user, host=self._host,
+            status="ok", session_id=self._session_id,
+        )
+
+    def disconnect(self) -> None:
+        if self._conn:
+            try:
+                self._conn.disconnect()
+            except Exception:
+                pass
+            self._conn = None
+            log.info("Sessao SSH encerrada")
+
+    @property
+    def is_connected(self) -> bool:
+        return self._conn is not None and self._conn.is_alive()
+
+    # ── executa comando CLI ──────────────────────────────────────────
+    def _cmd(self, command: str) -> str:
+        if not self._conn:
+            return "Sem conexao"
+        try:
+            out = self._conn.send_command(command, read_timeout=120)
+            return clean_output(out)
+        except Exception as e:
+            log.error("Comando falhou: %s — %s", command, e)
+            return f"ERRO: {e}"
+
+    def run_cli_timing(self, cmd: str) -> str:
+        if not self._conn:
+            return "Sem conexao"
+        sanitized = sanitize_command(cmd)
+        with self._lock:
+            with self._audit.timed(
+                "cli-timing", user=self._user, host=self._host,
+                session_id=self._session_id, cmd=sanitized,
+            ) as ctx:
+                try:
+                    out = self._conn.send_command_timing(cmd, read_timeout=120)
+                    ctx.set_status("ok")
+                    return clean_output(out)
+                except Exception as e:
+                    ctx.set_status("error")
+                    log.error("CLI timing falhou: %s — %s", cmd, e)
+                    return f"ERRO: {e}"
+
+    # ── mapeia filtro (key) para comando CLI ──────────────────────────
+    @staticmethod
+    def _resolve_filter(filter_xml: Optional[str]) -> Optional[str]:
+        if filter_xml is None:
+            return None
+        f = filter_xml.lower()
+        if "full_config" in f or "current-configuration" in f:
+            return "display current-configuration"
+        if "interface" in f and "counter" not in f:
+            return "display interface"
+        if "interface" in f and "counter" in f:
+            return "display counters interface"
+        if "routing" in f or "route" in f or "network-instance" in f:
+            return "display ip routing-table"
+        if "bgp" in f or "huawei_bgp" in f:
+            return "display bgp peer"
+        if "ospf" in f:
+            return "display ospf peer"
+        if "vrf" in f or "vpn-instance" in f:
+            return "display ip vpn-instance"
+        if "lldp" in f:
+            return "display lldp neighbor brief"
+        if "qos" in f:
+            return "display qos policy"
+        if "system" in f or "cpu" in f or "mem" in f:
+            return "display cpu-usage"
+        if "arp" in f:
+            return "display arp"
+        if "mpls" in f:
+            return "display mpls ldp peer"
+        if "platform" in f or "component" in f or "version" in f:
+            return "display version"
+        return None
+
+    # ── get config via CLI ────────────────────────────────────────────
+    def get_config(
+        self,
+        filter_xml: Optional[str] = None,
+        source: str = "running",
+    ) -> str:
+        cmd = self._resolve_filter(filter_xml) or "display current-configuration"
+        with self._lock:
+            with self._audit.timed(
+                "get-config", user=self._user, host=self._host,
+                datastore=source, session_id=self._session_id,
+            ) as ctx:
+                try:
+                    result = self._cmd(cmd)
+                    ctx.set_status("ok")
+                    return result
+                except Exception as e:
+                    ctx.set_status("error")
+                    return f"ERRO: {e}"
+
+    # ── get estado operacional via CLI ────────────────────────────────
+    def get(self, filter_xml: Optional[str] = None) -> str:
+        cmd = self._resolve_filter(filter_xml) or "display ip routing-table"
+        with self._lock:
+            with self._audit.timed(
+                "get", user=self._user, host=self._host,
+                session_id=self._session_id,
+            ) as ctx:
+                try:
+                    result = self._cmd(cmd)
+                    ctx.set_status("ok")
+                    return result
+                except Exception as e:
+                    ctx.set_status("error")
+                    return f"ERRO: {e}"
+
+    # ── edit config via CLI ───────────────────────────────────────────
+    def edit_config(
+        self,
+        config: str,
+        target: str = "running",
+    ) -> tuple[bool, str]:
+        with self._lock:
+            with self._audit.timed(
+                "edit-config", user=self._user, host=self._host,
+                datastore=target, session_id=self._session_id,
+            ) as ctx:
+                try:
+                    lines = [l.strip() for l in config.splitlines() if l.strip()]
+                    output = self._conn.send_config_set(lines, read_timeout=120)
+                    self._conn.save_config()
+                    ctx.set_status("ok")
+                    return True, f"OK Configuracao aplicada\n{output}"
+                except Exception as e:
+                    ctx.set_status("error")
+                    log.error("edit-config falhou: %s", e)
+                    return False, f"ERRO: {e}"
+
+    # ── schemas (nao aplicavel via CLI) ───────────────────────────────
+    def get_schemas(self) -> str:
+        return "Schemas nao disponiveis via Netmiko/CLI."
+
+    # ── capabilities ─────────────────────────────────────────────────
+    def get_capabilities(self) -> str:
+        return self._cmd("display version")
+
+    # ── comando CLI livre ─────────────────────────────────────────────
+    def run_cli_rpc(self, cmd: str) -> str:
+        sanitized = sanitize_command(cmd)
+        with self._lock:
+            with self._audit.timed(
+                "cli-rpc", user=self._user, host=self._host,
+                session_id=self._session_id, cmd=sanitized,
+            ) as ctx:
+                try:
+                    result = self._cmd(cmd)
+                    ctx.set_status("ok")
+                    return result
+                except Exception as e:
+                    ctx.set_status("error")
+                    log.error("CLI falhou: %s", e)
+                    return f"ERRO: {e}"
