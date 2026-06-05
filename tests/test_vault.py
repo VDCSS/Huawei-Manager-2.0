@@ -38,14 +38,13 @@ class TestEnvBackend(unittest.TestCase):
         self.assertEqual(backend.get("TEST_PUT_KEY"), "put_value")
         if hasattr(backend, "_env_path") and backend._env_path.exists():
             lines = backend._env_path.read_text().splitlines()
-            has_line = any("TEST_PUT_KEY=" in l for l in lines)
+            has_line = any("TEST_PUT_KEY=" in line for line in lines)
             self.assertTrue(has_line)
 
 
 class TestSopsBackend(unittest.TestCase):
 
     def test_init_no_secret_file(self):
-        import tempfile, os
         orig = Path("secrets.enc.yaml")
         if not orig.exists():
             self.skipTest("secrets.enc.yaml not present")

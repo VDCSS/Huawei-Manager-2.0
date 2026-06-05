@@ -3,9 +3,8 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from netmiko import ConnectHandler
 from netmiko.base_connection import BaseConnection as NetmikoConnection
@@ -33,15 +32,15 @@ class NetmikoSession:
         self,
         backend: SecretsBackend,
         audit_logger: AuditLogger,
-        override_host: Optional[str] = None,
-        override_port: Optional[int] = None,
-        override_username: Optional[str] = None,
-        override_password: Optional[str] = None,
-        override_ssh_key: Optional[str] = None,
+        override_host: str | None = None,
+        override_port: int | None = None,
+        override_username: str | None = None,
+        override_password: str | None = None,
+        override_ssh_key: str | None = None,
     ) -> None:
         self._backend = backend
         self._audit   = audit_logger
-        self._conn: Optional[NetmikoConnection] = None
+        self._conn: NetmikoConnection | None = None
         self._lock = threading.Lock()
         self.override_host = override_host
         self.override_port = override_port
@@ -71,7 +70,7 @@ class NetmikoSession:
         return self._backend.get("ROUTER_PASSWORD")
 
     @property
-    def _ssh_key(self) -> Optional[str]:
+    def _ssh_key(self) -> str | None:
         if self.override_ssh_key:
             p = Path(os.path.expanduser(self.override_ssh_key)).resolve()
             return str(p) if p.is_file() else None
@@ -86,7 +85,7 @@ class NetmikoSession:
         return self._backend.get("ROUTER_HOSTKEY_VERIFY", "true").lower() == "true"
 
     @property
-    def _session_id(self) -> Optional[str]:
+    def _session_id(self) -> str | None:
         return f"{self._host}:{self._port}" if self._conn else None
 
     # ── validacao pre-conexao ─────────────────────────────────────────
@@ -162,7 +161,7 @@ class NetmikoSession:
             return "Sem conexao"
         try:
             out = self._conn.send_command(command, read_timeout=120)
-            return clean_output(out)
+            return clean_output(str(out))
         except Exception as e:
             log.error("Comando falhou: %s — %s", command, e)
             return f"ERRO: {e}"
@@ -179,7 +178,7 @@ class NetmikoSession:
                 try:
                     out = self._conn.send_command_timing(cmd, read_timeout=120)
                     ctx.set_status("ok")
-                    return clean_output(out)
+                    return clean_output(str(out))
                 except Exception as e:
                     ctx.set_status("error")
                     log.error("CLI timing falhou: %s — %s", cmd, e)
@@ -187,7 +186,7 @@ class NetmikoSession:
 
     # ── mapeia filtro (key) para comando CLI ──────────────────────────
     @staticmethod
-    def _resolve_filter(filter_xml: Optional[str]) -> Optional[str]:
+    def _resolve_filter(filter_xml: str | None) -> str | None:
         if filter_xml is None:
             return None
         f = filter_xml.lower()
@@ -222,7 +221,7 @@ class NetmikoSession:
     # ── get config via CLI ────────────────────────────────────────────
     def get_config(
         self,
-        filter_xml: Optional[str] = None,
+        filter_xml: str | None = None,
         source: str = "running",
     ) -> str:
         cmd = self._resolve_filter(filter_xml) or "display current-configuration"
@@ -240,7 +239,7 @@ class NetmikoSession:
                     return f"ERRO: {e}"
 
     # ── get estado operacional via CLI ────────────────────────────────
-    def get(self, filter_xml: Optional[str] = None) -> str:
+    def get(self, filter_xml: str | None = None) -> str:
         cmd = self._resolve_filter(filter_xml) or "display ip routing-table"
         with self._lock:
             with self._audit.timed(
@@ -261,13 +260,15 @@ class NetmikoSession:
         config: str,
         target: str = "running",
     ) -> tuple[bool, str]:
+        if not self._conn:
+            return False, "Sem conexao"
         with self._lock:
             with self._audit.timed(
                 "edit-config", user=self._user, host=self._host,
                 datastore=target, session_id=self._session_id,
             ) as ctx:
                 try:
-                    lines = [l.strip() for l in config.splitlines() if l.strip()]
+                    lines = [line.strip() for line in config.splitlines() if line.strip()]
                     output = self._conn.send_config_set(lines, read_timeout=120)
                     self._conn.save_config()
                     ctx.set_status("ok")

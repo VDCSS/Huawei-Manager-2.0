@@ -19,9 +19,8 @@ import json
 import logging
 import os
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger("huawei.vault")
 
@@ -34,7 +33,10 @@ def _generate_ed25519() -> tuple[str, str]:
     try:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         from cryptography.hazmat.primitives.serialization import (
-            Encoding, NoEncryption, PrivateFormat, PublicFormat,
+            Encoding,
+            NoEncryption,
+            PrivateFormat,
+            PublicFormat,
         )
         key = Ed25519PrivateKey.generate()
         priv = key.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()).decode()
@@ -61,14 +63,14 @@ class SecretsBackend:
         return "base"
 
     @property
-    def last_rotation(self) -> Optional[str]:
+    def last_rotation(self) -> str | None:
         """ISO timestamp da última rotação de chave SSH, ou None."""
         if _TS_FILE.exists():
             return _TS_FILE.read_text().strip()
         return None
 
     def _record_rotation(self) -> None:
-        _TS_FILE.write_text(datetime.now(timezone.utc).isoformat())
+        _TS_FILE.write_text(datetime.now(UTC).isoformat())
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -121,7 +123,7 @@ class VaultBackend(SecretsBackend):
 
     def __init__(self) -> None:
         try:
-            import hvac  # noqa: F401
+            import hvac  # noqa: F401 # pyright: ignore[reportMissingModuleSource]
         except ImportError:
             raise RuntimeError("hvac não instalado: pip install hvac")
 
@@ -165,7 +167,7 @@ class AWSBackend(SecretsBackend):
 
     def __init__(self) -> None:
         try:
-            import boto3  # noqa: F401
+            import boto3  # noqa: F401 # pyright: ignore[reportMissingImports]
             self._boto3 = boto3
         except ImportError:
             raise RuntimeError("boto3 não instalado: pip install boto3")
@@ -333,7 +335,7 @@ def rotate_ssh_key(
             f"  Deploy no router: {'✔' if deployed else '✘'}\n"
             f"  Backend vault   : {backend.backend_name}\n"
             f"{push_msg}\n"
-            f"  Timestamp       : {datetime.now(timezone.utc).isoformat()}"
+            f"  Timestamp       : {datetime.now(UTC).isoformat()}"
         )
 
     except Exception as exc:

@@ -24,14 +24,23 @@ O VNF selecionado no canvas é usado como alvo para conexão SSH via Netmiko.
 from __future__ import annotations
 
 import json
-import tkinter as tk
 import logging
-import math
 import random
 import time
+import tkinter as tk
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+
+from huawei_manager.constants import (
+    FONT_BODY,
+    FONT_H1,
+    FONT_LARGE,
+    FONT_LARGE_B,
+    FONT_MEDIUM,
+    FONT_MEDIUM_B,
+    FONT_XSMALL,
+)
 
 log = logging.getLogger("huawei.topology")
 
@@ -63,7 +72,7 @@ class VNF:
         return f"{self.host}:{self.port}"
 
     @classmethod
-    def from_dict(cls, d: dict) -> "VNF":
+    def from_dict(cls, d: dict) -> VNF:
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -264,9 +273,9 @@ class ToolTip:
     def __init__(self, canvas, theme: dict) -> None:
         self._canvas = canvas
         self._theme  = theme
-        self._win: Optional[tk.Toplevel] = None
-        self._label: Optional[tk.Label]  = None
-        self._after_id: Optional[str]    = None
+        self._win: tk.Toplevel | None = None
+        self._label: tk.Label | None  = None
+        self._after_id: str | None    = None
 
     def show(self, vnf: VNF, x: int, y: int, admin: bool = False) -> None:
         self.hide()
@@ -299,7 +308,7 @@ class ToolTip:
         inner.pack(padx=1, pady=1)
         for line in lines:
             tk.Label(inner, text=line, bg=self._theme["BG_INPUT"],
-                     fg=self._theme["FG_MAIN"], font=("Consolas", 9),
+                     fg=self._theme["FG_MAIN"], font=FONT_BODY,
                      anchor="w", justify="left").pack(fill="x", padx=8, pady=1)
 
     def hide(self) -> None:
@@ -317,22 +326,22 @@ class TopologyCanvas:
     Suporta tooltip com infos filtradas por admin e menu de contexto.
     """
 
-    NODE_W, NODE_H = 100, 40
+    NODE_W, NODE_H = 180, 70
 
     def __init__(
         self,
         parent,
         theme: dict,
-        on_select: Optional[Callable[[VNF], None]] = None,
-        on_edit:   Optional[Callable[[VNF], None]] = None,
-        on_delete: Optional[Callable[[VNF], None]] = None,
+        on_select: Callable[[VNF], None] | None = None,
+        on_edit:   Callable[[VNF], None] | None = None,
+        on_delete: Callable[[VNF], None] | None = None,
     ) -> None:
         self._theme    = theme
         self._on_select = on_select
-        self._on_edit   = on_edit
-        self._on_delete = on_delete
+        self._edit_cb:   Callable[[VNF], None] | None = on_edit
+        self._delete_cb: Callable[[VNF], None] | None = on_delete
         self._vnfs: list[VNF]     = []
-        self._selected: Optional[VNF] = None
+        self._selected: VNF | None = None
         self._positions: dict[str, tuple[float, float]] = {}
         self._admin: bool = False
         self._tooltip = ToolTip(parent, theme)
@@ -369,7 +378,7 @@ class TopologyCanvas:
         self._vnfs = vnfs
         self._draw()
 
-    def get_selected(self) -> Optional[VNF]:
+    def get_selected(self) -> VNF | None:
         return self._selected
 
     def deselect(self) -> None:
@@ -377,117 +386,146 @@ class TopologyCanvas:
         self._draw()
 
     def _color_for(self, vnf: VNF) -> str:
-        return self._type_colors.get(vnf.type, self._type_colors.get("unknown"))
+        return self._type_colors.get(vnf.type, self._type_colors.get("unknown") or "")
 
     def _layout(self) -> dict[str, tuple[float, float]]:
         positions: dict[str, tuple[float, float]] = {}
-        n  = len(self._vnfs)
+        n = len(self._vnfs)
         if n == 0:
             return positions
-        w  = self._canvas.winfo_width()  or 800
-        h  = self._canvas.winfo_height() or 400
-        cx, cy = w / 2, h / 2
-        r  = min(cx, cy) * 0.68
+
+        w = self._canvas.winfo_width() or 800
+
+        cols = 4
+        pad_x, pad_y = 24, 24
+        grid_w = cols * self.NODE_W + (cols - 1) * pad_x
+        start_x = (w - grid_w) / 2 + self.NODE_W / 2
+        start_y = 100
+
         for i, vnf in enumerate(self._vnfs):
-            angle = (2 * math.pi * i / n) - math.pi / 2
-            positions[vnf.id] = (cx + r * math.cos(angle),
-                                  cy + r * math.sin(angle))
+            col = i % cols
+            row = i // cols
+            x = start_x + col * (self.NODE_W + pad_x)
+            y = start_y + row * (self.NODE_H + pad_y)
+            positions[vnf.id] = (x, y)
+
         return positions
 
-    def _draw(self) -> None:
+    def _draw_empty_state(self) -> None:
         c = self._canvas
-        c.delete("all")
+        w = c.winfo_width() or 800
+        h = c.winfo_height() or 400
+        c.create_text(w // 2, h // 2,
+                      text="Nenhum dispositivo cadastrado.\n"
+                           "Clique em 'Cadastrar Dispositivo' para adicionar.",
+                      fill=self._theme["FG_DIM"], font=FONT_LARGE,
+                      justify="center")
+
+    def _draw_sdn_bar(self) -> None:
+        c = self._canvas
         t = self._theme
+        cw = c.winfo_width() or 800
+
+        bar_w = max(cw - 40, 200)
+        bar_h = 40
+        bar_x = (cw - bar_w) / 2
+        bar_y = 16
+
+        c.create_rectangle(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h,
+                           fill=t["BG_INPUT"], outline=t["NEON_PURP"], width=2)
+        c.create_text(bar_x + 20, bar_y + bar_h // 2,
+                      text="⬡", fill=t["NEON_PURP"],
+                      font=FONT_H1, anchor="w")
+        c.create_text(bar_x + 44, bar_y + bar_h // 2,
+                      text="SDN CONTROLLER", fill=t["NEON_PURP"],
+                      font=FONT_LARGE_B, anchor="w")
+        c.create_text(bar_x + bar_w - 20, bar_y + bar_h // 2,
+                      text=f"{len(self._vnfs)} dispositivo(s) gerenciado(s)",
+                      fill=t["FG_DIM"], font=FONT_BODY, anchor="e")
+
+    def _draw_vnf_node(self, vnf: VNF, x: float, y: float) -> None:
+        c = self._canvas
+        t = self._theme
+        nw, nh = self.NODE_W, self.NODE_H
+        is_selected = self._selected and self._selected.id == vnf.id
+
+        type_color = self._color_for(vnf)
+        status_color = {
+            "online":  type_color,
+            "offline": "#ff4d4d",
+            "unknown": t["NEON_AMBER"],
+        }.get(vnf.status, t["NEON_AMBER"])
+
+        border_w = 2
+        fill_col = t["BG_CARD"]
+
+        if is_selected:
+            c.create_rectangle(
+                x - nw // 2 - 6, y - nh // 2 - 6,
+                x + nw // 2 + 6, y + nh // 2 + 6,
+                fill="", outline=status_color, width=1, dash=(3, 3),
+                tags=("node", vnf.id),
+            )
+            fill_col = t["BG_INPUT"]
+            border_w = 3
+
+        rect = c.create_rectangle(
+            x - nw // 2, y - nh // 2,
+            x + nw // 2, y + nh // 2,
+            fill=fill_col, outline=status_color, width=border_w,
+            tags=("node", vnf.id),
+        )
+
+        c.create_oval(x - nw // 2 + 4, y - nh // 2 + 4,
+                      x - nw // 2 + 14, y - nh // 2 + 14,
+                      fill=status_color, outline="", tags=("node", vnf.id))
+
+        c.create_text(
+            x, y - 18, text=vnf.label(),
+            fill=status_color, font=FONT_MEDIUM_B, anchor="center",
+            tags=("node", vnf.id),
+        )
+
+        c.create_text(
+            x, y + 2, text=vnf.address(),
+            fill=t["FG_DIM"], font=FONT_BODY, anchor="center",
+            tags=("node", vnf.id),
+        )
+
+        type_label = vnf.type.replace("-", "\n")
+        c.create_text(
+            x + nw // 2 - 8, y + nh // 2 - 8,
+            text=type_label, fill=type_color,
+            font=FONT_XSMALL, anchor="se",
+            tags=("node", vnf.id),
+        )
+
+        for item in (rect,):
+            c.tag_bind(item, "<Button-1>",
+                       lambda e, v=vnf: self._on_click(v))
+            c.tag_bind(item, "<Enter>",
+                       lambda e, v=vnf, it=rect, col=status_color:
+                           self._on_enter(e, v, it, col))
+            c.tag_bind(item, "<Leave>",
+                       lambda e, it=rect, fil=fill_col:
+                           self._on_leave(e, it, fil))
+            c.tag_bind(item, "<Button-3>",
+                       lambda e, v=vnf: self._on_context_menu(e, v))
+
+    def _draw(self) -> None:
+        self._canvas.delete("all")
 
         if not self._vnfs:
-            w = c.winfo_width()  or 800
-            h = c.winfo_height() or 400
-            c.create_text(w // 2, h // 2,
-                          text="Nenhum dispositivo cadastrado.\nClique em 'Cadastrar Dispositivo' para adicionar.",
-                          fill=t["FG_DIM"], font=("Consolas", 11),
-                          justify="center")
+            self._draw_empty_state()
             return
 
         self._positions = self._layout()
-        nw, nh = self.NODE_W, self.NODE_H
 
-        cx = (c.winfo_width() or 800) / 2
-        cy = (c.winfo_height() or 400) / 2
+        self._draw_sdn_bar()
 
         for vnf in self._vnfs:
             x, y = self._positions[vnf.id]
-            c.create_line(cx, cy, x, y,
-                          fill=t["BORDER_NRM"], width=1, dash=(4, 4))
-
-        c.create_oval(cx - 16, cy - 16, cx + 16, cy + 16,
-                      fill=t["BG_CARD"], outline=t["NEON_PURP"], width=2)
-        c.create_text(cx, cy, text="SDN", fill=t["NEON_PURP"],
-                      font=("Consolas", 8, "bold"))
-
-        for vnf in self._vnfs:
-            x, y = self._positions[vnf.id]
-            is_selected = self._selected and self._selected.id == vnf.id
-
-            type_color = self._color_for(vnf)
-            status_color = {
-                "online":  type_color,
-                "offline": "#ff4d4d",
-                "unknown": t["NEON_AMBER"],
-            }.get(vnf.status, t["NEON_AMBER"])
-
-            border_w  = 2
-            fill_col  = t["BG_CARD"]
-
-            if is_selected:
-                c.create_rectangle(
-                    x - nw // 2 - 6, y - nh // 2 - 6,
-                    x + nw // 2 + 6, y + nh // 2 + 6,
-                    fill="", outline=status_color, width=1, dash=(3, 3),
-                    tags=("node", vnf.id),
-                )
-                fill_col = t["BG_INPUT"]
-                border_w = 3
-
-            rect = c.create_rectangle(
-                x - nw // 2, y - nh // 2,
-                x + nw // 2, y + nh // 2,
-                fill=fill_col, outline=status_color, width=border_w,
-                tags=("node", vnf.id),
-            )
-            c.create_text(
-                x, y - 8, text=vnf.label(),
-                fill=status_color, font=("Consolas", 8, "bold"),
-                tags=("node", vnf.id),
-            )
-            c.create_text(
-                x, y + 6, text=vnf.address(),
-                fill=t["FG_DIM"], font=("Consolas", 7),
-                tags=("node", vnf.id),
-            )
-
-            type_label = vnf.type.replace("-", "\n")
-            c.create_text(
-                x + nw // 2 - 14, y + nh // 2 - 4,
-                text=type_label, fill=type_color,
-                font=("Consolas", 6),
-                tags=("node", vnf.id),
-            )
-
-            c.create_oval(x - nw // 2, y - nh // 2,
-                          x - nw // 2 + 10, y - nh // 2 + 10,
-                          fill=status_color, outline="", tags=("node", vnf.id))
-
-            for item in (rect,):
-                c.tag_bind(item, "<Button-1>",
-                           lambda e, v=vnf: self._on_click(v))
-                c.tag_bind(item, "<Enter>",
-                           lambda e, v=vnf, it=rect, col=status_color:
-                               self._on_enter(e, v, it, col))
-                c.tag_bind(item, "<Leave>",
-                           lambda e, it=rect, fil=fill_col:
-                               self._on_leave(e, it, fil))
-                c.tag_bind(item, "<Button-3>",
-                           lambda e, v=vnf: self._on_context_menu(e, v))
+            self._draw_vnf_node(vnf, x, y)
 
         if self._tooltip:
             self._tooltip.hide()
@@ -512,7 +550,7 @@ class TopologyCanvas:
 
     def _on_context_menu(self, event, vnf: VNF) -> None:
         menu = tk.Menu(self._canvas, tearoff=0, bg=self._theme["BG_INPUT"],
-                       fg=self._theme["FG_MAIN"], font=("Consolas", 10),
+                       fg=self._theme["FG_MAIN"], font=FONT_MEDIUM,
                        activebackground=self._theme["NEON_PURP"],
                        activeforeground=self._theme["BG_BASE"])
         menu.add_command(label="✏️  Editar Dispositivo",
@@ -522,11 +560,11 @@ class TopologyCanvas:
         menu.post(event.x_root, event.y_root)
 
     def _on_edit(self, vnf: VNF) -> None:
-        if self._on_edit:
-            self._on_edit(vnf)
+        if self._edit_cb:
+            self._edit_cb(vnf)
 
     def _on_delete(self, vnf: VNF) -> None:
-        if self._on_delete:
-            self._on_delete(vnf)
+        if self._delete_cb:
+            self._delete_cb(vnf)
 
 

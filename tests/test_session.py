@@ -3,13 +3,13 @@ from __future__ import annotations
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import PropertyMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from huawei_manager.audit_log import AuditLogger
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import EnvBackend
-from huawei_manager.audit_log import AuditLogger
 
 
 class TestNetmikoSession(unittest.TestCase):

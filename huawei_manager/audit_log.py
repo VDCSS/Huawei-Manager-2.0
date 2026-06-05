@@ -30,11 +30,12 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any
 
 AUDIT_FILE = "huawei_audit_structured.jsonl"
 _lock = threading.Lock()
@@ -50,10 +51,10 @@ class AuditEntry:
     op:          str
     user:        str
     host:        str
-    datastore:   Optional[str]
+    datastore:   str | None
     status:      str
     duration_ms: float
-    session_id:  Optional[str]
+    session_id:  str | None
     extra:       dict[str, Any] = field(default_factory=dict)
 
 
@@ -63,10 +64,10 @@ class AuditEntry:
 class _TimedCtx:
     """Contexto usado pelo AuditLogger.timed(). Mede duração e captura status."""
 
-    def __init__(self, logger: "AuditLogger", op: str,
+    def __init__(self, logger: AuditLogger, op: str,
                  user: str, host: str,
-                 datastore: Optional[str],
-                 session_id: Optional[str],
+                 datastore: str | None,
+                 session_id: str | None,
                  extra: dict) -> None:
         self._logger     = logger
         self._op         = op
@@ -87,7 +88,7 @@ class _TimedCtx:
     def _finish(self) -> None:
         ms = (time.monotonic() - self._t0) * 1000
         self._logger._write(AuditEntry(
-            timestamp   = datetime.now(timezone.utc).isoformat(),
+            timestamp   = datetime.now(UTC).isoformat(),
             op          = self._op,
             user        = self._user,
             host        = self._host,
@@ -121,15 +122,15 @@ class AuditLogger:
     # ── API direta ────────────────────────────────────────────────────
     def log_operation(
         self, op: str, user: str, host: str,
-        datastore: Optional[str] = None,
+        datastore: str | None = None,
         status: str = "ok",
         duration_ms: float = 0.0,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         **extra: Any,
     ) -> None:
         """Registra uma operação diretamente (sem medir tempo)."""
         self._write(AuditEntry(
-            timestamp   = datetime.now(timezone.utc).isoformat(),
+            timestamp   = datetime.now(UTC).isoformat(),
             op          = op,
             user        = user,
             host        = host,
@@ -144,8 +145,8 @@ class AuditLogger:
     @contextmanager
     def timed(
         self, op: str, user: str, host: str,
-        datastore: Optional[str] = None,
-        session_id: Optional[str] = None,
+        datastore: str | None = None,
+        session_id: str | None = None,
         **extra: Any,
     ) -> Generator[_TimedCtx, None, None]:
         """

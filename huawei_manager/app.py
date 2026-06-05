@@ -1,44 +1,70 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import datetime
 import io
 import logging
 import os
 import threading
-import datetime
-import textwrap
+import tkinter as tk
 from pathlib import Path
-from typing import Optional
-
-from dotenv import load_dotenv
-
-from huawei_manager.constants import (
-    BG_BASE, BG_CARD, BG_SIDEBAR, BG_INPUT, BORDER_NRM,
-    FG_MAIN, FG_DIM, FG_CODE,
-    NEON_CYAN, NEON_MAG, NEON_PURP, NEON_AMBER,
-    THEME, CLI_FILTERS, CMD_TEMPLATES,
-    VIEW_CATEGORIES, CONFIG_CATEGORIES,
-)
-from huawei_manager.widgets import (
-    neon_button, styled_text, neon_entry, action_button, status_badge,
-)
-from huawei_manager.session import NetmikoSession
-from huawei_manager.vault import get_backend, rotate_ssh_key, SecretsBackend
-from huawei_manager.audit_log import AuditLogger
-from huawei_manager.topology import (
-    NorthboundController, TopologyCanvas,
-    VNF, load_vnf_inventory, save_vnf_inventory,
-)
-from huawei_manager.services import (
-    ServiceDef, get_services_for, get_categories_for,
-    execute_service, VNF_TYPES, VNF_CATEGORIES,
-)
-from huawei_manager.utils import sanitize_command
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, filedialog
+from huawei_manager.audit_log import AuditLogger
+from huawei_manager.constants import (
+    BG_BASE,
+    BG_CARD,
+    BG_INPUT,
+    BG_SIDEBAR,
+    BORDER_NRM,
+    CLI_FILTERS,
+    CMD_TEMPLATES,
+    FG_DIM,
+    FG_MAIN,
+    FONT_BODY,
+    FONT_BODY_B,
+    FONT_H1,
+    FONT_H2_B,
+    FONT_HERO_B,
+    FONT_LARGE,
+    FONT_MEDIUM,
+    FONT_MEDIUM_B,
+    FONT_SMALL,
+    FONT_SMALL_B,
+    FONT_XLARGE,
+    FONT_XLARGE_B,
+    FONT_XSMALL,
+    NEON_AMBER,
+    NEON_CYAN,
+    NEON_MAG,
+    NEON_PURP,
+    THEME,
+    VIEW_CATEGORIES,
+)
+from huawei_manager.services import (
+    VNF_TYPES,
+    ServiceDef,
+    execute_service,
+    get_categories_for,
+    get_services_for,
+)
+from huawei_manager.session import NetmikoSession
+from huawei_manager.topology import (
+    VNF,
+    NorthboundController,
+    TopologyCanvas,
+    load_vnf_inventory,
+    save_vnf_inventory,
+)
+from huawei_manager.vault import SecretsBackend, get_backend, rotate_ssh_key
+from huawei_manager.widgets import (
+    action_button,
+    neon_button,
+    neon_entry,
+    styled_text,
+)
 
 # ─── LOG ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -93,17 +119,17 @@ class HuaweiRouterApp:
         self.root.resizable(True, True)
 
         self.session  = NetmikoSession(_secrets, audit)
-        self._active_btn: Optional[tk.Frame] = None
+        self._active_btn: tk.Frame | None = None
         self._admin_authenticated: bool = False
 
         # rate limit admin
         self._admin_attempts = 0
         self._admin_locked_until: float = 0
 
-        self._target_vnf: Optional[VNF] = None
-        self._nce_ctrl:   Optional[NorthboundController] = None
+        self._target_vnf: VNF | None = None
+        self._nce_ctrl:   NorthboundController | None = None
         self._vnfs:       list[VNF] = []
-        self._topo_canvas: Optional[TopologyCanvas] = None
+        self._topo_canvas: TopologyCanvas | None = None
 
         self._build_layout()
         self._show_page("config")
@@ -151,20 +177,20 @@ class HuaweiRouterApp:
         hdr.pack_propagate(False)
 
         tk.Label(hdr, text="HUAWEI",    bg=BG_BASE, fg=NEON_CYAN,
-                 font=("Consolas", 16, "bold")).pack(side="left")
+                 font=FONT_HERO_B).pack(side="left")
         tk.Label(hdr, text=" MANAGER",  bg=BG_BASE, fg=FG_MAIN,
-                 font=("Consolas", 16, "bold")).pack(side="left")
+                 font=FONT_HERO_B).pack(side="left")
         tk.Label(hdr, text="  SSH/CLI + SDN", bg=BG_BASE, fg=NEON_PURP,
-                 font=("Consolas", 11)).pack(side="left")
+                 font=FONT_LARGE).pack(side="left")
 
         badge = tk.Frame(hdr, bg=BG_BASE)
         badge.pack(side="right")
 
         self.status_dot = tk.Label(badge, text="\u25cf", bg=BG_BASE, fg=NEON_PURP,
-                                   font=("Consolas", 14))
+                                   font=FONT_H1)
         self.status_dot.pack(side="left", padx=(0, 4))
         self.status_lbl = tk.Label(badge, text="Desconectado", bg=BG_BASE, fg=FG_DIM,
-                                   font=("Consolas", 9))
+                                   font=FONT_BODY)
         self.status_lbl.pack(side="left", padx=(0, 12))
         self.conn_btn = action_button(badge, "  CONECTAR  ",
                                       self._toggle_connect, NEON_CYAN)
@@ -175,7 +201,7 @@ class HuaweiRouterApp:
         logo = tk.Frame(self.sidebar, bg=BG_SIDEBAR)
         logo.pack(fill="x", pady=(18, 8))
         tk.Label(logo, text="[ MODULOS ]", bg=BG_SIDEBAR,
-                 fg=FG_DIM, font=("Consolas", 8)).pack(padx=16, anchor="w")
+                 fg=FG_DIM, font=FONT_SMALL).pack(padx=16, anchor="w")
         tk.Frame(self.sidebar, bg=BORDER_NRM, height=1).pack(fill="x", padx=16, pady=6)
 
         self._nav_buttons: dict[str, tk.Frame] = {}
@@ -200,10 +226,10 @@ class HuaweiRouterApp:
         tk.Frame(self.sidebar, bg=BORDER_NRM, height=1).pack(
             fill="x", padx=16, pady=(16, 4))
         tk.Label(self.sidebar, text="ALVO VNF", bg=BG_SIDEBAR,
-                 fg=FG_DIM, font=("Consolas", 9)).pack(padx=16, anchor="w")
+                 fg=FG_DIM, font=FONT_BODY).pack(padx=16, anchor="w")
         self._vnf_target_lbl = tk.Label(
             self.sidebar, text="(roteador padrao)", bg=BG_SIDEBAR,
-            fg=NEON_AMBER, font=("Consolas", 10, "bold"), wraplength=180)
+            fg=NEON_AMBER, font=FONT_MEDIUM_B, wraplength=180)
         self._vnf_target_lbl.pack(padx=16, anchor="w")
 
     # ── Footer ───────────────────────────────────────────────────────
@@ -212,9 +238,9 @@ class HuaweiRouterApp:
         foot.pack(fill="x", side="bottom")
         tk.Label(foot,
                  text="Huawei Manager  \u2022  Netmiko  \u2022  SDN  \u2022  Multi-VNF",
-                 bg="#08081a", fg=FG_DIM, font=("Consolas", 7)).pack(side="left", padx=12)
+                 bg="#08081a", fg=FG_DIM, font=FONT_XSMALL).pack(side="left", padx=12)
         self.clock_lbl = tk.Label(foot, bg="#08081a", fg=NEON_PURP,
-                                  font=("Consolas", 7))
+                                  font=FONT_XSMALL)
         self.clock_lbl.pack(side="right", padx=12)
 
     # ── Helpers de pagina ─────────────────────────────────────────────
@@ -234,70 +260,66 @@ class HuaweiRouterApp:
         col = tk.Frame(row, bg=BG_CARD)
         col.pack(side="left")
         tk.Label(col, text=text.upper(), bg=BG_CARD, fg=color,
-                 font=("Consolas", 13, "bold")).pack(anchor="w")
+                 font=FONT_H2_B).pack(anchor="w")
         if subtitle:
             tk.Label(col, text=subtitle, bg=BG_CARD, fg=FG_DIM,
-                     font=("Consolas", 8)).pack(anchor="w")
+                     font=FONT_SMALL).pack(anchor="w")
 
     # ══════════════════════════════════════════════════════════════════
     #  PAGE BUILDERS
     # ══════════════════════════════════════════════════════════════════
 
-    def _build_config_page(self) -> None:
-        p = self._make_page("config")
-        self._page_title(p, "Configuracao", NEON_CYAN,
-                         "Comandos de visualizacao — somente leitura")
-
-        # ── Card 1: Configuração Atual ────────────────────────────────
-        card1 = tk.Frame(p, bg=BG_INPUT, highlightthickness=1,
+    def _build_config_current_card(self, parent: tk.Frame) -> None:
+        card1 = tk.Frame(parent, bg=BG_INPUT, highlightthickness=1,
                          highlightbackground=BORDER_NRM)
         card1.pack(fill="x", pady=(0, 12))
         inner1 = tk.Frame(card1, bg=BG_INPUT)
         inner1.pack(fill="x", padx=12, pady=8)
 
         tk.Label(inner1, text="CONFIGURACAO ATUAL", bg=BG_INPUT,
-                 fg=NEON_CYAN, font=("Consolas", 9, "bold")).pack(anchor="w")
+                 fg=NEON_CYAN, font=FONT_BODY_B).pack(anchor="w")
         filt_row = tk.Frame(inner1, bg=BG_INPUT)
         filt_row.pack(fill="x", pady=(6, 6))
         tk.Label(filt_row, text="Filtro:", bg=BG_INPUT, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         self.config_filter_var = tk.StringVar(value="full_config")
         ttk.Combobox(filt_row, textvariable=self.config_filter_var,
                      values=["full_config", "interfaces", "bgp", "vrfs", "ospf",
                              "qos", "huawei_bgp", "huawei_mpls", "arp"],
-                     state="readonly", width=20, font=("Consolas", 9)).pack(side="left")
+                     state="readonly", width=20, font=FONT_BODY).pack(side="left")
         action_button(filt_row, "\u21bb  get-config",
-                      lambda: self._run(self._fetch_config), NEON_CYAN).pack(side="left", padx=(8, 0))
+                      lambda: self._run(self._fetch_config),
+                      NEON_CYAN).pack(side="left", padx=(8, 0))
         self.out_config = styled_text(inner1, height=10)
         self.out_config.pack(fill="x")
 
-        # ── Card 2: Comandos de Visualização ──────────────────────────
-        card2 = tk.Frame(p, bg=BG_INPUT, highlightthickness=1,
+    def _build_config_view_card(self, parent: tk.Frame) -> None:
+        card2 = tk.Frame(parent, bg=BG_INPUT, highlightthickness=1,
                          highlightbackground=BORDER_NRM)
         card2.pack(fill="x", pady=(0, 12))
         inner2 = tk.Frame(card2, bg=BG_INPUT)
         inner2.pack(fill="x", padx=12, pady=8)
 
         tk.Label(inner2, text="COMANDOS DE VISUALIZACAO", bg=BG_INPUT,
-                 fg=NEON_CYAN, font=("Consolas", 9, "bold")).pack(anchor="w")
+                 fg=NEON_CYAN, font=FONT_BODY_B).pack(anchor="w")
 
         cmd_row = tk.Frame(inner2, bg=BG_INPUT)
         cmd_row.pack(fill="x", pady=(6, 6))
 
         tk.Label(cmd_row, text="Categoria:", bg=BG_INPUT, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         self._view_cat_var = tk.StringVar(value="Rede")
         cat_names = list(VIEW_CATEGORIES.keys())
         self._view_cat_cb = ttk.Combobox(cmd_row, textvariable=self._view_cat_var,
-            values=cat_names, state="readonly", width=16, font=("Consolas", 9))
+            values=cat_names, state="readonly", width=16, font=FONT_BODY)
         self._view_cat_cb.pack(side="left", padx=(0, 12))
         self._view_cat_cb.bind("<<ComboboxSelected>>", self._on_view_cat_change)
 
         tk.Label(cmd_row, text="Comando:", bg=BG_INPUT, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         self._view_cmd_var = tk.StringVar()
         self._view_cmd_cb = ttk.Combobox(cmd_row, textvariable=self._view_cmd_var,
-            state="readonly", width=30, font=("Consolas", 9))
+            state="readonly", width=30, font=FONT_BODY)
         self._view_cmd_cb.pack(side="left", padx=(0, 8))
         action_button(cmd_row, "\u25b6 Executar",
                       lambda: self._run(self._exec_view_cmd), NEON_CYAN).pack(side="left")
@@ -307,6 +329,14 @@ class HuaweiRouterApp:
 
         self._on_view_cat_change()
 
+    def _build_config_page(self) -> None:
+        p = self._make_page("config")
+        self._page_title(p, "Configuracao", NEON_CYAN,
+                         "Comandos de visualizacao — somente leitura")
+
+        self._build_config_current_card(p)
+        self._build_config_view_card(p)
+
     def _build_route_page(self) -> None:
         p = self._make_page("route")
         self._page_title(p, "Tabela de Roteamento", NEON_CYAN,
@@ -314,11 +344,11 @@ class HuaweiRouterApp:
         row = tk.Frame(p, bg=BG_CARD)
         row.pack(fill="x", pady=(0, 8))
         tk.Label(row, text="Filtro:", bg=BG_CARD, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         self.route_filter_var = tk.StringVar(value="routing")
         ttk.Combobox(row, textvariable=self.route_filter_var,
                      values=["routing", "bgp", "ospf", "huawei_bgp"],
-                     state="readonly", width=14, font=("Consolas", 9)).pack(side="left")
+                     state="readonly", width=14, font=FONT_BODY).pack(side="left")
         self.out_route = styled_text(p)
         self.out_route.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\u21bb  get routing",
@@ -362,11 +392,11 @@ class HuaweiRouterApp:
         left.pack_propagate(False)
 
         tk.Label(left, text="TEMPLATES", bg=BG_INPUT, fg=FG_DIM,
-                 font=("Consolas", 8, "bold")).pack(anchor="w")
+                 font=FONT_SMALL_B).pack(anchor="w")
         self._tpl_listbox = tk.Listbox(left, bg=BG_INPUT, fg=NEON_CYAN,
             selectbackground=NEON_PURP, selectforeground="white",
             relief="flat", borderwidth=0,
-            font=("Consolas", 10), highlightthickness=0)
+            font=FONT_MEDIUM, highlightthickness=0)
         self._tpl_listbox.pack(fill="both", expand=True, pady=(4, 0))
         for name in CMD_TEMPLATES:
             self._tpl_listbox.insert("end", name)
@@ -392,12 +422,13 @@ class HuaweiRouterApp:
             abar, text="system-view", variable=self._sysview_var,
             bg=BG_INPUT, fg=FG_DIM, selectcolor=BG_INPUT,
             activebackground=BG_INPUT, activeforeground=NEON_CYAN,
-            font=("Consolas", 9), relief="flat",
+            font=FONT_BODY, relief="flat",
         )
         sysview_cb.pack(side="left", padx=(12, 0))
 
-        tk.Label(right, text="\u26a0  Todas as operacoes sao registradas em huawei_audit_structured.jsonl",
-                 bg=BG_INPUT, fg=NEON_AMBER, font=("Consolas", 8)).pack(anchor="w", pady=(0, 4))
+        tk.Label(right,
+                 text="\u26a0  Todas as operacoes sao registradas em huawei_audit_structured.jsonl",
+                 bg=BG_INPUT, fg=NEON_AMBER, font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
 
         self.out_cmd = styled_text(right)
         self.out_cmd.pack(fill="both", expand=True)
@@ -409,7 +440,7 @@ class HuaweiRouterApp:
         ctrl = tk.Frame(p, bg=BG_CARD)
         ctrl.pack(fill="x", pady=(0, 12))
         tk.Label(ctrl, text="Destino:", bg=BG_CARD, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         self.backup_path = tk.StringVar(value=os.path.expanduser("~"))
         neon_entry(ctrl, textvariable=self.backup_path,
                    width=44, state="normal").pack(side="left", ipady=5)
@@ -418,12 +449,12 @@ class HuaweiRouterApp:
         fmt_frame = tk.Frame(p, bg=BG_CARD)
         fmt_frame.pack(fill="x", pady=(0, 8))
         tk.Label(fmt_frame, text="Formato:", bg=BG_CARD, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         self.backup_fmt = tk.StringVar(value="Texto (CLI)")
         ttk.Combobox(fmt_frame, textvariable=self.backup_fmt,
                      values=["Texto (CLI)"],
                      state="readonly", width=16,
-                     font=("Consolas", 9)).pack(side="left")
+                     font=FONT_BODY).pack(side="left")
         self.out_backup = styled_text(p)
         self.out_backup.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\U0001f4be  Fazer Backup",
@@ -453,7 +484,7 @@ class HuaweiRouterApp:
 
         self._vnf_info_lbl = tk.Label(
             ctrl, text="  Nenhum VNF selecionado", bg=BG_CARD,
-            fg=FG_DIM, font=("Consolas", 9))
+            fg=FG_DIM, font=FONT_BODY)
         self._vnf_info_lbl.pack(side="right", padx=8)
 
         canvas_frame = tk.Frame(p, bg=BG_BASE,
@@ -471,7 +502,7 @@ class HuaweiRouterApp:
         self._nce_status_lbl = tk.Label(
             p, text=f"Inventario: local ({nce_mode})",
             bg=BG_CARD, fg=NEON_AMBER if not NCE_HOST else NEON_CYAN,
-            font=("Consolas", 8))
+            font=FONT_SMALL)
         self._nce_status_lbl.pack(anchor="w", pady=(4, 0))
 
         threading.Thread(target=self._refresh_vnfs, daemon=True).start()
@@ -488,30 +519,30 @@ class HuaweiRouterApp:
         inner_v.pack(fill="x", padx=12, pady=8)
 
         tk.Label(inner_v, text="SECRETS BACKEND", bg=BG_INPUT,
-                 fg=FG_DIM, font=("Consolas", 8)).grid(row=0, column=0, sticky="w")
+                 fg=FG_DIM, font=FONT_SMALL).grid(row=0, column=0, sticky="w")
         tk.Label(inner_v, text=_secrets.backend_name, bg=BG_INPUT,
-                 fg=NEON_CYAN, font=("Consolas", 10, "bold")).grid(row=0, column=1, sticky="w", padx=16)
+                 fg=NEON_CYAN, font=FONT_MEDIUM_B).grid(row=0, column=1, sticky="w", padx=16)
 
         last_rot = _secrets.last_rotation or "Nunca"
         tk.Label(inner_v, text="ULTIMA ROTACAO SSH", bg=BG_INPUT,
-                 fg=FG_DIM, font=("Consolas", 8)).grid(row=1, column=0, sticky="w", pady=(6, 0))
+                 fg=FG_DIM, font=FONT_SMALL).grid(row=1, column=0, sticky="w", pady=(6, 0))
         self._rot_lbl = tk.Label(inner_v, text=last_rot, bg=BG_INPUT,
-                                 fg=NEON_AMBER, font=("Consolas", 9))
+                                 fg=NEON_AMBER, font=FONT_BODY)
         self._rot_lbl.grid(row=1, column=1, sticky="w", padx=16, pady=(6, 0))
 
         tk.Label(inner_v, text="CHAVE SSH", bg=BG_INPUT,
-                 fg=FG_DIM, font=("Consolas", 8)).grid(row=2, column=0, sticky="w", pady=(6, 0))
+                 fg=FG_DIM, font=FONT_SMALL).grid(row=2, column=0, sticky="w", pady=(6, 0))
         key_exists = Path(SSH_KEY).exists()
         tk.Label(inner_v,
                  text=f"{'\u2714 ' + SSH_KEY if key_exists else '\u2718 Nao encontrada'}",
                  bg=BG_INPUT,
                  fg=NEON_CYAN if key_exists else NEON_AMBER,
-                 font=("Consolas", 9)).grid(row=2, column=1, sticky="w", padx=16, pady=(6, 0))
+                 font=FONT_BODY).grid(row=2, column=1, sticky="w", padx=16, pady=(6, 0))
 
         tk.Label(inner_v, text="CONEXAO", bg=BG_INPUT,
-                 fg=FG_DIM, font=("Consolas", 8)).grid(row=3, column=0, sticky="w", pady=(6, 0))
+                 fg=FG_DIM, font=FONT_SMALL).grid(row=3, column=0, sticky="w", pady=(6, 0))
         self._sess_id_lbl = tk.Label(inner_v, text="\u2014", bg=BG_INPUT,
-                                     fg=NEON_PURP, font=("Consolas", 9))
+                                     fg=NEON_PURP, font=FONT_BODY)
         self._sess_id_lbl.grid(row=3, column=1, sticky="w", padx=16, pady=(6, 0))
 
         act_frame = tk.Frame(p, bg=BG_CARD)
@@ -525,46 +556,43 @@ class HuaweiRouterApp:
         self.out_rotate.pack(fill="x", pady=(0, 12))
 
         tk.Label(p, text="ULTIMAS OPERACOES AUDITADAS", bg=BG_CARD,
-                 fg=FG_DIM, font=("Consolas", 8)).pack(anchor="w")
+                 fg=FG_DIM, font=FONT_SMALL).pack(anchor="w")
         hdr_line = tk.Label(
             p,
             text="  timestamp              operacao          status    duracao",
-            bg=BG_CARD, fg=FG_DIM, font=("Consolas", 8))
+            bg=BG_CARD, fg=FG_DIM, font=FONT_SMALL)
         hdr_line.pack(anchor="w")
         self.out_audit = styled_text(p, height=7)
         self.out_audit.pack(fill="both", expand=True, pady=(2, 0))
         self._refresh_security_page()
 
-    def _build_services_page(self) -> None:
-        p = self._make_page("services")
-        self._page_title(p, "Catalogo de Servicos", NEON_AMBER,
-                         "Comandos SHOW e CONFIG por tipo de VNF (ROUTER | SWITCH | FIREWALL | \u2026)")
-
-        info_row = tk.Frame(p, bg=BG_CARD)
+    def _build_services_info_row(self, parent: tk.Frame) -> None:
+        info_row = tk.Frame(parent, bg=BG_CARD)
         info_row.pack(fill="x", pady=(0, 10))
 
         self._svc_vnf_lbl = tk.Label(info_row,
             text="VNF: (selecione um VNF na aba Topologia)",
-            bg=BG_CARD, fg=NEON_AMBER, font=("Consolas", 10, "bold"))
+            bg=BG_CARD, fg=NEON_AMBER, font=FONT_MEDIUM_B)
         self._svc_vnf_lbl.pack(side="left", padx=(0, 16))
 
         self._svc_type_lbl = tk.Label(info_row,
-            text="Tipo: \u2014", bg=BG_CARD, fg=FG_DIM, font=("Consolas", 9))
+            text="Tipo: \u2014", bg=BG_CARD, fg=FG_DIM, font=FONT_BODY)
         self._svc_type_lbl.pack(side="left", padx=(0, 16))
 
         self._svc_status_lbl = tk.Label(info_row,
-            text="", bg=BG_CARD, fg=FG_DIM, font=("Consolas", 9))
+            text="", bg=BG_CARD, fg=FG_DIM, font=FONT_BODY)
         self._svc_status_lbl.pack(side="left")
 
-        filt_row = tk.Frame(p, bg=BG_CARD)
+    def _build_services_filter_row(self, parent: tk.Frame) -> None:
+        filt_row = tk.Frame(parent, bg=BG_CARD)
         filt_row.pack(fill="x", pady=(0, 8))
 
         tk.Label(filt_row, text="Categoria:", bg=BG_CARD, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         self._svc_cat_var = tk.StringVar(value="todas")
         self._svc_cat_cb = ttk.Combobox(filt_row,
             textvariable=self._svc_cat_var, state="readonly",
-            width=20, font=("Consolas", 9))
+            width=20, font=FONT_BODY)
         self._svc_cat_cb.pack(side="left", padx=(0, 12))
         self._svc_cat_cb.bind("<<ComboboxSelected>>",
                               lambda _: self._refresh_service_list())
@@ -577,12 +605,13 @@ class HuaweiRouterApp:
         self._svc_mode_var = tk.StringVar(value="mock")
         mode_cb = ttk.Combobox(filt_row, textvariable=self._svc_mode_var,
             values=["mock", "cli"], state="readonly",
-            width=10, font=("Consolas", 9))
+            width=10, font=FONT_BODY)
         mode_cb.pack(side="left", padx=(8, 0))
         tk.Label(filt_row, text="Modo:", bg=BG_CARD, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(4, 0))
+                 font=FONT_BODY).pack(side="left", padx=(4, 0))
 
-        list_frame = tk.Frame(p, bg=BG_BASE,
+    def _build_services_scroll_area(self, parent: tk.Frame) -> None:
+        list_frame = tk.Frame(parent, bg=BG_BASE,
                               highlightthickness=1, highlightbackground=BORDER_NRM)
         list_frame.pack(fill="both", expand=True, pady=(0, 8))
 
@@ -612,6 +641,16 @@ class HuaweiRouterApp:
                 -1 * (ev.delta // 120), "units")))
         self._svc_canvas.bind("<Leave>", lambda e: self._svc_canvas.unbind("<MouseWheel>"))
 
+    def _build_services_page(self) -> None:
+        p = self._make_page("services")
+        self._page_title(p, "Catalogo de Servicos", NEON_AMBER,
+                         "Comandos SHOW e CONFIG por tipo de VNF "
+                         "(ROUTER | SWITCH | FIREWALL | \u2026)")
+
+        self._build_services_info_row(p)
+        self._build_services_filter_row(p)
+        self._build_services_scroll_area(p)
+
         self._svc_output = styled_text(p, height=8)
         self._svc_output.pack(fill="x", pady=(0, 4))
 
@@ -629,7 +668,7 @@ class HuaweiRouterApp:
             self._svc_cat_var.set("todas")
             tk.Label(self._svc_scroll_frame,
                 text="  Selecione um VNF na aba Topologia / VNFs",
-                bg=BG_BASE, fg=FG_DIM, font=("Consolas", 11)).pack(
+                bg=BG_BASE, fg=FG_DIM, font=FONT_LARGE).pack(
                     padx=20, pady=40)
             return
 
@@ -654,7 +693,7 @@ class HuaweiRouterApp:
         if not services:
             tk.Label(self._svc_scroll_frame,
                 text=f"  Nenhum servico disponivel para tipo '{vnf_type}'",
-                bg=BG_BASE, fg=FG_DIM, font=("Consolas", 11)).pack(
+                bg=BG_BASE, fg=FG_DIM, font=FONT_LARGE).pack(
                     padx=20, pady=40)
             return
 
@@ -667,21 +706,21 @@ class HuaweiRouterApp:
             row1.pack(fill="x", padx=10, pady=(6, 2))
 
             tk.Label(row1, text=svc.name, bg=BG_INPUT, fg=NEON_CYAN,
-                     font=("Consolas", 10, "bold")).pack(side="left")
+                     font=FONT_MEDIUM_B).pack(side="left")
             tk.Label(row1, text=f"[{svc.category}]", bg=BG_INPUT,
-                     fg=NEON_PURP, font=("Consolas", 8)).pack(
+                     fg=NEON_PURP, font=FONT_SMALL).pack(
                          side="left", padx=(8, 0))
 
             if svc.config_mode:
                 tk.Label(row1, text="CONFIG", bg=BG_INPUT,
-                         fg=NEON_AMBER, font=("Consolas", 8, "bold")).pack(
+                         fg=NEON_AMBER, font=FONT_SMALL_B).pack(
                              side="left", padx=(6, 0))
 
             row2 = tk.Frame(card, bg=BG_INPUT)
             row2.pack(fill="x", padx=10, pady=(0, 6))
 
             tk.Label(row2, text=svc.description, bg=BG_INPUT,
-                     fg=FG_DIM, font=("Consolas", 8)).pack(side="left")
+                     fg=FG_DIM, font=FONT_SMALL).pack(side="left")
 
             btn = action_button(row2, "\u25b6 Executar",
                 lambda s=svc: self._run_service(s), NEON_CYAN)
@@ -690,8 +729,6 @@ class HuaweiRouterApp:
     def _run_service(self, svc: ServiceDef) -> None:
         mode = self._svc_mode_var.get()
         vnf = self._target_vnf
-        vnf_type = vnf.type.upper() if vnf else ""
-
         label = f"Servico: {svc.name}  |  Modo: {mode}"
         if vnf:
             label += f"  |  Alvo: {vnf.name} ({vnf.host})"
@@ -725,7 +762,7 @@ class HuaweiRouterApp:
     # ══════════════════════════════════════════════════════════════════
     def _show_page(self, key: str) -> None:
         if self._active_btn:
-            self._active_btn._deactivate()
+            self._active_btn._deactivate()  # type: ignore[attr-defined]
         if key not in self.pages:
             fn = self._page_builders.get(key)
             if fn:
@@ -735,7 +772,7 @@ class HuaweiRouterApp:
             target.master.lift()
         btn = self._nav_buttons.get(key)
         if btn:
-            btn._activate()
+            btn._activate()  # type: ignore[attr-defined]
             self._active_btn = btn
 
     def _tick_clock(self) -> None:
@@ -774,13 +811,13 @@ class HuaweiRouterApp:
                 self.root.after(0, lambda: self._set_status(
                     "Falha de autenticacao", NEON_AMBER))
                 self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
-            except NetmikoTimeoutException as e:
+            except NetmikoTimeoutException:
                 self.root.after(0, lambda: self._set_status(
                     "Timeout de conexao", NEON_AMBER))
                 self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
-            except ValueError as e:
-                self.root.after(0, lambda: self._set_status(
-                    f"Config: {e}", NEON_AMBER))
+            except ValueError as exc:
+                msg = f"Config: {exc}"
+                self.root.after(0, lambda: self._set_status(msg, NEON_AMBER))
                 self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
             except Exception:
                 self.root.after(0, lambda: self._set_status(
@@ -823,7 +860,7 @@ class HuaweiRouterApp:
         if not cmd:
             return
         self._loading(self.out_view_cmd, f"Executando: {cmd}\u2026")
-        self._write(self.out_view_cmd, self.session.run_cli_rpc(cmd))
+        self._write(self.out_view_cmd, self.session.run_cli_rpc(cmd or ""))
 
     # ══════════════════════════════════════════════════════════════════
     #  FETCH METHODS
@@ -832,13 +869,13 @@ class HuaweiRouterApp:
         fkey = self.config_filter_var.get()
         cmd  = CLI_FILTERS.get(fkey, "display current-configuration")
         self._loading(self.out_config, f"Executando: {cmd}\u2026")
-        self._write(self.out_config, self.session.run_cli_rpc(cmd))
+        self._write(self.out_config, self.session.run_cli_rpc(cmd or ""))
 
     def _fetch_route(self) -> None:
         fkey = self.route_filter_var.get()
         cmd  = CLI_FILTERS.get(fkey, "display ip routing-table")
         self._loading(self.out_route, f"Executando: {cmd}\u2026")
-        self._write(self.out_route, self.session.run_cli_rpc(cmd))
+        self._write(self.out_route, self.session.run_cli_rpc(cmd or ""))
 
     def _fetch_arp(self) -> None:
         self._loading(self.out_arp, "Executando: display arp\u2026")
@@ -858,7 +895,7 @@ class HuaweiRouterApp:
         ]
         for title, cmd in commands:
             buf.write(f"{'=' * 70}\n\u25b6  {title}\n{'-' * 70}\n")
-            buf.write(self.session.run_cli_rpc(cmd))
+            buf.write(self.session.run_cli_rpc(cmd or ""))
             buf.write("\n\n")
         self._write(self.out_info, buf.getvalue())
 
@@ -883,19 +920,21 @@ class HuaweiRouterApp:
             self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite um comando")
             return
         if self._sysview_var.get():
-            self._loading(self.out_cmd, "system-view \u2192 " + cmd.splitlines()[0] + " \u2192 quit\u2026")
+            self._loading(self.out_cmd,
+                          "system-view \u2192 " + cmd.splitlines()[0] + " \u2192 quit\u2026")
             self.session.run_cli_timing("system-view")
             result = self.session.run_cli_timing(cmd)
             self.session.run_cli_timing("quit")
         else:
             self._loading(self.out_cmd, f"Executando: {cmd}\u2026")
-            result = self.session.run_cli_rpc(cmd)
+            result = self.session.run_cli_rpc(cmd or "")
         self._write(self.out_cmd, result)
 
     def _exec_config(self) -> None:
         cmd = self._get_editor_cmd()
         if not cmd:
-            self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite os comandos de configuracao")
+            self._write(self.out_cmd,
+                         "\u2718  Editor vazio \u2014 digite os comandos de configuracao")
             return
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
         ok, msg = self.session.edit_config(cmd)
@@ -989,7 +1028,8 @@ class HuaweiRouterApp:
         vnfs = load_vnf_inventory()
         self.root.after(0, lambda: self._update_vnfs_ui(vnfs))
         self.root.after(0, lambda: self._nce_status_lbl.configure(
-            text=f"Inventario: {len(vnfs)} dispositivos  \u2022  {datetime.datetime.now().strftime('%H:%M:%S')}"
+            text=("Inventario: {} dispositivos  \u2022  {}"
+                       .format(len(vnfs), datetime.datetime.now().strftime('%H:%M:%S')))
         ) if hasattr(self, "_nce_status_lbl") else None)
 
     def _update_vnfs_ui(self, vnfs: list[VNF]) -> None:
@@ -1035,12 +1075,12 @@ class HuaweiRouterApp:
         win.grab_set()
 
         tk.Label(win, text="Senha Mestra", bg=BG_CARD, fg=NEON_CYAN,
-                 font=("Consolas", 12, "bold")).pack(pady=(16, 8))
+                 font=FONT_XLARGE_B).pack(pady=(16, 8))
 
         pw_var = tk.StringVar()
         entry = tk.Entry(win, textvariable=pw_var, show="*",
                          bg=BG_INPUT, fg=NEON_CYAN, insertbackground=NEON_CYAN,
-                         font=("Consolas", 12), relief="flat", bd=0,
+                         font=FONT_XLARGE, relief="flat", bd=0,
                          highlightthickness=1, highlightbackground=BORDER_NRM)
         entry.pack(padx=24, fill="x", pady=(0, 12))
         entry.focus_set()
@@ -1081,7 +1121,7 @@ class HuaweiRouterApp:
         win.bind("<Escape>", lambda _: win.destroy())
 
     # ── Device Dialog ────────────────────────────────────────────────
-    def _show_device_dialog(self, vnf: Optional[VNF] = None) -> None:
+    def _show_device_dialog(self, vnf: VNF | None = None) -> None:
         editing = vnf is not None
         vnf = vnf or VNF(id="", name="", host="")
 
@@ -1105,21 +1145,21 @@ class HuaweiRouterApp:
         row_frame = tk.Frame(win, bg=BG_CARD)
         row_frame.pack(fill="x", padx=20, pady=(16, 4))
         tk.Label(row_frame, text="Nome:", bg=BG_CARD, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         name_var = tk.StringVar(value=vnf.name)
         tk.Entry(row_frame, textvariable=name_var, bg=BG_INPUT,
-                 fg=NEON_CYAN, font=("Consolas", 10), relief="flat", bd=0,
+                 fg=NEON_CYAN, font=FONT_MEDIUM, relief="flat", bd=0,
                  highlightthickness=1, highlightbackground=BORDER_NRM).pack(
                      side="left", fill="x", expand=True, ipady=4)
 
         row_frame2 = tk.Frame(win, bg=BG_CARD)
         row_frame2.pack(fill="x", padx=20, pady=(4, 12))
         tk.Label(row_frame2, text="Tipo:", bg=BG_CARD, fg=FG_DIM,
-                 font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                 font=FONT_BODY).pack(side="left", padx=(0, 8))
         type_var = tk.StringVar(value=vnf.type)
         type_cb = ttk.Combobox(row_frame2, textvariable=type_var,
                                values=list(VNF_TYPES.keys()),
-                               state="readonly", width=18, font=("Consolas", 9))
+                               state="readonly", width=18, font=FONT_BODY)
         type_cb.pack(side="left", fill="x", expand=True)
 
         vars_dict: dict[str, tk.StringVar] = {"name": name_var, "type": type_var}
@@ -1131,11 +1171,11 @@ class HuaweiRouterApp:
             fr = tk.Frame(win, bg=BG_CARD)
             fr.pack(fill="x", padx=20, pady=3)
             tk.Label(fr, text=f"{flabel}:", bg=BG_CARD, fg=FG_DIM,
-                     font=("Consolas", 9)).pack(side="left", padx=(0, 8))
+                     font=FONT_BODY).pack(side="left", padx=(0, 8))
             var = tk.StringVar(value=default)
             show_char = "*" if is_secret else ""
             entry = tk.Entry(fr, textvariable=var, show=show_char,
-                             bg=BG_INPUT, fg=NEON_CYAN, font=("Consolas", 10),
+                             bg=BG_INPUT, fg=NEON_CYAN, font=FONT_MEDIUM,
                              relief="flat", bd=0, highlightthickness=1,
                              highlightbackground=BORDER_NRM)
             entry.pack(side="left", fill="x", expand=True, ipady=4)
@@ -1146,7 +1186,7 @@ class HuaweiRouterApp:
                 def _toggle(e=None, ev=var, en=entry):
                     en.configure(show="" if en.cget("show") == "*" else "*")
                 btn = tk.Label(fr, text="\U0001f441", bg=BG_CARD, fg=NEON_PURP,
-                               font=("Consolas", 12), cursor="hand2")
+                               font=FONT_XLARGE, cursor="hand2")
                 btn.pack(side="left", padx=(4, 0))
                 btn.bind("<Button-1>", _toggle)
 

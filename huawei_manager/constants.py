@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 # ─── PALETA NEON ─────────────────────────────────────────────────────
 BG_BASE    = "#0d0d1a"
 BG_CARD    = "#13132b"
@@ -19,6 +17,27 @@ FG_CODE    = "#c8c8ff"
 
 BORDER_NRM = "#2a2a4a"
 
+# ─── FONTES ──────────────────────────────────────────────────────────
+FONT_TINY   = ("Consolas", 8)     # badges tipo VNF no canvas (era 6)
+FONT_XSMALL = ("Consolas", 9)     # rodapés, endereços (era 7)
+FONT_SMALL  = ("Consolas", 10)    # labels pequenos, badges (era 8)
+FONT_BODY   = ("Consolas", 11)    # corpo da UI, labels (era 9)
+FONT_MEDIUM = ("Consolas", 12)    # sidebar, botões, inputs (era 10)
+FONT_LARGE  = ("Consolas", 13)    # código / output (era 11)
+FONT_XLARGE = ("Consolas", 14)    # destaque / admin dialog (era 12)
+FONT_H2     = ("Consolas", 15)    # títulos de página (era 13)
+FONT_H1     = ("Consolas", 16)    # status dot / subtítulos (era 14)
+FONT_HERO   = ("Consolas", 18)    # header HUAWEI MANAGER (era 16)
+
+FONT_SMALL_B  = ("Consolas", 10, "bold")   # badges bold
+FONT_BODY_B   = ("Consolas", 11, "bold")   # corpo bold
+FONT_MEDIUM_B = ("Consolas", 12, "bold")   # botões bold
+FONT_LARGE_B  = ("Consolas", 13, "bold")   # código bold
+FONT_XLARGE_B = ("Consolas", 14, "bold")   # destaque bold
+FONT_H2_B     = ("Consolas", 15, "bold")   # título página bold
+FONT_H1_B     = ("Consolas", 16, "bold")   # status dot bold
+FONT_HERO_B   = ("Consolas", 18, "bold")   # header bold
+
 THEME = {
     "BG_BASE":    BG_BASE,    "BG_CARD":    BG_CARD,
     "BG_SIDEBAR": BG_SIDEBAR, "BG_INPUT":   BG_INPUT,
@@ -29,7 +48,7 @@ THEME = {
 }
 
 # ─── COMANDOS CLI ────────────────────────────────────────────────────
-CLI_FILTERS: dict[str, Optional[str]] = {
+CLI_FILTERS: dict[str, str | None] = {
     "full_config": "display current-configuration",
     "interfaces": "display interface",
     "interfaces_counters": "display counters interface",
