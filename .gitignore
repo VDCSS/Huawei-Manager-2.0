@@ -1,5 +1,5 @@
 .env
-secrets.enc.yaml
+secrets.yaml
 __pycache__/
 *.pyc
 .pytest_cache/
