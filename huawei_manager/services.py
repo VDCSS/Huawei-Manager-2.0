@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -79,727 +80,224 @@ class ServiceDef:
         return "; ".join(self.cli_commands)
 
 
+# ── factory helper ──────────────────────────────────────────────────
+def _svc(id_, name, desc, cat, types, cmds=None, config=False):
+    return ServiceDef(
+        id=id_, name=name, description=desc,
+        category=cat, vnf_types=types,
+        cli_commands=cmds or [desc],
+        config_mode=config,
+    )
+
+# VNF type shorthands para evitar linhas longas no catálogo
+_T_ALL = ['ROUTER', 'SWITCH', 'FIREWALL', 'LOAD-BALANCER', 'WAN-ACCEL', 'AP']
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  CATÁLOGO COMPLETO DE SERVIÇOS
 # ═══════════════════════════════════════════════════════════════════════
 
 SERVICE_REGISTRY: list[ServiceDef] = [
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  ROUTER — Roteamento                                           ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="router-routing-table", name="Tabela de Roteamento",
-               description="display ip routing-table",
-               category="routing", vnf_types=["ROUTER"],
-               cli_commands=["display ip routing-table"]),
-    ServiceDef(id="router-routing-table-verbose", name="Roteamento (detalhado)",
-               description="display ip routing-table verbose",
-               category="routing", vnf_types=["ROUTER"],
-               cli_commands=["display ip routing-table verbose"]),
-    ServiceDef(id="router-routing-table-stats", name="Estatísticas de Roteamento",
-               description="display ip routing-table statistics",
-               category="routing", vnf_types=["ROUTER"],
-               cli_commands=["display ip routing-table statistics"]),
-    ServiceDef(id="router-fib", name="Tabela FIB",
-               description="display fib",
-               category="routing", vnf_types=["ROUTER"],
-               cli_commands=["display fib"]),
-    ServiceDef(id="router-route-policy", name="Route Policy",
-               description="display route-policy",
-               category="routing", vnf_types=["ROUTER"],
-               cli_commands=["display route-policy"]),
-
-    # ── ROUTER — BGP ──────────────────────────────────────────────────
-    ServiceDef(id="router-bgp-summary", name="BGP Sumário",
-               description="display bgp peer",
-               category="bgp", vnf_types=["ROUTER"],
-               cli_commands=["display bgp peer"]),
-    ServiceDef(id="router-bgp-routes", name="BGP Rotas",
-               description="display bgp routing-table",
-               category="bgp", vnf_types=["ROUTER"],
-               cli_commands=["display bgp routing-table"]),
-    ServiceDef(id="router-bgp-community", name="BGP Community",
-               description="display bgp routing-table community",
-               category="bgp", vnf_types=["ROUTER"],
-               cli_commands=["display bgp routing-table community"]),
-    ServiceDef(id="router-bgp-vpnv4", name="BGP VPNv4",
-               description="display bgp vpnv4 all peer",
-               category="bgp", vnf_types=["ROUTER"],
-               cli_commands=["display bgp vpnv4 all peer"]),
-    ServiceDef(id="router-bgp-vpnv6", name="BGP VPNv6",
-               description="display bgp vpnv6 all peer",
-               category="bgp", vnf_types=["ROUTER"],
-               cli_commands=["display bgp vpnv6 all peer"]),
-
-    # ── ROUTER — OSPF ─────────────────────────────────────────────────
-    ServiceDef(id="router-ospf-peer", name="OSPF Vizinhos",
-               description="display ospf peer",
-               category="ospf", vnf_types=["ROUTER"],
-               cli_commands=["display ospf peer"]),
-    ServiceDef(id="router-ospf-routes", name="OSPF Rotas",
-               description="display ospf routing-table",
-               category="ospf", vnf_types=["ROUTER"],
-               cli_commands=["display ospf routing-table"]),
-    ServiceDef(id="router-ospf-lsdb", name="OSPF LSDB",
-               description="display ospf lsdb",
-               category="ospf", vnf_types=["ROUTER"],
-               cli_commands=["display ospf lsdb"]),
-    ServiceDef(id="router-ospf-interface", name="OSPF Interfaces",
-               description="display ospf interface",
-               category="ospf", vnf_types=["ROUTER"],
-               cli_commands=["display ospf interface"]),
-    ServiceDef(id="router-ospf-error", name="OSPF Erros / Contadores",
-               description="display ospf error",
-               category="ospf", vnf_types=["ROUTER"],
-               cli_commands=["display ospf error"]),
-
-    # ── ROUTER — IS-IS ────────────────────────────────────────────────
-    ServiceDef(id="router-isis-peer", name="IS-IS Vizinhos",
-               description="display isis peer",
-               category="isis", vnf_types=["ROUTER"],
-               cli_commands=["display isis peer"]),
-    ServiceDef(id="router-isis-lsdb", name="IS-IS LSDB",
-               description="display isis lsdb",
-               category="isis", vnf_types=["ROUTER"],
-               cli_commands=["display isis lsdb"]),
-    ServiceDef(id="router-isis-route", name="IS-IS Rotas",
-               description="display isis routing-table",
-               category="isis", vnf_types=["ROUTER"],
-               cli_commands=["display isis routing-table"]),
-
-    # ── ROUTER — MPLS ─────────────────────────────────────────────────
-    ServiceDef(id="router-mpls-ldp", name="MPLS LDP Sessões",
-               description="display mpls ldp peer",
-               category="mpls", vnf_types=["ROUTER"],
-               cli_commands=["display mpls ldp peer"]),
-    ServiceDef(id="router-mpls-lsp", name="MPLS LSP",
-               description="display mpls lsp",
-               category="mpls", vnf_types=["ROUTER"],
-               cli_commands=["display mpls lsp"]),
-    ServiceDef(id="router-mpls-te", name="MPLS TE Tunnel",
-               description="display mpls te tunnel",
-               category="mpls", vnf_types=["ROUTER"],
-               cli_commands=["display mpls te tunnel"]),
-    ServiceDef(id="router-mpls-vpn", name="MPLS L3VPN",
-               description="display ip vpn-instance",
-               category="mpls", vnf_types=["ROUTER"],
-               cli_commands=["display ip vpn-instance"]),
-
-    # ── ROUTER — Interface ────────────────────────────────────────────
-    ServiceDef(id="router-interface-brief", name="Sumário de Interfaces",
-               description="display interface brief",
-               category="interface", vnf_types=["ROUTER"],
-               cli_commands=["display interface brief"]),
-    ServiceDef(id="router-interface-desc", name="Descrição de Interfaces",
-               description="display interface description",
-               category="interface", vnf_types=["ROUTER"],
-               cli_commands=["display interface description"]),
-    ServiceDef(id="router-interface-ip", name="IP de Interfaces",
-               description="display ip interface brief",
-               category="interface", vnf_types=["ROUTER"],
-               cli_commands=["display ip interface brief"]),
-    ServiceDef(id="router-interface-stats", name="Estatísticas de Interface",
-               description="display counters interface",
-               category="interface", vnf_types=["ROUTER"],
-               cli_commands=["display counters interface"]),
-
-    # ── ROUTER — VRF ──────────────────────────────────────────────────
-    ServiceDef(id="router-vrf", name="VRF Instâncias",
-               description="display ip vpn-instance",
-               category="vrf", vnf_types=["ROUTER"],
-               cli_commands=["display ip vpn-instance"]),
-    ServiceDef(id="router-vrf-route", name="Roteamento por VRF",
-               description="display ip routing-table vpn-instance",
-               category="vrf", vnf_types=["ROUTER"],
-               cli_commands=["display ip routing-table vpn-instance"]),
-    ServiceDef(id="router-vrf-brief", name="VRF Resumo",
-               description="display ip vpn-instance brief",
-               category="vrf", vnf_types=["ROUTER"],
-               cli_commands=["display ip vpn-instance brief"]),
-
-    # ── ROUTER — QoS ──────────────────────────────────────────────────
-    ServiceDef(id="router-qos-policy", name="QoS Policy",
-               description="display qos policy",
-               category="qos", vnf_types=["ROUTER"],
-               cli_commands=["display qos policy"]),
-    ServiceDef(id="router-qos-queue", name="QoS Filas",
-               description="display qos queue statistics",
-               category="qos", vnf_types=["ROUTER"],
-               cli_commands=["display qos queue statistics"]),
-    ServiceDef(id="router-qos-cir", name="QoS CIR/PIR",
-               description="display qos car",
-               category="qos", vnf_types=["ROUTER"],
-               cli_commands=["display qos car"]),
-
-    # ── ROUTER — ACL ──────────────────────────────────────────────────
-    ServiceDef(id="router-acl", name="ACLs",
-               description="display acl all",
-               category="acl", vnf_types=["ROUTER"],
-               cli_commands=["display acl all"]),
-
-    # ── ROUTER — NAT ──────────────────────────────────────────────────
-    ServiceDef(id="router-nat-session", name="Sessões NAT",
-               description="display nat session",
-               category="nat", vnf_types=["ROUTER"],
-               cli_commands=["display nat session"]),
-    ServiceDef(id="router-nat-rule", name="Regras NAT",
-               description="display nat outbound",
-               category="nat", vnf_types=["ROUTER"],
-               cli_commands=["display nat outbound"]),
-    ServiceDef(id="router-nat-server", name="NAT Server",
-               description="display nat server",
-               category="nat", vnf_types=["ROUTER"],
-               cli_commands=["display nat server"]),
-
-    # ── ROUTER — Segurança ────────────────────────────────────────────
-    ServiceDef(id="router-vrrp", name="VRRP Status",
-               description="display vrrp",
-               category="security", vnf_types=["ROUTER"],
-               cli_commands=["display vrrp"]),
-    ServiceDef(id="router-bfd", name="BFD Sessões",
-               description="display bfd session",
-               category="security", vnf_types=["ROUTER"],
-               cli_commands=["display bfd session"]),
-    ServiceDef(id="router-nqa", name="NQA Resultados",
-               description="display nqa results",
-               category="troubleshoot", vnf_types=["ROUTER"],
-               cli_commands=["display nqa results"]),
-
-    # ── ROUTER — Troubleshooting ──────────────────────────────────────
-    ServiceDef(id="router-ping", name="Ping",
-               description="ping diagnóstico",
-               category="troubleshoot", vnf_types=["ROUTER"],
-               cli_commands=["ping 10.0.0.1"]),
-    ServiceDef(id="router-tracert", name="Traceroute",
-               description="tracert diagnóstico",
-               category="troubleshoot", vnf_types=["ROUTER"],
-               cli_commands=["tracert 10.0.0.1"]),
-    ServiceDef(id="router-log", name="Log do Sistema",
-               description="display logbuffer",
-               category="troubleshoot", vnf_types=["ROUTER"],
-               cli_commands=["display logbuffer"]),
-    ServiceDef(id="router-debug", name="Debug Info",
-               description="display debugging",
-               category="troubleshoot", vnf_types=["ROUTER"],
-               cli_commands=["display debugging"]),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  ROUTER — Config Mode — NAT                                    ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="router-config-nat-outbound", name="NAT Outbound",
-               description="nat outbound <acl> address-group <id>",
-               category="config-nat", vnf_types=["ROUTER"],
-               cli_commands=["nat outbound 2000 address-group 1"],
-               config_mode=True),
-    ServiceDef(id="router-config-nat-inbound", name="NAT Inbound",
-               description="nat inbound <acl> address-group <id>",
-               category="config-nat", vnf_types=["ROUTER"],
-               cli_commands=["nat inbound 3000 address-group 1"],
-               config_mode=True),
-    ServiceDef(id="router-config-nat-server", name="NAT Server",
-               description="nat server protocol tcp global <ip> <port> inside <ip> <port>",
-               category="config-nat", vnf_types=["ROUTER"],
-               cli_commands=["nat server protocol tcp global 10.0.0.1 80 inside 192.168.1.10 80"],
-               config_mode=True),
-    ServiceDef(id="router-config-nat-static", name="NAT Static",
-               description="nat static global <ip> inside <ip>",
-               category="config-nat", vnf_types=["ROUTER"],
-               cli_commands=["nat static global 10.0.0.1 inside 192.168.1.1"],
-               config_mode=True),
-    ServiceDef(id="router-config-nat-address-group", name="NAT Address-Group",
-               description="nat address-group <id> <start> <end>",
-               category="config-nat", vnf_types=["ROUTER"],
-               cli_commands=["nat address-group 1 10.0.0.1 10.0.0.254"],
-               config_mode=True),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  ROUTER — Config Mode — Interface                              ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="router-config-interface", name="Interface GigabitEthernet",
-               description="interface GigabitEthernet <x/x/x>",
-               category="config-interface", vnf_types=["ROUTER"],
-               cli_commands=["interface GigabitEthernet0/0/0"],
-               config_mode=True),
-    ServiceDef(id="router-config-ip-address", name="IP Address",
-               description="ip address <ip> <mask>",
-               category="config-interface", vnf_types=["ROUTER"],
-               cli_commands=["ip address 10.0.0.1 255.255.255.0"],
-               config_mode=True),
-    ServiceDef(id="router-config-description", name="Description",
-               description="description <text>",
-               category="config-interface", vnf_types=["ROUTER"],
-               cli_commands=["description LINK-REDE"],
-               config_mode=True),
-    ServiceDef(id="router-config-shutdown", name="Shutdown / No Shutdown",
-               description="shutdown | undo shutdown",
-               category="config-interface", vnf_types=["ROUTER"],
-               cli_commands=["shutdown"],
-               config_mode=True),
-    ServiceDef(id="router-config-undo-shutdown", name="Undo Shutdown",
-               description="undo shutdown",
-               category="config-interface", vnf_types=["ROUTER"],
-               cli_commands=["undo shutdown"],
-               config_mode=True),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  ROUTER — Config Mode — ACL                                    ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="router-config-acl-number", name="ACL Number",
-               description="acl number <id>",
-               category="config-acl", vnf_types=["ROUTER"],
-               cli_commands=["acl number 3000"],
-               config_mode=True),
-    ServiceDef(id="router-config-acl-rule", name="ACL Rule",
-               description="rule <id> permit/deny ip source <ip> <wildcard>",
-               category="config-acl", vnf_types=["ROUTER"],
-               cli_commands=["rule 5 permit ip source 10.0.0.0 0.0.0.255"],
-               config_mode=True),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  ROUTER — Config Mode — BGP                                    ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="router-config-bgp", name="BGP",
-               description="bgp <asn>",
-               category="config-bgp", vnf_types=["ROUTER"],
-               cli_commands=["bgp 65000"],
-               config_mode=True),
-    ServiceDef(id="router-config-bgp-router-id", name="BGP Router-ID",
-               description="router-id <id>",
-               category="config-bgp", vnf_types=["ROUTER"],
-               cli_commands=["router-id 1.1.1.1"],
-               config_mode=True),
-    ServiceDef(id="router-config-bgp-peer", name="BGP Peer",
-               description="peer <ip> as-number <asn>",
-               category="config-bgp", vnf_types=["ROUTER"],
-               cli_commands=["peer 10.0.0.2 as-number 65001"],
-               config_mode=True),
-    ServiceDef(id="router-config-bgp-network", name="BGP Network",
-               description="network <prefix>",
-               category="config-bgp", vnf_types=["ROUTER"],
-               cli_commands=["network 10.0.0.0 255.255.255.0"],
-               config_mode=True),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  ROUTER — Config Mode — OSPF                                   ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="router-config-ospf", name="OSPF",
-               description="ospf <id>",
-               category="config-ospf", vnf_types=["ROUTER"],
-               cli_commands=["ospf 1"],
-               config_mode=True),
-    ServiceDef(id="router-config-ospf-area", name="OSPF Area",
-               description="area <id>",
-               category="config-ospf", vnf_types=["ROUTER"],
-               cli_commands=["area 0"],
-               config_mode=True),
-    ServiceDef(id="router-config-ospf-network", name="OSPF Network",
-               description="network <prefix> <wildcard> area <id>",
-               category="config-ospf", vnf_types=["ROUTER"],
-               cli_commands=["network 10.0.0.0 0.0.0.255 area 0"],
-               config_mode=True),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  ROUTER — Config Mode — VLAN                                   ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="router-config-vlan-batch", name="VLAN Batch",
-               description="vlan batch <start> to <end>",
-               category="config-vlan", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["vlan batch 10 to 20"],
-               config_mode=True),
-    ServiceDef(id="router-config-vlan-port-type", name="Port Link-Type",
-               description="port link-type <access|trunk|hybrid>",
-               category="config-vlan", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["port link-type trunk"],
-               config_mode=True),
-    ServiceDef(id="router-config-vlan-default", name="Port Default VLAN",
-               description="port default vlan <id>",
-               category="config-vlan", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["port default vlan 10"],
-               config_mode=True),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  SWITCH — VLAN                                                 ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="switch-vlan", name="VLANs",
-               description="display vlan",
-               category="vlan", vnf_types=["SWITCH"],
-               cli_commands=["display vlan"]),
-    ServiceDef(id="switch-vlan-all", name="Todas as VLANs",
-               description="display vlan all",
-               category="vlan", vnf_types=["SWITCH"],
-               cli_commands=["display vlan all"]),
-    ServiceDef(id="switch-vlan-if", name="Interface VLAN",
-               description="display vlan brief",
-               category="vlan", vnf_types=["SWITCH"],
-               cli_commands=["display vlan brief"]),
-
-    # ── SWITCH — STP ──────────────────────────────────────────────────
-    ServiceDef(id="switch-stp", name="STP Status",
-               description="display stp brief",
-               category="stp", vnf_types=["SWITCH"],
-               cli_commands=["display stp brief"]),
-    ServiceDef(id="switch-stp-detail", name="STP Detalhado",
-               description="display stp",
-               category="stp", vnf_types=["SWITCH"],
-               cli_commands=["display stp"]),
-    ServiceDef(id="switch-rstp", name="RSTP/MSTP",
-               description="display stp region-configuration",
-               category="stp", vnf_types=["SWITCH"],
-               cli_commands=["display stp region-configuration"]),
-
-    # ── SWITCH — LACP / Link Aggregation ──────────────────────────────
-    ServiceDef(id="switch-lacp", name="Link Aggregation",
-               description="display link-aggregation summary",
-               category="lacp", vnf_types=["SWITCH"],
-               cli_commands=["display link-aggregation summary"]),
-    ServiceDef(id="switch-lacp-verbose", name="LACP Detalhado",
-               description="display link-aggregation verbose",
-               category="lacp", vnf_types=["SWITCH"],
-               cli_commands=["display link-aggregation verbose"]),
-
-    # ── SWITCH — MAC Table ────────────────────────────────────────────
-    ServiceDef(id="switch-mac", name="Tabela MAC",
-               description="display mac-address",
-               category="mac", vnf_types=["SWITCH"],
-               cli_commands=["display mac-address"]),
-    ServiceDef(id="switch-mac-dynamic", name="MAC Dinâmicas",
-               description="display mac-address dynamic",
-               category="mac", vnf_types=["SWITCH"],
-               cli_commands=["display mac-address dynamic"]),
-    ServiceDef(id="switch-mac-static", name="MAC Estáticas",
-               description="display mac-address static",
-               category="mac", vnf_types=["SWITCH"],
-               cli_commands=["display mac-address static"]),
-
-    # ── SWITCH — LLDP ─────────────────────────────────────────────────
-    ServiceDef(id="switch-lldp", name="LLDP Vizinhos",
-               description="display lldp neighbor brief",
-               category="lldp", vnf_types=["SWITCH"],
-               cli_commands=["display lldp neighbor brief"]),
-    ServiceDef(id="switch-lldp-all", name="LLDP Todos",
-               description="display lldp neighbor",
-               category="lldp", vnf_types=["SWITCH"],
-               cli_commands=["display lldp neighbor"]),
-
-    # ── SWITCH — PoE ──────────────────────────────────────────────────
-    ServiceDef(id="switch-poe", name="PoE Status",
-               description="display poe power-state",
-               category="poe", vnf_types=["SWITCH"],
-               cli_commands=["display poe power-state"]),
-    ServiceDef(id="switch-poe-detail", name="PoE Detalhado",
-               description="display poe power-state interface",
-               category="poe", vnf_types=["SWITCH"],
-               cli_commands=["display poe power-state interface"]),
-
-    # ── SWITCH — IGMP Snooping ────────────────────────────────────────
-    ServiceDef(id="switch-igmp", name="IGMP Snooping",
-               description="display igmp-snooping",
-               category="igmp", vnf_types=["SWITCH"],
-               cli_commands=["display igmp-snooping"]),
-
-    # ── SWITCH — DHCP Snooping ────────────────────────────────────────
-    ServiceDef(id="switch-dhcp-snoop", name="DHCP Snooping",
-               description="display dhcp snooping",
-               category="dhcp", vnf_types=["SWITCH"],
-               cli_commands=["display dhcp snooping"]),
-
-    # ── SWITCH — Interface ────────────────────────────────────────────
-    ServiceDef(id="switch-int-brief", name="Sumário de Interfaces",
-               description="display interface brief",
-               category="interface", vnf_types=["SWITCH"],
-               cli_commands=["display interface brief"]),
-    ServiceDef(id="switch-int-desc", name="Descrição Interfaces",
-               description="display interface description",
-               category="interface", vnf_types=["SWITCH"],
-               cli_commands=["display interface description"]),
-
-    # ── SWITCH — Segurança ────────────────────────────────────────────
-    ServiceDef(id="switch-port-sec", name="Port Security",
-               description="display port-security",
-               category="security", vnf_types=["SWITCH"],
-               cli_commands=["display port-security"]),
-    ServiceDef(id="switch-storm", name="Storm Control",
-               description="display storm-control",
-               category="security", vnf_types=["SWITCH"],
-               cli_commands=["display storm-control"]),
-    ServiceDef(id="switch-arp", name="Tabela ARP",
-               description="display arp",
-               category="security", vnf_types=["SWITCH"],
-               cli_commands=["display arp"]),
-
-    # ── SWITCH — Stack ────────────────────────────────────────────────
-    ServiceDef(id="switch-stack", name="Stack Info",
-               description="display stack",
-               category="system", vnf_types=["SWITCH"],
-               cli_commands=["display stack"]),
-    ServiceDef(id="switch-device", name="Info do Dispositivo",
-               description="display device",
-               category="system", vnf_types=["SWITCH"],
-               cli_commands=["display device"]),
-
-    # ── SWITCH — Troubleshooting ──────────────────────────────────────
-    ServiceDef(id="switch-log", name="Logbuffer",
-               description="display logbuffer",
-               category="troubleshoot", vnf_types=["SWITCH"],
-               cli_commands=["display logbuffer"]),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  FIREWALL — Policy                                             ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="fw-security-policy", name="Security Policy",
-               description="display security-policy",
-               category="policy", vnf_types=["FIREWALL"],
-               cli_commands=["display security-policy"]),
-    ServiceDef(id="fw-security-policy-stats", name="Policy Hit Count",
-               description="display security-policy statistics",
-               category="policy", vnf_types=["FIREWALL"],
-               cli_commands=["display security-policy statistics"]),
-    ServiceDef(id="fw-session-table", name="Tabela de Sessões",
-               description="display firewall session table",
-               category="policy", vnf_types=["FIREWALL"],
-               cli_commands=["display firewall session table"]),
-    ServiceDef(id="fw-session-stat", name="Estatísticas de Sessão",
-               description="display firewall session statistics",
-               category="policy", vnf_types=["FIREWALL"],
-               cli_commands=["display firewall session statistics"]),
-
-    # ── FIREWALL — NAT ────────────────────────────────────────────────
-    ServiceDef(id="fw-nat-policy", name="NAT Policy",
-               description="display nat-policy",
-               category="nat", vnf_types=["FIREWALL"],
-               cli_commands=["display nat-policy"]),
-    ServiceDef(id="fw-nat-session", name="Sessões NAT",
-               description="display nat session",
-               category="nat", vnf_types=["FIREWALL"],
-               cli_commands=["display nat session"]),
-
-    # ── FIREWALL — VPN ────────────────────────────────────────────────
-    ServiceDef(id="fw-ipsec", name="IPSec Policy",
-               description="display ipsec policy",
-               category="vpn", vnf_types=["FIREWALL"],
-               cli_commands=["display ipsec policy"]),
-    ServiceDef(id="fw-ike", name="IKE Proposal",
-               description="display ike proposal",
-               category="vpn", vnf_types=["FIREWALL"],
-               cli_commands=["display ike proposal"]),
-    ServiceDef(id="fw-ike-sa", name="IKE SA",
-               description="display ike sa",
-               category="vpn", vnf_types=["FIREWALL"],
-               cli_commands=["display ike sa"]),
-    ServiceDef(id="fw-ipsec-sa", name="IPSec SA",
-               description="display ipsec sa",
-               category="vpn", vnf_types=["FIREWALL"],
-               cli_commands=["display ipsec sa"]),
-    ServiceDef(id="fw-l2tp", name="L2TP Tunnel",
-               description="display l2tp tunnel",
-               category="vpn", vnf_types=["FIREWALL"],
-               cli_commands=["display l2tp tunnel"]),
-    ServiceDef(id="fw-vpn-instance", name="VPN Instâncias",
-               description="display vpn-instance",
-               category="vpn", vnf_types=["FIREWALL"],
-               cli_commands=["display vpn-instance"]),
-
-    # ── FIREWALL — IPS ────────────────────────────────────────────────
-    ServiceDef(id="fw-ips", name="IPS Status",
-               description="display ips status",
-               category="ips", vnf_types=["FIREWALL"],
-               cli_commands=["display ips status"]),
-    ServiceDef(id="fw-ips-signature", name="IPS Assinaturas",
-               description="display ips signature",
-               category="ips", vnf_types=["FIREWALL"],
-               cli_commands=["display ips signature"]),
-
-    # ── FIREWALL — Antivírus ──────────────────────────────────────────
-    ServiceDef(id="fw-antivirus", name="Anti-Virus Status",
-               description="display antivirus status",
-               category="antivirus", vnf_types=["FIREWALL"],
-               cli_commands=["display antivirus status"]),
-
-    # ── FIREWALL — URL Filter ─────────────────────────────────────────
-    ServiceDef(id="fw-url-filter", name="URL Filter Stats",
-               description="display url-filter statistics",
-               category="url-filter", vnf_types=["FIREWALL"],
-               cli_commands=["display url-filter statistics"]),
-
-    # ── FIREWALL — Zone ───────────────────────────────────────────────
-    ServiceDef(id="fw-zone", name="Zonas de Segurança",
-               description="display firewall zone",
-               category="zone", vnf_types=["FIREWALL"],
-               cli_commands=["display firewall zone"]),
-
-    # ── FIREWALL — HA ─────────────────────────────────────────────────
-    ServiceDef(id="fw-hrp", name="HRP (HA) Status",
-               description="display hrp status",
-               category="ha", vnf_types=["FIREWALL"],
-               cli_commands=["display hrp status"]),
-
-    # ── FIREWALL — System ─────────────────────────────────────────────
-    ServiceDef(id="fw-cpu", name="CPU Usage",
-               description="display firewall cpu-usage",
-               category="system", vnf_types=["FIREWALL"],
-               cli_commands=["display firewall cpu-usage"]),
-    ServiceDef(id="fw-mem", name="Memory Usage",
-               description="display memory-usage",
-               category="system", vnf_types=["FIREWALL"],
-               cli_commands=["display memory-usage"]),
-    ServiceDef(id="fw-context", name="Contextos (VSYS)",
-               description="display switch VSYS",
-               category="system", vnf_types=["FIREWALL"],
-               cli_commands=["display switch VSYS"]),
-
-    # ── FIREWALL — Troubleshoot ───────────────────────────────────────
-    ServiceDef(id="fw-log", name="Logbuffer",
-               description="display logbuffer",
-               category="troubleshoot", vnf_types=["FIREWALL"],
-               cli_commands=["display logbuffer"]),
-    ServiceDef(id="fw-firewall-stat", name="Firewall Statistics",
-               description="display firewall statistics",
-               category="troubleshoot", vnf_types=["FIREWALL"],
-               cli_commands=["display firewall statistics"]),
-    ServiceDef(id="fw-interface-stat", name="Interface Stats",
-               description="display interface brief",
-               category="troubleshoot", vnf_types=["FIREWALL"],
-               cli_commands=["display interface brief"]),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  LOAD-BALANCER                                                 ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="slb-service-group", name="Service Groups",
-               description="display slb service-group",
-               category="slb", vnf_types=["LOAD-BALANCER"],
-               cli_commands=["display slb service-group"]),
-    ServiceDef(id="slb-virtual-server", name="Virtual Servers",
-               description="display slb virtual-server",
-               category="slb", vnf_types=["LOAD-BALANCER"],
-               cli_commands=["display slb virtual-server"]),
-    ServiceDef(id="slb-real-server", name="Real Servers",
-               description="display slb real-server",
-               category="slb", vnf_types=["LOAD-BALANCER"],
-               cli_commands=["display slb real-server"]),
-    ServiceDef(id="slb-health", name="Health Checks",
-               description="display slb health",
-               category="health", vnf_types=["LOAD-BALANCER"],
-               cli_commands=["display slb health"]),
-    ServiceDef(id="slb-stats", name="Estatísticas SLB",
-               description="display slb statistics",
-               category="statistics", vnf_types=["LOAD-BALANCER"],
-               cli_commands=["display slb statistics"]),
-    ServiceDef(id="slb-sticky", name="Sticky Sessions",
-               description="display sticky",
-               category="slb", vnf_types=["LOAD-BALANCER"],
-               cli_commands=["display sticky"]),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  WAN-ACCEL                                                     ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="wanac-optimization", name="Otimização WAN",
-               description="display wan-optimization status",
-               category="optimization", vnf_types=["WAN-ACCEL"],
-               cli_commands=["display wan-optimization status"]),
-    ServiceDef(id="wanac-flow", name="Fluxos Ativos",
-               description="display wan-optimization flow",
-               category="optimization", vnf_types=["WAN-ACCEL"],
-               cli_commands=["display wan-optimization flow"]),
-    ServiceDef(id="wanac-compression", name="Compressão",
-               description="display wan-optimization compression",
-               category="optimization", vnf_types=["WAN-ACCEL"],
-               cli_commands=["display wan-optimization compression"]),
-    ServiceDef(id="wanac-stats", name="Estatísticas",
-               description="display wan-optimization statistics",
-               category="statistics", vnf_types=["WAN-ACCEL"],
-               cli_commands=["display wan-optimization statistics"]),
-    ServiceDef(id="wanac-interface", name="Interfaces",
-               description="display interface brief",
-               category="system", vnf_types=["WAN-ACCEL"],
-               cli_commands=["display interface brief"]),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  AP / Wireless                                                 ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="ap-wireless", name="Status Wireless",
-               description="display wireless status",
-               category="wireless", vnf_types=["AP"],
-               cli_commands=["display wireless status"]),
-    ServiceDef(id="ap-client", name="Clientes Conectados",
-               description="display station",
-               category="client", vnf_types=["AP"],
-               cli_commands=["display station"]),
-    ServiceDef(id="ap-radio", name="Rádio Status",
-               description="display radio all",
-               category="radio", vnf_types=["AP"],
-               cli_commands=["display radio all"]),
-    ServiceDef(id="ap-ssid", name="SSIDs",
-               description="display ssid",
-               category="wireless", vnf_types=["AP"],
-               cli_commands=["display ssid"]),
-    ServiceDef(id="ap-ap-list", name="APs Gerenciados",
-               description="display ap all",
-               category="wireless", vnf_types=["AP"],
-               cli_commands=["display ap all"]),
-    ServiceDef(id="ap-int-brief", name="Interfaces",
-               description="display interface brief",
-               category="system", vnf_types=["AP"],
-               cli_commands=["display interface brief"]),
-
-    # ╔══════════════════════════════════════════════════════════════════╗
-    # ║  COMUNS — Sistema (todos os tipos)                             ║
-    # ╚══════════════════════════════════════════════════════════════════╝
-    ServiceDef(id="sys-version", name="Versão do Sistema",
-               description="display version",
-               category="system", vnf_types=["ROUTER", "SWITCH", "FIREWALL",
-                                                "LOAD-BALANCER", "WAN-ACCEL", "AP"],
-               cli_commands=["display version"]),
-    ServiceDef(id="sys-cpu", name="CPU Usage",
-               description="display cpu-usage",
-               category="system", vnf_types=["ROUTER", "SWITCH", "WAN-ACCEL", "AP"],
-               cli_commands=["display cpu-usage"]),
-    ServiceDef(id="sys-mem", name="Memory Usage",
-               description="display memory-usage",
-               category="system", vnf_types=["ROUTER", "SWITCH", "WAN-ACCEL", "AP"],
-               cli_commands=["display memory-usage"]),
-    ServiceDef(id="sys-date", name="Relógio do Sistema",
-               description="display clock",
-               category="system", vnf_types=["ROUTER", "SWITCH", "FIREWALL",
-                                                "LOAD-BALANCER", "WAN-ACCEL", "AP"],
-               cli_commands=["display clock"]),
-    ServiceDef(id="sys-uptime", name="Uptime",
-               description="display system uptime",
-               category="system", vnf_types=["ROUTER", "SWITCH", "FIREWALL",
-                                                "LOAD-BALANCER", "WAN-ACCEL", "AP"],
-               cli_commands=["display system uptime"]),
-    ServiceDef(id="sys-config", name="Configuração Atual",
-               description="display current-configuration",
-               category="system", vnf_types=["ROUTER", "SWITCH", "FIREWALL",
-                                                "LOAD-BALANCER", "WAN-ACCEL", "AP"],
-               cli_commands=["display current-configuration"]),
-    ServiceDef(id="sys-config-last", name="Últimas Alterações",
-               description="display current-configuration | include sysname",
-               category="system", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["display current-configuration | include sysname"]),
-    ServiceDef(id="sys-diagnose", name="Diagnóstico do Sistema",
-               description="display diagnostic-information",
-               category="troubleshoot", vnf_types=["ROUTER", "SWITCH", "FIREWALL",
-                                                     "LOAD-BALANCER", "WAN-ACCEL", "AP"],
-               cli_commands=["display diagnostic-information"]),
-    ServiceDef(id="sys-license", name="Licenças",
-               description="display license",
-               category="system", vnf_types=["ROUTER", "SWITCH", "FIREWALL"],
-               cli_commands=["display license"]),
-    ServiceDef(id="sys-hardware", name="Hardware",
-               description="display device hardware",
-               category="system", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["display device hardware"]),
-    ServiceDef(id="sys-power", name="Fonte de Alimentação",
-               description="display power",
-               category="system", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["display power"]),
-    ServiceDef(id="sys-fan", name="Ventoinhas",
-               description="display fan",
-               category="system", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["display fan"]),
-    ServiceDef(id="sys-temperature", name="Temperatura",
-               description="display temperature all",
-               category="system", vnf_types=["ROUTER", "SWITCH"],
-               cli_commands=["display temperature all"]),
+    _svc('router-routing-table', 'Tabela de Roteamento', 'display ip routing-table', 'routing', ['ROUTER']),
+    _svc('router-routing-table-verbose', 'Roteamento (detalhado)',
+         'display ip routing-table verbose', 'routing', ['ROUTER']),
+    _svc('router-routing-table-stats', 'Estatísticas de Roteamento',
+         'display ip routing-table statistics', 'routing', ['ROUTER']),
+    _svc('router-fib', 'Tabela FIB', 'display fib', 'routing', ['ROUTER']),
+    _svc('router-route-policy', 'Route Policy', 'display route-policy', 'routing', ['ROUTER']),
+    _svc('router-bgp-summary', 'BGP Sumário', 'display bgp peer', 'bgp', ['ROUTER']),
+    _svc('router-bgp-routes', 'BGP Rotas', 'display bgp routing-table', 'bgp', ['ROUTER']),
+    _svc('router-bgp-community', 'BGP Community', 'display bgp routing-table community', 'bgp', ['ROUTER']),
+    _svc('router-bgp-vpnv4', 'BGP VPNv4', 'display bgp vpnv4 all peer', 'bgp', ['ROUTER']),
+    _svc('router-bgp-vpnv6', 'BGP VPNv6', 'display bgp vpnv6 all peer', 'bgp', ['ROUTER']),
+    _svc('router-ospf-peer', 'OSPF Vizinhos', 'display ospf peer', 'ospf', ['ROUTER']),
+    _svc('router-ospf-routes', 'OSPF Rotas', 'display ospf routing-table', 'ospf', ['ROUTER']),
+    _svc('router-ospf-lsdb', 'OSPF LSDB', 'display ospf lsdb', 'ospf', ['ROUTER']),
+    _svc('router-ospf-interface', 'OSPF Interfaces', 'display ospf interface', 'ospf', ['ROUTER']),
+    _svc('router-ospf-error', 'OSPF Erros / Contadores', 'display ospf error', 'ospf', ['ROUTER']),
+    _svc('router-isis-peer', 'IS-IS Vizinhos', 'display isis peer', 'isis', ['ROUTER']),
+    _svc('router-isis-lsdb', 'IS-IS LSDB', 'display isis lsdb', 'isis', ['ROUTER']),
+    _svc('router-isis-route', 'IS-IS Rotas', 'display isis routing-table', 'isis', ['ROUTER']),
+    _svc('router-mpls-ldp', 'MPLS LDP Sessões', 'display mpls ldp peer', 'mpls', ['ROUTER']),
+    _svc('router-mpls-lsp', 'MPLS LSP', 'display mpls lsp', 'mpls', ['ROUTER']),
+    _svc('router-mpls-te', 'MPLS TE Tunnel', 'display mpls te tunnel', 'mpls', ['ROUTER']),
+    _svc('router-mpls-vpn', 'MPLS L3VPN', 'display ip vpn-instance', 'mpls', ['ROUTER']),
+    _svc('router-interface-brief', 'Sumário de Interfaces', 'display interface brief', 'interface', ['ROUTER']),
+    _svc('router-interface-desc', 'Descrição de Interfaces', 'display interface description', 'interface', ['ROUTER']),
+    _svc('router-interface-ip', 'IP de Interfaces', 'display ip interface brief', 'interface', ['ROUTER']),
+    _svc('router-interface-stats', 'Estatísticas de Interface', 'display counters interface', 'interface', ['ROUTER']),
+    _svc('router-vrf', 'VRF Instâncias', 'display ip vpn-instance', 'vrf', ['ROUTER']),
+    _svc('router-vrf-route', 'Roteamento por VRF', 'display ip routing-table vpn-instance', 'vrf', ['ROUTER']),
+    _svc('router-vrf-brief', 'VRF Resumo', 'display ip vpn-instance brief', 'vrf', ['ROUTER']),
+    _svc('router-qos-policy', 'QoS Policy', 'display qos policy', 'qos', ['ROUTER']),
+    _svc('router-qos-queue', 'QoS Filas', 'display qos queue statistics', 'qos', ['ROUTER']),
+    _svc('router-qos-cir', 'QoS CIR/PIR', 'display qos car', 'qos', ['ROUTER']),
+    _svc('router-acl', 'ACLs', 'display acl all', 'acl', ['ROUTER']),
+    _svc('router-nat-session', 'Sessões NAT', 'display nat session', 'nat', ['ROUTER']),
+    _svc('router-nat-rule', 'Regras NAT', 'display nat outbound', 'nat', ['ROUTER']),
+    _svc('router-nat-server', 'NAT Server', 'display nat server', 'nat', ['ROUTER']),
+    _svc('router-vrrp', 'VRRP Status', 'display vrrp', 'security', ['ROUTER']),
+    _svc('router-bfd', 'BFD Sessões', 'display bfd session', 'security', ['ROUTER']),
+    _svc('router-nqa', 'NQA Resultados', 'display nqa results', 'troubleshoot', ['ROUTER']),
+    _svc('router-ping', 'Ping', 'ping diagnóstico', 'troubleshoot', ['ROUTER'],
+         cmds=['ping 10.0.0.1']),
+    _svc('router-tracert', 'Traceroute', 'tracert diagnóstico', 'troubleshoot', ['ROUTER'],
+         cmds=['tracert 10.0.0.1']),
+    _svc('router-log', 'Log do Sistema', 'display logbuffer', 'troubleshoot', ['ROUTER']),
+    _svc('router-debug', 'Debug Info', 'display debugging', 'troubleshoot', ['ROUTER']),
+    _svc('router-config-nat-outbound', 'NAT Outbound',
+         'nat outbound <acl> address-group <id>', 'config-nat', ['ROUTER'],
+         cmds=['nat outbound 2000 address-group 1'],
+         config=True),
+    _svc('router-config-nat-inbound', 'NAT Inbound', 'nat inbound <acl> address-group <id>', 'config-nat', ['ROUTER'],
+         cmds=['nat inbound 3000 address-group 1'],
+         config=True),
+    _svc('router-config-nat-server', 'NAT Server',
+         'nat server protocol tcp global <ip> <port> inside <ip> <port>', 'config-nat', ['ROUTER'],
+         cmds=['nat server protocol tcp global 10.0.0.1 80 inside 192.168.1.10 80'],
+         config=True),
+    _svc('router-config-nat-static', 'NAT Static', 'nat static global <ip> inside <ip>', 'config-nat', ['ROUTER'],
+         cmds=['nat static global 10.0.0.1 inside 192.168.1.1'],
+         config=True),
+    _svc('router-config-nat-address-group', 'NAT Address-Group',
+         'nat address-group <id> <start> <end>', 'config-nat', ['ROUTER'],
+         cmds=['nat address-group 1 10.0.0.1 10.0.0.254'],
+         config=True),
+    _svc('router-config-interface', 'Interface GigabitEthernet',
+         'interface GigabitEthernet <x/x/x>', 'config-interface', ['ROUTER'],
+         cmds=['interface GigabitEthernet0/0/0'],
+         config=True),
+    _svc('router-config-ip-address', 'IP Address', 'ip address <ip> <mask>', 'config-interface', ['ROUTER'],
+         cmds=['ip address 10.0.0.1 255.255.255.0'],
+         config=True),
+    _svc('router-config-description', 'Description', 'description <text>', 'config-interface', ['ROUTER'],
+         cmds=['description LINK-REDE'],
+         config=True),
+    _svc('router-config-shutdown', 'Shutdown / No Shutdown', 'shutdown | undo shutdown', 'config-interface', ['ROUTER'],
+         cmds=['shutdown'],
+         config=True),
+    _svc('router-config-undo-shutdown', 'Undo Shutdown', 'undo shutdown', 'config-interface', ['ROUTER'],
+         config=True),
+    _svc('router-config-acl-number', 'ACL Number', 'acl number <id>', 'config-acl', ['ROUTER'],
+         cmds=['acl number 3000'],
+         config=True),
+    _svc('router-config-acl-rule', 'ACL Rule',
+         'rule <id> permit/deny ip source <ip> <wildcard>', 'config-acl', ['ROUTER'],
+         cmds=['rule 5 permit ip source 10.0.0.0 0.0.0.255'],
+         config=True),
+    _svc('router-config-bgp', 'BGP', 'bgp <asn>', 'config-bgp', ['ROUTER'],
+         cmds=['bgp 65000'],
+         config=True),
+    _svc('router-config-bgp-router-id', 'BGP Router-ID', 'router-id <id>', 'config-bgp', ['ROUTER'],
+         cmds=['router-id 1.1.1.1'],
+         config=True),
+    _svc('router-config-bgp-peer', 'BGP Peer', 'peer <ip> as-number <asn>', 'config-bgp', ['ROUTER'],
+         cmds=['peer 10.0.0.2 as-number 65001'],
+         config=True),
+    _svc('router-config-bgp-network', 'BGP Network', 'network <prefix>', 'config-bgp', ['ROUTER'],
+         cmds=['network 10.0.0.0 255.255.255.0'],
+         config=True),
+    _svc('router-config-ospf', 'OSPF', 'ospf <id>', 'config-ospf', ['ROUTER'],
+         cmds=['ospf 1'],
+         config=True),
+    _svc('router-config-ospf-area', 'OSPF Area', 'area <id>', 'config-ospf', ['ROUTER'],
+         cmds=['area 0'],
+         config=True),
+    _svc('router-config-ospf-network', 'OSPF Network',
+         'network <prefix> <wildcard> area <id>', 'config-ospf', ['ROUTER'],
+         cmds=['network 10.0.0.0 0.0.0.255 area 0'],
+         config=True),
+    _svc('router-config-vlan-batch', 'VLAN Batch', 'vlan batch <start> to <end>', 'config-vlan', ['ROUTER', 'SWITCH'],
+         cmds=['vlan batch 10 to 20'],
+         config=True),
+    _svc('router-config-vlan-port-type', 'Port Link-Type',
+         'port link-type <access|trunk|hybrid>', 'config-vlan', ['ROUTER', 'SWITCH'],
+         cmds=['port link-type trunk'],
+         config=True),
+    _svc('router-config-vlan-default', 'Port Default VLAN',
+         'port default vlan <id>', 'config-vlan', ['ROUTER', 'SWITCH'],
+         cmds=['port default vlan 10'],
+         config=True),
+    _svc('switch-vlan', 'VLANs', 'display vlan', 'vlan', ['SWITCH']),
+    _svc('switch-vlan-all', 'Todas as VLANs', 'display vlan all', 'vlan', ['SWITCH']),
+    _svc('switch-vlan-if', 'Interface VLAN', 'display vlan brief', 'vlan', ['SWITCH']),
+    _svc('switch-stp', 'STP Status', 'display stp brief', 'stp', ['SWITCH']),
+    _svc('switch-stp-detail', 'STP Detalhado', 'display stp', 'stp', ['SWITCH']),
+    _svc('switch-rstp', 'RSTP/MSTP', 'display stp region-configuration', 'stp', ['SWITCH']),
+    _svc('switch-lacp', 'Link Aggregation', 'display link-aggregation summary', 'lacp', ['SWITCH']),
+    _svc('switch-lacp-verbose', 'LACP Detalhado', 'display link-aggregation verbose', 'lacp', ['SWITCH']),
+    _svc('switch-mac', 'Tabela MAC', 'display mac-address', 'mac', ['SWITCH']),
+    _svc('switch-mac-dynamic', 'MAC Dinâmicas', 'display mac-address dynamic', 'mac', ['SWITCH']),
+    _svc('switch-mac-static', 'MAC Estáticas', 'display mac-address static', 'mac', ['SWITCH']),
+    _svc('switch-lldp', 'LLDP Vizinhos', 'display lldp neighbor brief', 'lldp', ['SWITCH']),
+    _svc('switch-lldp-all', 'LLDP Todos', 'display lldp neighbor', 'lldp', ['SWITCH']),
+    _svc('switch-poe', 'PoE Status', 'display poe power-state', 'poe', ['SWITCH']),
+    _svc('switch-poe-detail', 'PoE Detalhado', 'display poe power-state interface', 'poe', ['SWITCH']),
+    _svc('switch-igmp', 'IGMP Snooping', 'display igmp-snooping', 'igmp', ['SWITCH']),
+    _svc('switch-dhcp-snoop', 'DHCP Snooping', 'display dhcp snooping', 'dhcp', ['SWITCH']),
+    _svc('switch-int-brief', 'Sumário de Interfaces', 'display interface brief', 'interface', ['SWITCH']),
+    _svc('switch-int-desc', 'Descrição Interfaces', 'display interface description', 'interface', ['SWITCH']),
+    _svc('switch-port-sec', 'Port Security', 'display port-security', 'security', ['SWITCH']),
+    _svc('switch-storm', 'Storm Control', 'display storm-control', 'security', ['SWITCH']),
+    _svc('switch-arp', 'Tabela ARP', 'display arp', 'security', ['SWITCH']),
+    _svc('switch-stack', 'Stack Info', 'display stack', 'system', ['SWITCH']),
+    _svc('switch-device', 'Info do Dispositivo', 'display device', 'system', ['SWITCH']),
+    _svc('switch-log', 'Logbuffer', 'display logbuffer', 'troubleshoot', ['SWITCH']),
+    _svc('fw-security-policy', 'Security Policy', 'display security-policy', 'policy', ['FIREWALL']),
+    _svc('fw-security-policy-stats', 'Policy Hit Count', 'display security-policy statistics', 'policy', ['FIREWALL']),
+    _svc('fw-session-table', 'Tabela de Sessões', 'display firewall session table', 'policy', ['FIREWALL']),
+    _svc('fw-session-stat', 'Estatísticas de Sessão', 'display firewall session statistics', 'policy', ['FIREWALL']),
+    _svc('fw-nat-policy', 'NAT Policy', 'display nat-policy', 'nat', ['FIREWALL']),
+    _svc('fw-nat-session', 'Sessões NAT', 'display nat session', 'nat', ['FIREWALL']),
+    _svc('fw-ipsec', 'IPSec Policy', 'display ipsec policy', 'vpn', ['FIREWALL']),
+    _svc('fw-ike', 'IKE Proposal', 'display ike proposal', 'vpn', ['FIREWALL']),
+    _svc('fw-ike-sa', 'IKE SA', 'display ike sa', 'vpn', ['FIREWALL']),
+    _svc('fw-ipsec-sa', 'IPSec SA', 'display ipsec sa', 'vpn', ['FIREWALL']),
+    _svc('fw-l2tp', 'L2TP Tunnel', 'display l2tp tunnel', 'vpn', ['FIREWALL']),
+    _svc('fw-vpn-instance', 'VPN Instâncias', 'display vpn-instance', 'vpn', ['FIREWALL']),
+    _svc('fw-ips', 'IPS Status', 'display ips status', 'ips', ['FIREWALL']),
+    _svc('fw-ips-signature', 'IPS Assinaturas', 'display ips signature', 'ips', ['FIREWALL']),
+    _svc('fw-antivirus', 'Anti-Virus Status', 'display antivirus status', 'antivirus', ['FIREWALL']),
+    _svc('fw-url-filter', 'URL Filter Stats', 'display url-filter statistics', 'url-filter', ['FIREWALL']),
+    _svc('fw-zone', 'Zonas de Segurança', 'display firewall zone', 'zone', ['FIREWALL']),
+    _svc('fw-hrp', 'HRP (HA) Status', 'display hrp status', 'ha', ['FIREWALL']),
+    _svc('fw-cpu', 'CPU Usage', 'display firewall cpu-usage', 'system', ['FIREWALL']),
+    _svc('fw-mem', 'Memory Usage', 'display memory-usage', 'system', ['FIREWALL']),
+    _svc('fw-context', 'Contextos (VSYS)', 'display switch VSYS', 'system', ['FIREWALL']),
+    _svc('fw-log', 'Logbuffer', 'display logbuffer', 'troubleshoot', ['FIREWALL']),
+    _svc('fw-firewall-stat', 'Firewall Statistics', 'display firewall statistics', 'troubleshoot', ['FIREWALL']),
+    _svc('fw-interface-stat', 'Interface Stats', 'display interface brief', 'troubleshoot', ['FIREWALL']),
+    _svc('slb-service-group', 'Service Groups', 'display slb service-group', 'slb', ['LOAD-BALANCER']),
+    _svc('slb-virtual-server', 'Virtual Servers', 'display slb virtual-server', 'slb', ['LOAD-BALANCER']),
+    _svc('slb-real-server', 'Real Servers', 'display slb real-server', 'slb', ['LOAD-BALANCER']),
+    _svc('slb-health', 'Health Checks', 'display slb health', 'health', ['LOAD-BALANCER']),
+    _svc('slb-stats', 'Estatísticas SLB', 'display slb statistics', 'statistics', ['LOAD-BALANCER']),
+    _svc('slb-sticky', 'Sticky Sessions', 'display sticky', 'slb', ['LOAD-BALANCER']),
+    _svc('wanac-optimization', 'Otimização WAN', 'display wan-optimization status', 'optimization', ['WAN-ACCEL']),
+    _svc('wanac-flow', 'Fluxos Ativos', 'display wan-optimization flow', 'optimization', ['WAN-ACCEL']),
+    _svc('wanac-compression', 'Compressão', 'display wan-optimization compression', 'optimization', ['WAN-ACCEL']),
+    _svc('wanac-stats', 'Estatísticas', 'display wan-optimization statistics', 'statistics', ['WAN-ACCEL']),
+    _svc('wanac-interface', 'Interfaces', 'display interface brief', 'system', ['WAN-ACCEL']),
+    _svc('ap-wireless', 'Status Wireless', 'display wireless status', 'wireless', ['AP']),
+    _svc('ap-client', 'Clientes Conectados', 'display station', 'client', ['AP']),
+    _svc('ap-radio', 'Rádio Status', 'display radio all', 'radio', ['AP']),
+    _svc('ap-ssid', 'SSIDs', 'display ssid', 'wireless', ['AP']),
+    _svc('ap-ap-list', 'APs Gerenciados', 'display ap all', 'wireless', ['AP']),
+    _svc('ap-int-brief', 'Interfaces', 'display interface brief', 'system', ['AP']),
+    _svc('sys-version', 'Versão do Sistema', 'display version', 'system', _T_ALL),
+    _svc('sys-cpu', 'CPU Usage', 'display cpu-usage', 'system', ['ROUTER', 'SWITCH', 'WAN-ACCEL', 'AP']),
+    _svc('sys-mem', 'Memory Usage', 'display memory-usage', 'system', ['ROUTER', 'SWITCH', 'WAN-ACCEL', 'AP']),
+    _svc('sys-date', 'Relógio do Sistema', 'display clock', 'system', _T_ALL),
+    _svc('sys-uptime', 'Uptime', 'display system uptime', 'system', _T_ALL),
+    _svc('sys-config', 'Configuração Atual', 'display current-configuration', 'system', _T_ALL),
+    _svc('sys-config-last', 'Últimas Alterações',
+         'display current-configuration | include sysname', 'system', ['ROUTER', 'SWITCH']),
+    _svc('sys-diagnose', 'Diagnóstico do Sistema', 'display diagnostic-information', 'troubleshoot', _T_ALL),
+    _svc('sys-license', 'Licenças', 'display license', 'system', ['ROUTER', 'SWITCH', 'FIREWALL']),
+    _svc('sys-hardware', 'Hardware', 'display device hardware', 'system', ['ROUTER', 'SWITCH']),
+    _svc('sys-power', 'Fonte de Alimentação', 'display power', 'system', ['ROUTER', 'SWITCH']),
+    _svc('sys-fan', 'Ventoinhas', 'display fan', 'system', ['ROUTER', 'SWITCH']),
+    _svc('sys-temperature', 'Temperatura', 'display temperature all', 'system', ['ROUTER', 'SWITCH']),
 ]
 
 
@@ -817,8 +315,7 @@ def get_services_for(vnf_type: str, category: str | None = None) -> list[Service
 
 def get_categories_for(vnf_type: str) -> list[str]:
     """Retorna categorias disponíveis para um tipo de VNF."""
-    from collections import OrderedDict
-    cats = OrderedDict()
+    cats: dict[str, bool] = {}
     for s in SERVICE_REGISTRY:
         if vnf_type.upper() in s.vnf_types:
             cats[s.category] = True
@@ -831,6 +328,50 @@ def get_service_by_id(svc_id: str) -> ServiceDef | None:
         if s.id == svc_id:
             return s
     return None
+
+
+def get_all_show_commands() -> list[tuple[str, str]]:
+    """Retorna todos os comandos SHOW únicos do catálogo, como pares (nome, comando)."""
+    seen: set[str] = set()
+    result: list[tuple[str, str]] = []
+    for svc in SERVICE_REGISTRY:
+        if svc.config_mode:
+            continue
+        cmd = svc.cli_commands[0] if svc.cli_commands else svc.description
+        if cmd not in seen:
+            seen.add(cmd)
+            result.append((svc.name, cmd))
+    return sorted(result, key=lambda x: x[1])
+
+
+def parse_params(service: ServiceDef) -> list[tuple[str, str]]:
+    """Extrai pares (nome_param, valor_default) da description de um serviço config.
+
+    Examina placeholders <nome> na description e mapeia para os valores
+    correspondentes em cli_commands[0] pela posição.
+    """
+    params: list[tuple[str, str]] = []
+    if not service.config_mode:
+        return params
+    desc = service.description
+    default_cmd = service.cli_commands[0] if service.cli_commands else desc
+    names = re.findall(r"<([^>]+)>", desc)
+    if not names:
+        return params
+    parts = re.split(r"<[^>]+>", desc)
+    tokens = default_cmd.split()
+    idx = 0
+    for name in names:
+        label = name.replace("|", "/")
+        default = ""
+        template_before = parts[len(params)].strip()
+        before_tokens = template_before.split() if template_before else []
+        idx += len(before_tokens)
+        if idx < len(tokens):
+            default = tokens[idx]
+            idx += 1
+        params.append((label, default))
+    return params
 
 
 # ═══════════════════════════════════════════════════════════════════════

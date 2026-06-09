@@ -5,9 +5,8 @@ import datetime
 import io
 import logging
 import os
-import threading
 import tkinter as tk
-from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
@@ -21,6 +20,7 @@ from huawei_manager.constants import (
     BORDER_NRM,
     CLI_FILTERS,
     CMD_TEMPLATES,
+    FG_CODE,
     FG_DIM,
     FG_MAIN,
     FONT_BODY,
@@ -29,6 +29,7 @@ from huawei_manager.constants import (
     FONT_H2_B,
     FONT_HERO_B,
     FONT_LARGE,
+    FONT_LARGE_B,
     FONT_MEDIUM,
     FONT_MEDIUM_B,
     FONT_SMALL,
@@ -41,14 +42,15 @@ from huawei_manager.constants import (
     NEON_MAG,
     NEON_PURP,
     THEME,
-    VIEW_CATEGORIES,
 )
 from huawei_manager.services import (
     VNF_TYPES,
     ServiceDef,
     execute_service,
+    get_all_show_commands,
     get_categories_for,
     get_services_for,
+    parse_params,
 )
 from huawei_manager.session import NetmikoSession
 from huawei_manager.topology import (
@@ -58,11 +60,12 @@ from huawei_manager.topology import (
     load_vnf_inventory,
     save_vnf_inventory,
 )
-from huawei_manager.vault import SecretsBackend, get_backend, rotate_ssh_key
+from huawei_manager.vault import SecretsBackend, get_backend
 from huawei_manager.widgets import (
     action_button,
     neon_button,
     neon_entry,
+    output_text,
     styled_text,
 )
 
@@ -130,9 +133,10 @@ class HuaweiRouterApp:
         self._nce_ctrl:   NorthboundController | None = None
         self._vnfs:       list[VNF] = []
         self._topo_canvas: TopologyCanvas | None = None
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="hw")
 
         self._build_layout()
-        self._show_page("config")
+        self._show_page("topology")
         self._tick_clock()
         self._init_topology_backend()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -166,7 +170,6 @@ class HuaweiRouterApp:
             "cmd":      self._build_cmd_page,
             "backup":   self._build_backup_page,
             "topology": self._build_topology_page,
-            "security": self._build_security_page,
             "services": self._build_services_page,
         }
 
@@ -214,7 +217,6 @@ class HuaweiRouterApp:
             ("cmd",      "\u2328",  "Editor",       NEON_MAG),
             ("backup",   "\U0001f4be", "Backup",               NEON_PURP),
             ("services", "\u26a1", "Servicos",              NEON_AMBER),
-            ("security", "\U0001f510", "Seguranca",            NEON_AMBER),
         )
         for key, icon, label, color in items:
             btn = neon_button(self.sidebar, label,
@@ -272,9 +274,9 @@ class HuaweiRouterApp:
     def _build_config_current_card(self, parent: tk.Frame) -> None:
         card1 = tk.Frame(parent, bg=BG_INPUT, highlightthickness=1,
                          highlightbackground=BORDER_NRM)
-        card1.pack(fill="x", pady=(0, 12))
+        card1.pack(side="left", fill="both", expand=True, padx=(0, 6))
         inner1 = tk.Frame(card1, bg=BG_INPUT)
-        inner1.pack(fill="x", padx=12, pady=8)
+        inner1.pack(fill="both", expand=True, padx=12, pady=8)
 
         tk.Label(inner1, text="CONFIGURACAO ATUAL", bg=BG_INPUT,
                  fg=NEON_CYAN, font=FONT_BODY_B).pack(anchor="w")
@@ -290,52 +292,77 @@ class HuaweiRouterApp:
         action_button(filt_row, "\u21bb  get-config",
                       lambda: self._run(self._fetch_config),
                       NEON_CYAN).pack(side="left", padx=(8, 0))
-        self.out_config = styled_text(inner1, height=10)
-        self.out_config.pack(fill="x")
+        self.out_config = output_text(inner1)
+        self.out_config.pack(fill="both", expand=True)
 
-    def _build_config_view_card(self, parent: tk.Frame) -> None:
+    def _build_config_commands_card(self, parent: tk.Frame) -> None:
         card2 = tk.Frame(parent, bg=BG_INPUT, highlightthickness=1,
                          highlightbackground=BORDER_NRM)
-        card2.pack(fill="x", pady=(0, 12))
+        card2.pack(side="left", fill="both", expand=True, padx=(6, 0))
         inner2 = tk.Frame(card2, bg=BG_INPUT)
-        inner2.pack(fill="x", padx=12, pady=8)
+        inner2.pack(fill="both", expand=True, padx=12, pady=8)
 
-        tk.Label(inner2, text="COMANDOS DE VISUALIZACAO", bg=BG_INPUT,
+        tk.Label(inner2, text="COMANDOS DISPONIVEIS", bg=BG_INPUT,
                  fg=NEON_CYAN, font=FONT_BODY_B).pack(anchor="w")
 
-        cmd_row = tk.Frame(inner2, bg=BG_INPUT)
-        cmd_row.pack(fill="x", pady=(6, 6))
+        lbf = tk.Frame(inner2, bg=BG_INPUT)
+        lbf.pack(fill="both", expand=True, pady=(4, 0))
 
-        tk.Label(cmd_row, text="Categoria:", bg=BG_INPUT, fg=FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(0, 8))
-        self._view_cat_var = tk.StringVar(value="Rede")
-        cat_names = list(VIEW_CATEGORIES.keys())
-        self._view_cat_cb = ttk.Combobox(cmd_row, textvariable=self._view_cat_var,
-            values=cat_names, state="readonly", width=16, font=FONT_BODY)
-        self._view_cat_cb.pack(side="left", padx=(0, 12))
-        self._view_cat_cb.bind("<<ComboboxSelected>>", self._on_view_cat_change)
+        self._sc_listbox = tk.Listbox(lbf, bg=BG_INPUT, fg=NEON_CYAN,
+            selectbackground=NEON_PURP, selectforeground="white",
+            relief="flat", borderwidth=0,
+            font=FONT_MEDIUM, highlightthickness=0)
+        self._sc_listbox.pack(side="left", fill="both", expand=True)
 
-        tk.Label(cmd_row, text="Comando:", bg=BG_INPUT, fg=FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(0, 8))
-        self._view_cmd_var = tk.StringVar()
-        self._view_cmd_cb = ttk.Combobox(cmd_row, textvariable=self._view_cmd_var,
-            state="readonly", width=30, font=FONT_BODY)
-        self._view_cmd_cb.pack(side="left", padx=(0, 8))
-        action_button(cmd_row, "\u25b6 Executar",
-                      lambda: self._run(self._exec_view_cmd), NEON_CYAN).pack(side="left")
+        sc_scroll = tk.Scrollbar(lbf, orient="vertical",
+                                 command=self._sc_listbox.yview)
+        sc_scroll.pack(side="right", fill="y")
+        self._sc_listbox.configure(yscrollcommand=sc_scroll.set)
 
-        self.out_view_cmd = styled_text(inner2, height=10)
-        self.out_view_cmd.pack(fill="x")
+        self._sc_commands: list[tuple[str, str]] = []
 
-        self._on_view_cat_change()
+        abar = tk.Frame(inner2, bg=BG_INPUT)
+        abar.pack(fill="x", pady=(4, 0))
+        action_button(abar, "\u25b6 Executar",
+                      lambda: self._run(self._exec_sc_cmd), NEON_CYAN).pack(side="left")
+
+        self.out_sc_cmd = output_text(inner2, height=6)
+        self.out_sc_cmd.pack(fill="x", pady=(4, 0))
+
+        self._load_sc_commands()
+        self._sc_listbox.bind("<<ListboxSelect>>", self._on_sc_select)
+
+    def _load_sc_commands(self) -> None:
+        self._sc_listbox.delete(0, "end")
+        self._sc_commands = get_all_show_commands()
+        for name, cmd in self._sc_commands:
+            self._sc_listbox.insert("end", f"  {name}")
+
+    def _on_sc_select(self, _event=None) -> None:
+        sel = self._sc_listbox.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        if idx >= len(self._sc_commands):
+            return
+        self._sc_selected_cmd = self._sc_commands[idx][1]
+
+    def _exec_sc_cmd(self) -> None:
+        cmd = getattr(self, "_sc_selected_cmd", None)
+        if not cmd:
+            self._write(self.out_sc_cmd, "\u2718  Selecione um comando na lista")
+            return
+        self._loading(self.out_sc_cmd, f"Executando: {cmd}\u2026")
+        self._write(self.out_sc_cmd, self.session.run_cli_rpc(cmd or ""))
 
     def _build_config_page(self) -> None:
         p = self._make_page("config")
-        self._page_title(p, "Configuracao", NEON_CYAN,
-                         "Comandos de visualizacao — somente leitura")
-
-        self._build_config_current_card(p)
-        self._build_config_view_card(p)
+        self._page_title(p, "Configuracao Atual", NEON_CYAN,
+                         "Comandos de visualizacao do catalogo de servicos")
+        row = tk.Frame(p, bg=BG_BASE)
+        row.pack(fill="both", expand=True)
+        self._build_config_current_card(row)
+        self._build_config_commands_card(row)
 
     def _build_route_page(self) -> None:
         p = self._make_page("route")
@@ -349,7 +376,7 @@ class HuaweiRouterApp:
         ttk.Combobox(row, textvariable=self.route_filter_var,
                      values=["routing", "bgp", "ospf", "huawei_bgp"],
                      state="readonly", width=14, font=FONT_BODY).pack(side="left")
-        self.out_route = styled_text(p)
+        self.out_route = output_text(p)
         self.out_route.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\u21bb  get routing",
                       lambda: self._run(self._fetch_route), NEON_CYAN).pack()
@@ -358,7 +385,7 @@ class HuaweiRouterApp:
         p = self._make_page("arp")
         self._page_title(p, "Tabela ARP", NEON_CYAN,
                          "CLI: display arp")
-        self.out_arp = styled_text(p)
+        self.out_arp = output_text(p)
         self.out_arp.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\u21bb  get arp",
                       lambda: self._run(self._fetch_arp), NEON_CYAN).pack()
@@ -367,7 +394,7 @@ class HuaweiRouterApp:
         p = self._make_page("info")
         self._page_title(p, "Informacoes do Sistema", NEON_MAG,
                          "CLI: display version / cpu-usage / memory-usage")
-        self.out_info = styled_text(p)
+        self.out_info = output_text(p)
         self.out_info.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\u21bb  get system info",
                       lambda: self._run(self._fetch_info), NEON_MAG).pack()
@@ -387,7 +414,7 @@ class HuaweiRouterApp:
         split.pack(fill="both", expand=True)
 
         # ── Left: template listbox ────────────────────────────────────
-        left = tk.Frame(split, bg=BG_INPUT, width=220)
+        left = tk.Frame(split, bg=BG_INPUT, width=260)
         left.pack(side="left", fill="y", padx=(0, 10))
         left.pack_propagate(False)
 
@@ -398,7 +425,17 @@ class HuaweiRouterApp:
             relief="flat", borderwidth=0,
             font=FONT_MEDIUM, highlightthickness=0)
         self._tpl_listbox.pack(fill="both", expand=True, pady=(4, 0))
+
+        self._tpl_cmd_map: dict[str, str] = {}
         for name in CMD_TEMPLATES:
+            self._tpl_cmd_map[name] = CMD_TEMPLATES[name]
+        show_cmds = get_all_show_commands()
+        existing = set(self._tpl_cmd_map.values())
+        for _svc_name, cmd in show_cmds:
+            if cmd not in existing:
+                existing.add(cmd)
+                self._tpl_cmd_map[cmd] = cmd
+        for name in self._tpl_cmd_map:
             self._tpl_listbox.insert("end", name)
         self._tpl_listbox.bind("<<ListboxSelect>>", self._on_tpl_select)
 
@@ -430,7 +467,7 @@ class HuaweiRouterApp:
                  text="\u26a0  Todas as operacoes sao registradas em huawei_audit_structured.jsonl",
                  bg=BG_INPUT, fg=NEON_AMBER, font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
 
-        self.out_cmd = styled_text(right)
+        self.out_cmd = output_text(right)
         self.out_cmd.pack(fill="both", expand=True)
 
     def _build_backup_page(self) -> None:
@@ -455,7 +492,7 @@ class HuaweiRouterApp:
                      values=["Texto (CLI)"],
                      state="readonly", width=16,
                      font=FONT_BODY).pack(side="left")
-        self.out_backup = styled_text(p)
+        self.out_backup = output_text(p)
         self.out_backup.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\U0001f4be  Fazer Backup",
                       lambda: self._run(self._do_backup), NEON_PURP).pack()
@@ -475,10 +512,8 @@ class HuaweiRouterApp:
         action_button(ctrl, "\u2795  Cadastrar Dispositivo",
                       lambda: self._show_device_dialog(), NEON_CYAN).pack(side="left", padx=(0, 8))
         action_button(ctrl, "\u21bb  Atualizar",
-                      lambda: threading.Thread(target=self._refresh_vnfs, daemon=True).start(),
+                      lambda: self._spawn(self._refresh_vnfs),
                       NEON_AMBER).pack(side="left", padx=(0, 8))
-        action_button(ctrl, "\U0001f50c  Conectar",
-                      self._connect_to_vnf, NEON_CYAN).pack(side="left", padx=(0, 8))
         action_button(ctrl, "\u2716  Voltar",
                       self._clear_vnf_target, NEON_PURP).pack(side="left")
 
@@ -505,66 +540,7 @@ class HuaweiRouterApp:
             font=FONT_SMALL)
         self._nce_status_lbl.pack(anchor="w", pady=(4, 0))
 
-        threading.Thread(target=self._refresh_vnfs, daemon=True).start()
-
-    def _build_security_page(self) -> None:
-        p = self._make_page("security")
-        self._page_title(p, "Seguranca", NEON_AMBER,
-                         "Fase 3 \u2014 Secrets vault \u00b7 Rotacao SSH \u00b7 Auditoria")
-
-        vault_card = tk.Frame(p, bg=BG_INPUT, highlightthickness=1,
-                              highlightbackground=BORDER_NRM)
-        vault_card.pack(fill="x", pady=(0, 12))
-        inner_v = tk.Frame(vault_card, bg=BG_INPUT)
-        inner_v.pack(fill="x", padx=12, pady=8)
-
-        tk.Label(inner_v, text="SECRETS BACKEND", bg=BG_INPUT,
-                 fg=FG_DIM, font=FONT_SMALL).grid(row=0, column=0, sticky="w")
-        tk.Label(inner_v, text=_secrets.backend_name, bg=BG_INPUT,
-                 fg=NEON_CYAN, font=FONT_MEDIUM_B).grid(row=0, column=1, sticky="w", padx=16)
-
-        last_rot = _secrets.last_rotation or "Nunca"
-        tk.Label(inner_v, text="ULTIMA ROTACAO SSH", bg=BG_INPUT,
-                 fg=FG_DIM, font=FONT_SMALL).grid(row=1, column=0, sticky="w", pady=(6, 0))
-        self._rot_lbl = tk.Label(inner_v, text=last_rot, bg=BG_INPUT,
-                                 fg=NEON_AMBER, font=FONT_BODY)
-        self._rot_lbl.grid(row=1, column=1, sticky="w", padx=16, pady=(6, 0))
-
-        tk.Label(inner_v, text="CHAVE SSH", bg=BG_INPUT,
-                 fg=FG_DIM, font=FONT_SMALL).grid(row=2, column=0, sticky="w", pady=(6, 0))
-        key_exists = Path(SSH_KEY).exists()
-        tk.Label(inner_v,
-                 text=f"{'\u2714 ' + SSH_KEY if key_exists else '\u2718 Nao encontrada'}",
-                 bg=BG_INPUT,
-                 fg=NEON_CYAN if key_exists else NEON_AMBER,
-                 font=FONT_BODY).grid(row=2, column=1, sticky="w", padx=16, pady=(6, 0))
-
-        tk.Label(inner_v, text="CONEXAO", bg=BG_INPUT,
-                 fg=FG_DIM, font=FONT_SMALL).grid(row=3, column=0, sticky="w", pady=(6, 0))
-        self._sess_id_lbl = tk.Label(inner_v, text="\u2014", bg=BG_INPUT,
-                                     fg=NEON_PURP, font=FONT_BODY)
-        self._sess_id_lbl.grid(row=3, column=1, sticky="w", padx=16, pady=(6, 0))
-
-        act_frame = tk.Frame(p, bg=BG_CARD)
-        act_frame.pack(fill="x", pady=(0, 12))
-        action_button(act_frame, "\U0001f511  Rotacionar Chave SSH",
-                      self._do_rotate_key, NEON_AMBER).pack(side="left", padx=(0, 8))
-        action_button(act_frame, "\u21bb  Atualizar",
-                      self._refresh_security_page, NEON_PURP).pack(side="left")
-
-        self.out_rotate = styled_text(p, height=6)
-        self.out_rotate.pack(fill="x", pady=(0, 12))
-
-        tk.Label(p, text="ULTIMAS OPERACOES AUDITADAS", bg=BG_CARD,
-                 fg=FG_DIM, font=FONT_SMALL).pack(anchor="w")
-        hdr_line = tk.Label(
-            p,
-            text="  timestamp              operacao          status    duracao",
-            bg=BG_CARD, fg=FG_DIM, font=FONT_SMALL)
-        hdr_line.pack(anchor="w")
-        self.out_audit = styled_text(p, height=7)
-        self.out_audit.pack(fill="both", expand=True, pady=(2, 0))
-        self._refresh_security_page()
+        self._spawn(self._refresh_vnfs)
 
     def _build_services_info_row(self, parent: tk.Frame) -> None:
         info_row = tk.Frame(parent, bg=BG_CARD)
@@ -610,36 +586,48 @@ class HuaweiRouterApp:
         tk.Label(filt_row, text="Modo:", bg=BG_CARD, fg=FG_DIM,
                  font=FONT_BODY).pack(side="left", padx=(4, 0))
 
-    def _build_services_scroll_area(self, parent: tk.Frame) -> None:
-        list_frame = tk.Frame(parent, bg=BG_BASE,
-                              highlightthickness=1, highlightbackground=BORDER_NRM)
-        list_frame.pack(fill="both", expand=True, pady=(0, 8))
+    def _build_services_split(self, parent: tk.Frame) -> None:
+        card = tk.Frame(parent, bg=BG_INPUT,
+                        highlightthickness=1, highlightbackground=BORDER_NRM)
+        card.pack(fill="both", expand=True, pady=(0, 8))
 
-        canvas_wrap = tk.Frame(list_frame, bg=BG_BASE)
-        canvas_wrap.pack(fill="both", expand=True)
+        inner = tk.Frame(card, bg=BG_INPUT)
+        inner.pack(fill="both", expand=True, padx=12, pady=8)
 
-        self._svc_canvas = tk.Canvas(canvas_wrap, bg=BG_BASE,
-                                      highlightthickness=0)
-        scrollbar = tk.Scrollbar(canvas_wrap, orient="vertical",
-                                 command=self._svc_canvas.yview)
-        self._svc_scroll_frame = tk.Frame(self._svc_canvas, bg=BG_BASE)
+        split = tk.Frame(inner, bg=BG_INPUT)
+        split.pack(fill="both", expand=True)
 
-        self._svc_scroll_frame.bind(
-            "<Configure>",
-            lambda e: self._svc_canvas.configure(
-                scrollregion=self._svc_canvas.bbox("all")))
+        left = tk.Frame(split, bg=BG_INPUT, width=280)
+        left.pack(side="left", fill="y", padx=(0, 10))
+        left.pack_propagate(False)
 
-        self._svc_canvas.create_window((0, 0), window=self._svc_scroll_frame,
-                                        anchor="nw", tags="inner")
-        self._svc_canvas.configure(yscrollcommand=scrollbar.set)
+        tk.Label(left, text="SERVIÇOS", bg=BG_INPUT, fg=FG_DIM,
+                 font=FONT_SMALL_B).pack(anchor="w")
 
-        self._svc_canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        lbf = tk.Frame(left, bg=BG_INPUT)
+        lbf.pack(fill="both", expand=True, pady=(4, 0))
 
-        self._svc_canvas.bind("<Enter>", lambda e: self._svc_canvas.bind(
-            "<MouseWheel>", lambda ev: self._svc_canvas.yview_scroll(
-                -1 * (ev.delta // 120), "units")))
-        self._svc_canvas.bind("<Leave>", lambda e: self._svc_canvas.unbind("<MouseWheel>"))
+        self._svc_listbox = tk.Listbox(lbf, bg=BG_INPUT, fg=NEON_CYAN,
+            selectbackground=NEON_PURP, selectforeground="white",
+            relief="flat", borderwidth=0,
+            font=FONT_MEDIUM, highlightthickness=0)
+        self._svc_listbox.pack(side="left", fill="both", expand=True)
+
+        svc_scroll = tk.Scrollbar(lbf, orient="vertical",
+                                  command=self._svc_listbox.yview)
+        svc_scroll.pack(side="right", fill="y")
+        self._svc_listbox.configure(yscrollcommand=svc_scroll.set)
+        self._svc_listbox.bind("<<ListboxSelect>>", self._on_service_select)
+
+        right = tk.Frame(split, bg=BG_INPUT)
+        right.pack(side="left", fill="both", expand=True)
+
+        self._svc_detail_frame = tk.Frame(right, bg=BG_INPUT)
+        self._svc_detail_frame.pack(fill="both", expand=True)
+
+        self._svc_param_entries: dict[str, tk.Entry] = {}
+        self._svc_services: list[ServiceDef] = []
+        self._svc_current_svc: ServiceDef | None = None
 
     def _build_services_page(self) -> None:
         p = self._make_page("services")
@@ -649,16 +637,16 @@ class HuaweiRouterApp:
 
         self._build_services_info_row(p)
         self._build_services_filter_row(p)
-        self._build_services_scroll_area(p)
+        self._build_services_split(p)
 
-        self._svc_output = styled_text(p, height=8)
+        self._svc_output = output_text(p, height=8)
         self._svc_output.pack(fill="x", pady=(0, 4))
 
         self.root.after(500, self._refresh_service_list)
 
     def _refresh_service_list(self) -> None:
-        for w in self._svc_scroll_frame.winfo_children():
-            w.destroy()
+        self._svc_listbox.delete(0, "end")
+        self._svc_services.clear()
 
         vnf = self._target_vnf
         if not vnf:
@@ -666,15 +654,14 @@ class HuaweiRouterApp:
             self._svc_type_lbl.configure(text="Tipo: \u2014")
             self._svc_cat_cb.configure(values=["todas"])
             self._svc_cat_var.set("todas")
-            tk.Label(self._svc_scroll_frame,
-                text="  Selecione um VNF na aba Topologia / VNFs",
-                bg=BG_BASE, fg=FG_DIM, font=FONT_LARGE).pack(
-                    padx=20, pady=40)
+            self._svc_listbox.insert("end", "  Selecione um VNF na aba Topologia")
+            self._clear_detail_panel()
             return
 
         vnf_type = vnf.type.upper()
+        host_info = f"{vnf.host}:{vnf.port}" if self._admin_authenticated else vnf.host
         self._svc_vnf_lbl.configure(
-            text=f"VNF: {vnf.name} ({vnf.host}:{vnf.port})")
+            text=f"VNF: {vnf.name} ({host_info})")
         self._svc_type_lbl.configure(
             text=f"Tipo: {VNF_TYPES.get(vnf_type, vnf_type)}")
         self._svc_status_lbl.configure(
@@ -682,49 +669,102 @@ class HuaweiRouterApp:
             fg={"online": NEON_CYAN, "offline": "#ff4d4d",
                 "unknown": NEON_AMBER}.get(vnf.status, NEON_AMBER))
 
-        cats = get_categories_for(vnf_type)
-        self._svc_cat_cb.configure(values=["todas"] + cats)
-        if self._svc_cat_var.get() not in ["todas"] + cats:
+        all_cats = get_categories_for(vnf_type)
+        config_cats = [c for c in all_cats if c.startswith("config-")]
+        self._svc_cat_cb.configure(values=["todas"] + config_cats)
+        if self._svc_cat_var.get() not in ["todas"] + config_cats:
             self._svc_cat_var.set("todas")
 
         cat_filter = None if self._svc_cat_var.get() == "todas" else self._svc_cat_var.get()
         services = get_services_for(vnf_type, category=cat_filter)
+        services = [s for s in services if s.config_mode]
+        self._svc_services = services
 
         if not services:
-            tk.Label(self._svc_scroll_frame,
-                text=f"  Nenhum servico disponivel para tipo '{vnf_type}'",
-                bg=BG_BASE, fg=FG_DIM, font=FONT_LARGE).pack(
-                    padx=20, pady=40)
+            self._svc_listbox.insert(
+                "end", "  Nenhum servico de configuracao para este tipo de VNF")
+            self._clear_detail_panel()
             return
 
         for svc in services:
-            card = tk.Frame(self._svc_scroll_frame, bg=BG_INPUT,
-                            highlightthickness=1, highlightbackground=BORDER_NRM)
-            card.pack(fill="x", padx=8, pady=3)
+            self._svc_listbox.insert("end", f"  \u2699 {svc.name}")
 
-            row1 = tk.Frame(card, bg=BG_INPUT)
-            row1.pack(fill="x", padx=10, pady=(6, 2))
+        self._svc_listbox.selection_set(0)
+        self._on_service_select()
 
-            tk.Label(row1, text=svc.name, bg=BG_INPUT, fg=NEON_CYAN,
-                     font=FONT_MEDIUM_B).pack(side="left")
-            tk.Label(row1, text=f"[{svc.category}]", bg=BG_INPUT,
-                     fg=NEON_PURP, font=FONT_SMALL).pack(
-                         side="left", padx=(8, 0))
+    def _on_service_select(self, _event=None) -> None:
+        sel = self._svc_listbox.curselection()
+        if not sel:
+            self._clear_detail_panel()
+            return
+        idx = sel[0]
+        if idx >= len(self._svc_services):
+            return
+        svc = self._svc_services[idx]
+        self._svc_current_svc = svc
+        self._show_service_detail(svc)
 
-            if svc.config_mode:
-                tk.Label(row1, text="CONFIG", bg=BG_INPUT,
-                         fg=NEON_AMBER, font=FONT_SMALL_B).pack(
-                             side="left", padx=(6, 0))
+    def _clear_detail_panel(self) -> None:
+        for w in self._svc_detail_frame.winfo_children():
+            w.destroy()
+        self._svc_param_entries.clear()
+        self._svc_current_svc = None
 
-            row2 = tk.Frame(card, bg=BG_INPUT)
-            row2.pack(fill="x", padx=10, pady=(0, 6))
+    def _show_service_detail(self, svc: ServiceDef) -> None:
+        self._clear_detail_panel()
+        p = self._svc_detail_frame
 
-            tk.Label(row2, text=svc.description, bg=BG_INPUT,
-                     fg=FG_DIM, font=FONT_SMALL).pack(side="left")
+        mode_label = "Configurando" if svc.config_mode else "Executando"
+        tk.Label(p, text=f"{mode_label}: {svc.name}", bg=BG_INPUT,
+                 fg=NEON_AMBER if svc.config_mode else NEON_CYAN,
+                 font=FONT_LARGE_B).pack(anchor="w", pady=(0, 4))
 
-            btn = action_button(row2, "\u25b6 Executar",
-                lambda s=svc: self._run_service(s), NEON_CYAN)
-            btn.pack(side="right", padx=4)
+        tk.Label(p, text=f"Categoria: {svc.category}", bg=BG_INPUT,
+                 fg=NEON_PURP, font=FONT_SMALL).pack(anchor="w", pady=(0, 2))
+
+        cmd_frame = tk.Frame(p, bg=BG_INPUT,
+                             highlightthickness=1, highlightbackground=BORDER_NRM)
+        cmd_frame.pack(fill="x", pady=(0, 8))
+        tk.Label(cmd_frame, text=svc.description, bg=BG_INPUT,
+                 fg=FG_CODE, font=FONT_BODY, anchor="w",
+                 wraplength=500).pack(fill="x", padx=8, pady=6)
+
+        if svc.config_mode:
+            self._build_param_fields(p, svc)
+
+        abar = tk.Frame(p, bg=BG_INPUT)
+        abar.pack(fill="x", pady=(4, 0))
+        action_button(abar, f"\u25b6 {mode_label}",
+                      lambda s=svc: self._run_service(s),
+                      NEON_CYAN).pack(side="left", padx=(0, 6))
+        action_button(abar, "\u2716  Limpar output",
+                      lambda: self._write(self._svc_output, ""),
+                      NEON_PURP).pack(side="left")
+
+    def _build_param_fields(self, parent: tk.Frame, svc: ServiceDef) -> None:
+        params = parse_params(svc)
+        if not params:
+            return
+
+        pf = tk.Frame(parent, bg=BG_INPUT,
+                      highlightthickness=1, highlightbackground=BORDER_NRM)
+        pf.pack(fill="x", pady=(0, 8))
+
+        tk.Label(pf, text="PARÂMETROS", bg=BG_INPUT, fg=FG_DIM,
+                 font=FONT_SMALL_B).pack(anchor="w", padx=8, pady=(4, 2))
+
+        self._svc_param_entries.clear()
+        for label, default in params:
+            row = tk.Frame(pf, bg=BG_INPUT)
+            row.pack(fill="x", padx=8, pady=2)
+            tk.Label(row, text=f"{label}:", bg=BG_INPUT, fg=FG_DIM,
+                     font=FONT_BODY, width=10, anchor="w").pack(side="left")
+            var = tk.StringVar(value=default)
+            entry = tk.Entry(row, textvariable=var, bg=BG_BASE, fg=NEON_CYAN,
+                             font=FONT_MEDIUM, relief="flat", bd=0,
+                             highlightthickness=1, highlightbackground=BORDER_NRM)
+            entry.pack(side="left", fill="x", expand=True, ipady=3)
+            self._svc_param_entries[label] = entry
 
     def _run_service(self, svc: ServiceDef) -> None:
         mode = self._svc_mode_var.get()
@@ -734,11 +774,23 @@ class HuaweiRouterApp:
             label += f"  |  Alvo: {vnf.name} ({vnf.host})"
         self._svc_vnf_lbl.configure(text=label)
 
+        final_svc = svc
+        if svc.config_mode and self._svc_param_entries:
+            cmd = svc.description
+            for name, entry in self._svc_param_entries.items():
+                cmd = cmd.replace(f"<{name}>", entry.get().strip())
+            final_svc = ServiceDef(
+                id=svc.id, name=svc.name, description=svc.description,
+                category=svc.category, vnf_types=svc.vnf_types,
+                cli_commands=[cmd],
+                config_mode=svc.config_mode,
+            )
+
         def _do():
             self._loading(self._svc_output, f"Executando: {svc.name} ({mode})\u2026")
 
             if mode == "mock":
-                result = execute_service(svc, session_type="mock")
+                result = execute_service(final_svc, session_type="mock")
                 self._write(self._svc_output, result)
                 return
 
@@ -748,14 +800,14 @@ class HuaweiRouterApp:
                 return
 
             if mode == "cli":
-                result = execute_service(svc, session_type="cli",
+                result = execute_service(final_svc, session_type="cli",
                                          session=self.session._conn)
                 self._write(self._svc_output, result)
                 return
 
             self._write(self._svc_output, f"Modo desconhecido: {mode}")
 
-        threading.Thread(target=_do, daemon=True).start()
+        self._spawn(_do)
 
     # ══════════════════════════════════════════════════════════════════
     #  NAVEGACAO
@@ -784,98 +836,111 @@ class HuaweiRouterApp:
         self.status_dot.configure(fg=color)
         self.status_lbl.configure(text=text)
 
+    def _set_conn_btn(self, text: str = "  CONECTAR  ", disabled: bool = False) -> None:
+        state = "disabled" if disabled else "normal"
+        self.root.after(0, lambda: self.conn_btn.configure(text=text, state=state))
+
     # ══════════════════════════════════════════════════════════════════
     #  CONEXAO SSH (Netmiko)
     # ══════════════════════════════════════════════════════════════════
+    def _get_selected_vnf(self) -> VNF | None:
+        return (self._topo_canvas.get_selected()
+                if self._topo_canvas else None) or self._target_vnf
+
     def _toggle_connect(self) -> None:
         if self.session.is_connected:
             self.session.disconnect()
             self._set_status("Desconectado", NEON_PURP)
-            self.conn_btn.configure(text="  CONECTAR  ")
-            self._update_session_id()
+            self._set_conn_btn()
             return
 
-        self._set_status("Conectando SSH\u2026", NEON_AMBER)
-        self.conn_btn.configure(state="disabled")
+        vnf = self._get_selected_vnf()
+        if vnf:
+            self._connect_with_vnf(vnf)
+        else:
+            self._connect_default()
 
+    def _do_connect(self, on_success_fmt: str, on_error_msg: str) -> None:
         def _do():
             try:
                 self.session.connect()
                 sid = self.session._session_id or "?"
                 self.root.after(0, lambda: self._set_status(
-                    f"SSH \u2714  {sid}", NEON_CYAN))
-                self.root.after(0, lambda: self.conn_btn.configure(
-                    text="  DESCONECTAR  ", state="normal"))
-                self.root.after(0, self._update_session_id)
+                    on_success_fmt.format(sid=sid), NEON_CYAN))
+                self._set_conn_btn("  DESCONECTAR  ")
             except NetmikoAuthenticationException:
                 self.root.after(0, lambda: self._set_status(
                     "Falha de autenticacao", NEON_AMBER))
-                self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
+                self._set_conn_btn()
             except NetmikoTimeoutException:
                 self.root.after(0, lambda: self._set_status(
                     "Timeout de conexao", NEON_AMBER))
-                self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
+                self._set_conn_btn()
             except ValueError as exc:
                 msg = f"Config: {exc}"
-                self.root.after(0, lambda: self._set_status(msg, NEON_AMBER))
-                self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
+                self.root.after(0, lambda m=msg: self._set_status(m, NEON_AMBER))
+                self._set_conn_btn()
             except Exception:
                 self.root.after(0, lambda: self._set_status(
-                    "Erro ao conectar", NEON_AMBER))
-                self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
+                    on_error_msg, NEON_AMBER))
+                self._set_conn_btn()
 
-        threading.Thread(target=_do, daemon=True).start()
+        self._spawn(_do)
 
-    def _update_session_id(self) -> None:
-        sid = self.session._session_id or "\u2014"
-        if hasattr(self, "_sess_id_lbl"):
-            self._sess_id_lbl.configure(text=sid)
+    def _connect_default(self) -> None:
+        self._set_status("Conectando SSH\u2026", NEON_AMBER)
+        self._set_conn_btn(disabled=True)
+        self._do_connect("SSH \u2714  {sid}", "Erro ao conectar")
+
+    def _connect_with_vnf(self, vnf: VNF) -> None:
+        if self.session.is_connected:
+            self.session.disconnect()
+        self.session.override_host = vnf.host
+        self.session.override_port = vnf.port
+        self.session.override_username = vnf.username or None
+        self.session.override_password = vnf.password or None
+        self.session.override_ssh_key = vnf.ssh_key or None
+        self._set_status(f"Conectando ao VNF {vnf.name}\u2026", NEON_AMBER)
+        self._set_conn_btn(disabled=True)
+        self._do_connect(f"VNF \u2714  {vnf.name}  {{sid}}", "Erro ao conectar ao VNF")
+
+    def _spawn(self, fn, *args) -> None:
+        self._executor.submit(fn, *args)
 
     def _run(self, func) -> None:
         if not self.session.is_connected:
             messagebox.showwarning("Aviso", "Conecte ao roteador primeiro.")
             return
-        threading.Thread(target=func, daemon=True).start()
+        self._spawn(func)
 
     def _write(self, widget: scrolledtext.ScrolledText, text: str) -> None:
         self.root.after(0, lambda: (
-            widget.delete("1.0", "end"), widget.insert("end", text)))
+            widget.configure(state="normal"),
+            widget.delete("1.0", "end"),
+            widget.insert("end", text),
+            widget.configure(state="disabled")))
 
     def _loading(self, widget: scrolledtext.ScrolledText, msg: str) -> None:
         self.root.after(0, lambda: (
-            widget.delete("1.0", "end"), widget.insert("end", f"\u23f3  {msg}\n")))
-
-    # ── view commands (aba Config) ──────────────────────────────────
-    def _on_view_cat_change(self, _event=None) -> None:
-        cat = self._view_cat_var.get()
-        cmds = []
-        for label, cmd in VIEW_CATEGORIES.get(cat, []):
-            cmds.append(cmd)
-        self._view_cmd_cb.configure(values=cmds)
-        if cmds:
-            self._view_cmd_var.set(cmds[0])
-
-    def _exec_view_cmd(self) -> None:
-        cmd = self._view_cmd_var.get()
-        if not cmd:
-            return
-        self._loading(self.out_view_cmd, f"Executando: {cmd}\u2026")
-        self._write(self.out_view_cmd, self.session.run_cli_rpc(cmd or ""))
+            widget.configure(state="normal"),
+            widget.delete("1.0", "end"),
+            widget.insert("end", f"\u23f3  {msg}\n"),
+            widget.configure(state="disabled")))
 
     # ══════════════════════════════════════════════════════════════════
     #  FETCH METHODS
     # ══════════════════════════════════════════════════════════════════
+    def _fetch_with_filter(self, filter_var: tk.StringVar, widget, default_cmd: str) -> None:
+        fkey = filter_var.get()
+        cmd  = CLI_FILTERS.get(fkey, default_cmd)
+        self._loading(widget, f"Executando: {cmd}\u2026")
+        self._write(widget, self.session.run_cli_rpc(cmd or ""))
+
     def _fetch_config(self) -> None:
-        fkey = self.config_filter_var.get()
-        cmd  = CLI_FILTERS.get(fkey, "display current-configuration")
-        self._loading(self.out_config, f"Executando: {cmd}\u2026")
-        self._write(self.out_config, self.session.run_cli_rpc(cmd or ""))
+        self._fetch_with_filter(self.config_filter_var, self.out_config, "display current-configuration")
 
     def _fetch_route(self) -> None:
-        fkey = self.route_filter_var.get()
-        cmd  = CLI_FILTERS.get(fkey, "display ip routing-table")
-        self._loading(self.out_route, f"Executando: {cmd}\u2026")
-        self._write(self.out_route, self.session.run_cli_rpc(cmd or ""))
+        self._fetch_with_filter(self.route_filter_var, self.out_route, "display ip routing-table")
 
     def _fetch_arp(self) -> None:
         self._loading(self.out_arp, "Executando: display arp\u2026")
@@ -907,7 +972,7 @@ class HuaweiRouterApp:
         if not sel:
             return
         name = self._tpl_listbox.get(sel[0])
-        cmd  = CMD_TEMPLATES.get(name, "")
+        cmd  = self._tpl_cmd_map.get(name, name) or ""
         self._cmd_editor.delete("1.0", "end")
         self._cmd_editor.insert("end", cmd)
 
@@ -987,29 +1052,6 @@ class HuaweiRouterApp:
                                     initialdir=self.backup_path.get())
         if d:
             self.backup_path.set(d)
-
-    # ══════════════════════════════════════════════════════════════════
-    #  SEGURANCA
-    # ══════════════════════════════════════════════════════════════════
-    def _do_rotate_key(self) -> None:
-        self._write(self.out_rotate, "\u23f3  Gerando par de chaves ED25519\u2026")
-        conn = self.session._conn if self.session.is_connected else None
-
-        def _do():
-            ok, msg = rotate_ssh_key(_secrets, netmiko_connection=conn)
-            self.root.after(0, lambda: self._write(self.out_rotate, msg))
-            self.root.after(0, self._refresh_security_page)
-
-        threading.Thread(target=_do, daemon=True).start()
-
-    def _refresh_security_page(self) -> None:
-        if hasattr(self, "_rot_lbl"):
-            self._rot_lbl.configure(text=_secrets.last_rotation or "Nunca")
-        if hasattr(self, "_sess_id_lbl"):
-            self._sess_id_lbl.configure(
-                text=self.session._session_id or "\u2014")
-        if hasattr(self, "out_audit"):
-            self._write(self.out_audit, audit.format_tail(10))
 
     # ══════════════════════════════════════════════════════════════════
     #  TOPOLOGIA / VNFs
@@ -1237,7 +1279,7 @@ class HuaweiRouterApp:
 
             save_vnf_inventory(vnfs)
             win.destroy()
-            threading.Thread(target=self._refresh_vnfs, daemon=True).start()
+            self._spawn(self._refresh_vnfs)
 
         bar = tk.Frame(win, bg=BG_CARD)
         bar.pack(fill="x", padx=20, pady=(16, 12))
@@ -1253,11 +1295,13 @@ class HuaweiRouterApp:
         save_vnf_inventory(vnfs)
         if self._target_vnf and self._target_vnf.id == vnf.id:
             self._clear_vnf_target()
-        threading.Thread(target=self._refresh_vnfs, daemon=True).start()
+        self._spawn(self._refresh_vnfs)
 
     def _on_vnf_selected(self, vnf: VNF) -> None:
         self._target_vnf = vnf
-        info = f"{vnf.name} ({vnf.host}:{vnf.port})"
+        info = f"{vnf.name} ({vnf.host})"
+        if self._admin_authenticated:
+            info += f":{vnf.port}"
         if self._admin_authenticated and vnf.username:
             info += f"  user:{vnf.username}"
         if hasattr(self, "_vnf_info_lbl"):
@@ -1266,38 +1310,6 @@ class HuaweiRouterApp:
         self._vnf_target_lbl.configure(text=info)
         log.info("VNF selecionado: %s", info)
         self._refresh_service_list()
-
-    def _connect_to_vnf(self) -> None:
-        vnf = (self._topo_canvas.get_selected()
-               if self._topo_canvas else None) or self._target_vnf
-        if not vnf:
-            messagebox.showinfo("Topologia", "Selecione um VNF no canvas primeiro.")
-            return
-        if self.session.is_connected:
-            self.session.disconnect()
-        self.session.override_host = vnf.host
-        self.session.override_port = vnf.port
-        self.session.override_username = vnf.username or None
-        self.session.override_password = vnf.password or None
-        self.session.override_ssh_key = vnf.ssh_key or None
-        self._set_status(f"Conectando ao VNF {vnf.name}\u2026", NEON_AMBER)
-        self.conn_btn.configure(state="disabled")
-
-        def _do():
-            try:
-                self.session.connect()
-                sid = self.session._session_id or "?"
-                self.root.after(0, lambda: self._set_status(
-                    f"VNF \u2714  {vnf.name}  {sid}", NEON_CYAN))
-                self.root.after(0, lambda: self.conn_btn.configure(
-                    text="  DESCONECTAR  ", state="normal"))
-                self.root.after(0, self._update_session_id)
-            except Exception:
-                self.root.after(0, lambda: self._set_status(
-                    "Erro ao conectar ao VNF", NEON_AMBER))
-                self.root.after(0, lambda: self.conn_btn.configure(state="normal"))
-
-        threading.Thread(target=_do, daemon=True).start()
 
     def _clear_vnf_target(self) -> None:
         self._target_vnf = None
@@ -1315,7 +1327,7 @@ class HuaweiRouterApp:
         if self.session.is_connected:
             self.session.disconnect()
             self._set_status("Desconectado", NEON_PURP)
-            self.conn_btn.configure(text="  CONECTAR  ")
+            self._set_conn_btn()
         self._refresh_service_list()
 
     def _on_close(self) -> None:

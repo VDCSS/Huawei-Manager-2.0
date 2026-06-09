@@ -74,6 +74,10 @@ def styled_text(parent, **kw) -> scrolledtext.ScrolledText:
     )
 
 
+def output_text(parent, **kw) -> scrolledtext.ScrolledText:
+    return styled_text(parent, state="disabled", **kw)
+
+
 def neon_entry(parent, textvariable: tk.Variable | None = None, width=30,
                state: Literal["normal", "disabled", "readonly"] = "normal") -> tk.Entry:
     return tk.Entry(
@@ -103,8 +107,8 @@ def action_button(parent, text, command, color=NEON_CYAN) -> tk.Button:
         highlightbackground=color,
         highlightcolor=color,
     )
-    btn.bind("<Enter>", lambda _: btn.configure(bg=color, fg=BG_BASE))
-    btn.bind("<Leave>", lambda _: btn.configure(bg=BG_INPUT, fg=color))
+    btn.bind("<Enter>", lambda _, b=btn, c=color: b.configure(bg=c, fg=BG_BASE))
+    btn.bind("<Leave>", lambda _, b=btn, c=color: b.configure(bg=BG_INPUT, fg=c))
     return btn
 
 

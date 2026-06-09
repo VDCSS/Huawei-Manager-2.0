@@ -443,7 +443,7 @@ class TopologyCanvas:
                       text=f"{len(self._vnfs)} dispositivo(s) gerenciado(s)",
                       fill=t["FG_DIM"], font=FONT_BODY, anchor="e")
 
-    def _draw_vnf_node(self, vnf: VNF, x: float, y: float) -> None:
+    def _draw_vnf_node(self, vnf: VNF, x: float, y: float, admin: bool = False) -> None:
         c = self._canvas
         t = self._theme
         nw, nh = self.NODE_W, self.NODE_H
@@ -486,8 +486,9 @@ class TopologyCanvas:
             tags=("node", vnf.id),
         )
 
+        addr = vnf.host if not admin else vnf.address()
         c.create_text(
-            x, y + 2, text=vnf.address(),
+            x, y + 2, text=addr,
             fill=t["FG_DIM"], font=FONT_BODY, anchor="center",
             tags=("node", vnf.id),
         )
@@ -525,7 +526,7 @@ class TopologyCanvas:
 
         for vnf in self._vnfs:
             x, y = self._positions[vnf.id]
-            self._draw_vnf_node(vnf, x, y)
+            self._draw_vnf_node(vnf, x, y, admin=self._admin)
 
         if self._tooltip:
             self._tooltip.hide()
