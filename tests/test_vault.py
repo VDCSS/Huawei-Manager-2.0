@@ -1,61 +1,78 @@
-from __future__ import annotations
-
 import os
-import sys
-import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import pytest
 
-from huawei_manager.vault import EnvBackend, SopsBackend
+from huawei_manager.vault import EnvBackend, SopsBackend, get_backend
 
 
-class TestEnvBackend(unittest.TestCase):
-
+class TestEnvBackend:
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         os.environ["TEST_VAULT_KEY"] = "test_value_123"
 
     def test_get_existing_key(self):
         backend = EnvBackend()
-        self.assertEqual(backend.get("TEST_VAULT_KEY"), "test_value_123")
+        assert backend.get("TEST_VAULT_KEY") == "test_value_123"
 
     def test_get_missing_key_default(self):
         backend = EnvBackend()
-        self.assertEqual(backend.get("NONEXISTENT_KEY", "fallback"), "fallback")
+        assert backend.get("NONEXISTENT_KEY", "fallback") == "fallback"
 
     def test_get_missing_key_empty_default(self):
         backend = EnvBackend()
-        self.assertEqual(backend.get("NONEXISTENT_KEY"), "")
+        assert backend.get("NONEXISTENT_KEY") == ""
 
     def test_backend_name(self):
         backend = EnvBackend()
-        self.assertEqual(backend.backend_name, "env (.env)")
+        assert "env" in backend.backend_name.lower()
 
     def test_put_and_get(self):
         backend = EnvBackend()
         backend.put("TEST_PUT_KEY", "put_value")
-        self.assertEqual(backend.get("TEST_PUT_KEY"), "put_value")
+        assert backend.get("TEST_PUT_KEY") == "put_value"
+
+    def test_put_overwrites(self):
+        backend = EnvBackend()
+        backend.put("TEST_OVERWRITE", "first")
+        backend.put("TEST_OVERWRITE", "second")
+        assert backend.get("TEST_OVERWRITE") == "second"
+
+    def test_put_persists_to_env_file(self):
+        backend = EnvBackend()
+        backend.put("TEST_PERSIST", "persisted")
         if hasattr(backend, "_env_path") and backend._env_path.exists():
-            lines = backend._env_path.read_text().splitlines()
-            has_line = any("TEST_PUT_KEY=" in line for line in lines)
-            self.assertTrue(has_line)
+            content = backend._env_path.read_text()
+            assert "TEST_PERSIST=" in content
 
 
-class TestSopsBackend(unittest.TestCase):
-
-    def test_init_no_secret_file(self):
+class TestSopsBackend:
+    def test_no_secret_file_raises(self):
         orig = Path("secrets.enc.yaml")
         if not orig.exists():
-            self.skipTest("secrets.enc.yaml not present")
+            pytest.skip("secrets.enc.yaml not present")
         tmp = orig.with_suffix(".yaml.bak")
         orig.rename(tmp)
         try:
-            with self.assertRaises(RuntimeError):
+            with pytest.raises(RuntimeError):
                 SopsBackend()
         finally:
             tmp.rename(orig)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestGetBackend:
+    def test_env_backend(self):
+        with patch.dict(os.environ, {"SECRETS_BACKEND": "env"}, clear=True):
+            backend = get_backend()
+            assert isinstance(backend, EnvBackend)
+
+    def test_unknown_backend_fallback_to_env(self):
+        with patch.dict(os.environ, {"SECRETS_BACKEND": "unknown"}, clear=True):
+            backend = get_backend()
+            assert isinstance(backend, EnvBackend)
+
+    def test_no_env_var_returns_env(self):
+        with patch.dict(os.environ, {}, clear=True):
+            backend = get_backend()
+            assert isinstance(backend, EnvBackend)

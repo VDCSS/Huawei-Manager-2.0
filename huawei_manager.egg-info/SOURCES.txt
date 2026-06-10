@@ -16,6 +16,10 @@ huawei_manager.egg-info/dependency_links.txt
 huawei_manager.egg-info/entry_points.txt
 huawei_manager.egg-info/requires.txt
 huawei_manager.egg-info/top_level.txt
+tests/test_audit_log.py
+tests/test_constants.py
+tests/test_services.py
 tests/test_session.py
+tests/test_topology.py
 tests/test_utils.py
 tests/test_vault.py

@@ -26,9 +26,11 @@ from __future__ import annotations
 import json
 import logging
 import random
+import socket
 import time
 import tkinter as tk
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -77,6 +79,47 @@ class VNF:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  SIMULAÇÃO DE STATUS (MOCK)
+# ═══════════════════════════════════════════════════════════════════════
+_mock_last_update: float = 0.0
+
+def simulate_status(vnfs: list[VNF]) -> list[VNF]:
+    global _mock_last_update
+    now = time.time()
+    if now - _mock_last_update < 15:
+        return vnfs
+    _mock_last_update = now
+    for v in vnfs:
+        if v.status == "offline":
+            if random.random() < 0.2:
+                v.status = "online"
+        elif v.status == "online":
+            if random.random() < 0.05:
+                v.status = random.choice(["offline", "unknown"])
+    return vnfs
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  PROBE TCP (REAL)
+# ═══════════════════════════════════════════════════════════════════════
+def _check_vnf(vnf: VNF, timeout: int = 3) -> str:
+    socket.create_connection((vnf.host, vnf.port or 22), timeout=timeout).close()
+    return "online"
+
+
+def probe_vnfs(vnfs: list[VNF], timeout: int = 5) -> list[VNF]:
+    with ThreadPoolExecutor(max_workers=min(10, len(vnfs) or 1)) as ex:
+        fut = {ex.submit(_check_vnf, v, timeout): v for v in vnfs if v.host}
+        for f in as_completed(fut):
+            v = fut[f]
+            try:
+                v.status = f.result()
+            except (OSError, TimeoutError):
+                v.status = "offline"
+    return vnfs
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  HUAWEI iMASTER NCE NORTHBOUND CLIENT (+ MOCK)
 # ═══════════════════════════════════════════════════════════════════════
 class NorthboundController:
@@ -105,7 +148,6 @@ class NorthboundController:
 
         if use_mock:
             log.info("NorthboundController em modo MOCK (sem iMaster NCE).")
-            self._mock_last_update: float = 0.0
             return
 
         try:
@@ -146,28 +188,12 @@ class NorthboundController:
         self._session.headers["X-Auth-Token"] = token
         log.debug("NCE auth OK, token: %s…", token[:4])
 
-    def _simulate_status(self, vnfs: list[VNF]) -> list[VNF]:
-        now = time.time()
-        if now - self._mock_last_update < 15:
-            return vnfs
-        self._mock_last_update = now
-        for v in vnfs:
-            if v.status == "offline":
-                r = random.random()
-                if r < 0.2:
-                    v.status = "online"
-            elif v.status == "online":
-                r = random.random()
-                if r < 0.05:
-                    v.status = random.choice(["offline", "unknown"])
-        return vnfs
-
     def list_vnfs(self) -> list[VNF]:
         if self._use_mock:
             vnfs = load_vnf_inventory()
             if not vnfs:
                 return []
-            vnfs = self._simulate_status(vnfs)
+            vnfs = simulate_status(vnfs)
             save_vnf_inventory(vnfs)
             return vnfs
 
@@ -344,7 +370,7 @@ class TopologyCanvas:
         self._vnfs: list[VNF]     = []
         self._selected: VNF | None = None
         self._positions: dict[str, tuple[float, float]] = {}
-        self._admin: bool = False
+        self._access_level: str = "user"
         self._tooltip = ToolTip(parent, theme)
         self._type_colors: dict[str, str] = {
             "ROUTER":        theme.get("NEON_CYAN",  "#00e5ff"),
@@ -366,8 +392,8 @@ class TopologyCanvas:
         self._canvas.pack(fill="both", expand=True)
         self._canvas.bind("<Configure>", lambda _: self._draw())
 
-    def set_admin(self, enabled: bool) -> None:
-        self._admin = enabled
+    def set_access(self, level: str) -> None:
+        self._access_level = level
 
     def pack(self, **kw):
         self._frame.pack(**kw)
@@ -527,7 +553,7 @@ class TopologyCanvas:
 
         for vnf in self._vnfs:
             x, y = self._positions[vnf.id]
-            self._draw_vnf_node(vnf, x, y, admin=self._admin)
+            self._draw_vnf_node(vnf, x, y, admin=self._access_level in ("admin", "tecnico"))
 
         if self._tooltip:
             self._tooltip.hide()
@@ -543,7 +569,7 @@ class TopologyCanvas:
         if self._tooltip:
             x = self._canvas.winfo_pointerx()
             y = self._canvas.winfo_pointery()
-            self._tooltip.show(vnf, x, y, admin=self._admin)
+            self._tooltip.show(vnf, x, y, admin=self._access_level in ("admin", "tecnico"))
 
     def _on_leave(self, event, item_id: int, fill: str) -> None:
         self._canvas.itemconfig(item_id, fill=fill)
@@ -555,11 +581,13 @@ class TopologyCanvas:
                        fg=self._theme["FG_MAIN"], font=FONT_MEDIUM,
                        activebackground=self._theme["NEON_PURP"],
                        activeforeground=self._theme["BG_BASE"])
-        menu.add_command(label="✏️  Editar Dispositivo",
-                         command=lambda: self._on_edit(vnf))
-        menu.add_command(label="🗑  Excluir Dispositivo",
-                         command=lambda: self._on_delete(vnf))
-        menu.post(event.x_root, event.y_root)
+        can_edit = self._access_level in ("admin", "tecnico")
+        if can_edit:
+            menu.add_command(label="✏️  Editar Dispositivo",
+                             command=lambda: self._on_edit(vnf))
+            menu.add_command(label="🗑  Excluir Dispositivo",
+                             command=lambda: self._on_delete(vnf))
+            menu.post(event.x_root, event.y_root)
 
     def _on_edit(self, vnf: VNF) -> None:
         if self._edit_cb:

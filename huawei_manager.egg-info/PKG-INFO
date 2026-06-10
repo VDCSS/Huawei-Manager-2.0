@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: huawei-manager
-Version: 1.0.4
+Version: 2.0.0
 Summary: Huawei SSH/CLI Manager via Netmiko + SDN + VNFs
 License: Proprietary
 Requires-Python: >=3.12
@@ -10,6 +10,9 @@ Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: cryptography>=42.0.0
 Requires-Dist: requests>=2.31.0
 Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0; extra == "dev"
 
 # HUAWEI MANAGER — Netmiko/CLI + SDN + VNF
 
@@ -38,19 +41,21 @@ Requires-Dist: pyyaml>=6.0
 ### Fase 4 — Topologia SDN / Multi-VNF
 - **NorthboundController** para Huawei iMaster NCE (RESTCONF v2)
 - Modo **MOCK** integrado — funciona 100% sem iMaster, usando `vnf_inventory.json`
-- **Canvas Tkinter** com nós VNF coloridos por tipo (ROUTER, SWITCH, FIREWALL, LB, WAN-ACCEL, AP)
+- **Canvas Tkinter** com barra SDN no topo + grid 4 colunas, nós coloridos por tipo
+- Barra roxa com contador de dispositivos gerenciados + tooltip flutuante
 - Status online/offline/unknown com simulação automática
 - Seleção clicável de VNF como alvo SSH
 - **TopologyPoller** em thread separada, atualização a cada 30s
 
-### Catálogo de Serviços (+120 comandos)
-- 56 serviços para **ROUTER**: routing-table, BGP, OSPF, IS-IS, MPLS, VRF, QoS, ACL, NAT, VRRP, BFD, NQA
-- 38 serviços para **SWITCH**: VLAN, STP, LACP, MAC, LLDP, PoE, IGMP snooping, DHCP snooping, port-security
+### Catálogo de Serviços (144 comandos)
+- 78 serviços para **ROUTER**: routing-table, BGP, OSPF, IS-IS, MPLS, VRF, QoS, ACL, NAT, além de templates de config (nat, interface, acl, bgp, ospf, vlan)
+- 41 serviços para **SWITCH**: VLAN, STP, LACP, MAC, LLDP, PoE, IGMP snooping, DHCP snooping, port-security
 - 30 serviços para **FIREWALL**: security-policy, session-table, IPSec, IKE, IPS, antivírus, URL filter, zonas, HRP
 - 11 serviços para **LOAD-BALANCER**: service-group, virtual-server, real-server, health checks
 - 12 serviços para **WAN-ACCEL**: otimização, compressão, fluxos
 - 13 serviços para **AP**: wireless, clientes, rádio, SSIDs
 - Execução em 2 modos: **mock** (lab) ou **cli** (Netmiko via SSH)
+- Catálogo definido via factory `_svc()`, 0 boilerplate, 0 duplicação
 
 ---
 
@@ -101,8 +106,8 @@ Requires-Dist: pyyaml>=6.0
 ## Instalação
 
 ```bash
-git clone <repo>
-cd Scripts-main
+git clone https://github.com/VDCSS/Huawei-Manager-2.0.git
+cd Huawei-Manager-2.0
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -192,7 +197,9 @@ huawei-manager
 
 ### Topologia / VNFs
 - Abra a aba **🗺 Topologia / VNFs**
-- Nós coloridos em círculo: ROUTER (cyan), SWITCH (magenta), FIREWALL (red), LB (amber)
+- Barra SDN roxa no topo com contador de dispositivos + grid 4 colunas
+- Tooltip flutuante com detalhes do VNF ao passar o mouse (toggle administrador)
+- Menu de contexto (botão direito): editar ou excluir VNF
 - Clique em um VNF para selecionar como alvo SSH
 - Botão **"🔌 Conectar ao VNF selecionado"** conecta a sessão ao host/porta do VNF
 - Botão **"✖ Voltar ao padrão"** retorna ao dispositivo do `.env`
@@ -211,7 +218,7 @@ huawei-manager
 - `NCE_HOST` vazio → `NorthboundController(use_mock=True)`
 - 12 VNFs pré-carregados do `vnf_inventory.json`
 - Status simulados com variação automática
-- 122 serviços executáveis com output realista simulado
+- 144 serviços executáveis com output realista simulado
 
 ### Modo Real (iMaster NCE)
 - Configure `NCE_HOST`, `NCE_PORT`, `NCE_USERNAME`, `NCE_PASSWORD` no `.env`
