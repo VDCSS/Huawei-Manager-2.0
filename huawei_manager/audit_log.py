@@ -116,8 +116,9 @@ class AuditLogger:
         with _lock:
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(line + "\n")
-        _log.info("AUDIT op=%-12s user=%-8s host=%-16s status=%-10s dt=%.1fms",
-                  entry.op, entry.user, entry.host, entry.status, entry.duration_ms)
+        _log.info("AUDIT op=%-12s user=%-8s status=%-10s dt=%.1fms",
+                  entry.op, entry.user, entry.status, entry.duration_ms)
+        _log.debug("AUDIT host=%s", entry.host)
 
     # ── API direta ────────────────────────────────────────────────────
     def log_operation(

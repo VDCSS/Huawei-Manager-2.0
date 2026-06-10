@@ -263,7 +263,7 @@ SERVICE_REGISTRY: list[ServiceDef] = [
     _svc('fw-hrp', 'HRP (HA) Status', 'display hrp status', 'ha', ['FIREWALL']),
     _svc('fw-cpu', 'CPU Usage', 'display firewall cpu-usage', 'system', ['FIREWALL']),
     _svc('fw-mem', 'Memory Usage', 'display memory-usage', 'system', ['FIREWALL']),
-    _svc('fw-context', 'Contextos (VSYS)', 'display switch VSYS', 'system', ['FIREWALL']),
+    _svc('fw-context', 'Contextos (VSYS)', 'display vsys', 'system', ['FIREWALL']),
     _svc('fw-log', 'Logbuffer', 'display logbuffer', 'troubleshoot', ['FIREWALL']),
     _svc('fw-firewall-stat', 'Firewall Statistics', 'display firewall statistics', 'troubleshoot', ['FIREWALL']),
     _svc('fw-interface-stat', 'Interface Stats', 'display interface brief', 'troubleshoot', ['FIREWALL']),
@@ -294,7 +294,7 @@ SERVICE_REGISTRY: list[ServiceDef] = [
          'display current-configuration | include sysname', 'system', ['ROUTER', 'SWITCH']),
     _svc('sys-diagnose', 'Diagnóstico do Sistema', 'display diagnostic-information', 'troubleshoot', _T_ALL),
     _svc('sys-license', 'Licenças', 'display license', 'system', ['ROUTER', 'SWITCH', 'FIREWALL']),
-    _svc('sys-hardware', 'Hardware', 'display device hardware', 'system', ['ROUTER', 'SWITCH']),
+    _svc('sys-hardware', 'Hardware', 'display device', 'system', ['ROUTER', 'SWITCH']),
     _svc('sys-power', 'Fonte de Alimentação', 'display power', 'system', ['ROUTER', 'SWITCH']),
     _svc('sys-fan', 'Ventoinhas', 'display fan', 'system', ['ROUTER', 'SWITCH']),
     _svc('sys-temperature', 'Temperatura', 'display temperature all', 'system', ['ROUTER', 'SWITCH']),
@@ -688,6 +688,7 @@ def _execute_cli(service: ServiceDef, connection, **kwargs) -> str:
 
         return "\n\n".join(result_parts)
     except Exception as e:
+        log.error("execute_service CLI falhou: %s", e)
         return f"✘  Erro CLI: {e}"
 
 

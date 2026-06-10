@@ -126,7 +126,8 @@ class NorthboundController:
             "Accept":       "application/json",
         })
         self._authenticate(username, password)
-        log.info("NCE connected: %s:%d", host, port)
+        log.info("NCE conectado (iMaster NCE)")
+        log.debug("NCE conectado — %s (porta %d)", host, port)
 
     def _authenticate(self, username: str, password: str) -> None:
         url  = f"{self._base_url}/data/auth/token:tokens"
@@ -143,7 +144,7 @@ class NorthboundController:
         if not token:
             raise RuntimeError(f"NCE auth: token não encontrado — {data}")
         self._session.headers["X-Auth-Token"] = token
-        log.info("NCE auth OK, token: %s…", token[:12])
+        log.debug("NCE auth OK, token: %s…", token[:4])
 
     def _simulate_status(self, vnfs: list[VNF]) -> list[VNF]:
         now = time.time()

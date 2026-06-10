@@ -9,5 +9,6 @@ archive/
 *.swo
 *.swn
 *.log
+logs/
 *.jsonl
 AGENTS.md

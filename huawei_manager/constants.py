@@ -47,22 +47,41 @@ THEME = {
     "FG_CODE":    FG_CODE,    "BORDER_NRM": BORDER_NRM,
 }
 
-# ─── COMANDOS CLI ────────────────────────────────────────────────────
-CLI_FILTERS: dict[str, str | None] = {
-    "full_config": "display current-configuration",
-    "interfaces": "display interface",
+# ─── COMANDOS CLI — filtros da aba Roteamento ───────────────────────
+CLI_FILTERS: dict[str, str] = {
+    "interfaces":          "display interface",
     "interfaces_counters": "display counters interface",
-    "routing": "display ip routing-table",
-    "bgp": "display bgp peer",
-    "vrfs": "display ip vpn-instance",
-    "ospf": "display ospf peer",
-    "lldp": "display lldp neighbor brief",
-    "qos": "display qos policy",
-    "system_info": "display version",
-    "arp": "display arp",
-    "cpu_mem": "display cpu-usage",
-    "huawei_bgp": "display bgp peer",
-    "huawei_mpls": "display mpls ldp peer",
+    "routing":             "display ip routing-table",
+    "bgp":                 "display bgp peer",
+    "vrfs":                "display ip vpn-instance",
+    "ospf":                "display ospf peer",
+    "lldp":                "display lldp neighbor brief",
+    "qos":                 "display qos policy",
+    "huawei_mpls":         "display mpls ldp peer",
+}
+
+# ─── ROTULOS DESCRITIVOS para o combobox de Roteamento ─────────────
+ROUTE_FILTER_LABELS: dict[str, str] = {
+    "routing":            "Tabela de Rotas do Roteador",
+    "interfaces":         "Status de Todas as Interfaces de Rede",
+    "interfaces_counters":"Contadores de Tráfego das Interfaces",
+    "bgp":                "Vizinhos BGP (Roteamento entre Sistemas)",
+    "vrfs":               "Redes Virtuais (VRF)",
+    "ospf":               "Vizinhos OSPF (Roteamento Interno)",
+    "lldp":               "Dispositivos Vizinhos Conectados (LLDP)",
+    "qos":                "Qualidade de Serviço (QoS)",
+    "huawei_mpls":        "Vizinhos MPLS (Rotas por Etiquetas)",
+}
+
+# ─── ROTULOS DESCRITIVOS para o combobox de Categoria (Serviços) ──
+SERVICE_CAT_LABELS: dict[str, str] = {
+    "todas":           "Todas as Categorias",
+    "config-nat":      "NAT",
+    "config-interface": "Interfaces",
+    "config-acl":      "ACL",
+    "config-bgp":      "BGP",
+    "config-ospf":     "OSPF",
+    "config-vlan":     "VLAN",
 }
 
 # ─── CATEGORIAS DE COMANDOS DE VISUALIZAÇÃO (aba Config) ────────────

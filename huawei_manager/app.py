@@ -7,6 +7,8 @@ import logging
 import os
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
@@ -24,7 +26,6 @@ from huawei_manager.constants import (
     FG_DIM,
     FG_MAIN,
     FONT_BODY,
-    FONT_BODY_B,
     FONT_H1,
     FONT_H2_B,
     FONT_HERO_B,
@@ -41,6 +42,8 @@ from huawei_manager.constants import (
     NEON_CYAN,
     NEON_MAG,
     NEON_PURP,
+    ROUTE_FILTER_LABELS,
+    SERVICE_CAT_LABELS,
     THEME,
 )
 from huawei_manager.services import (
@@ -70,12 +73,34 @@ from huawei_manager.widgets import (
 )
 
 # ─── LOG ─────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s \u2014 %(message)s",
-    handlers=[logging.StreamHandler()],
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+
+_fh = RotatingFileHandler(
+    LOG_DIR / "huawei-manager.log",
+    maxBytes=5_000_000,
+    backupCount=3,
+    encoding="utf-8",
 )
+_fh.setLevel(logging.DEBUG)
+_fh.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)-7s] %(name)s \u2014 %(message)s"
+))
+
+_sh = logging.StreamHandler()
+_sh.setLevel(logging.INFO)
+_sh.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s \u2014 %(message)s",
+    datefmt="%H:%M:%S"
+))
+
+_root = logging.getLogger("huawei")
+_root.setLevel(logging.DEBUG)
+_root.addHandler(_fh)
+_root.addHandler(_sh)
+
 log = logging.getLogger("huawei_manager")
+log.info("Logging iniciado \u2014 %s", LOG_DIR.resolve())
 
 # ─── SECRETS / AUDIT ─────────────────────────────────────────────────
 try:
@@ -210,11 +235,11 @@ class HuaweiRouterApp:
         self._nav_buttons: dict[str, tk.Frame] = {}
         items = (
             ("topology", "\U0001f5fa", "Topologia / VNFs",     NEON_AMBER),
-            ("config",   "\U0001f4cb", "Configuracao",      NEON_CYAN),
+            ("config",   "\U0001f4cb", "Config Atual",       NEON_CYAN),
             ("route",    "\U0001f310", "Roteamento",          NEON_CYAN),
             ("arp",      "\U0001f4e1", "Tabela ARP",           NEON_CYAN),
             ("info",     "\U0001f4bb", "Info do Sistema",      NEON_MAG),
-            ("cmd",      "\u2328",  "Editor",       NEON_MAG),
+            ("cmd",      "\u2328",  "Editor de Comandos",       NEON_MAG),
             ("backup",   "\U0001f4be", "Backup",               NEON_PURP),
             ("services", "\u26a1", "Servicos",              NEON_AMBER),
         )
@@ -271,114 +296,29 @@ class HuaweiRouterApp:
     #  PAGE BUILDERS
     # ══════════════════════════════════════════════════════════════════
 
-    def _build_config_current_card(self, parent: tk.Frame) -> None:
-        card1 = tk.Frame(parent, bg=BG_INPUT, highlightthickness=1,
-                         highlightbackground=BORDER_NRM)
-        card1.pack(side="left", fill="both", expand=True, padx=(0, 6))
-        inner1 = tk.Frame(card1, bg=BG_INPUT)
-        inner1.pack(fill="both", expand=True, padx=12, pady=8)
-
-        tk.Label(inner1, text="CONFIGURACAO ATUAL", bg=BG_INPUT,
-                 fg=NEON_CYAN, font=FONT_BODY_B).pack(anchor="w")
-        filt_row = tk.Frame(inner1, bg=BG_INPUT)
-        filt_row.pack(fill="x", pady=(6, 6))
-        tk.Label(filt_row, text="Filtro:", bg=BG_INPUT, fg=FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(0, 8))
-        self.config_filter_var = tk.StringVar(value="full_config")
-        ttk.Combobox(filt_row, textvariable=self.config_filter_var,
-                     values=["full_config", "interfaces", "bgp", "vrfs", "ospf",
-                             "qos", "huawei_bgp", "huawei_mpls", "arp"],
-                     state="readonly", width=20, font=FONT_BODY).pack(side="left")
-        action_button(filt_row, "\u21bb  get-config",
-                      lambda: self._run(self._fetch_config),
-                      NEON_CYAN).pack(side="left", padx=(8, 0))
-        self.out_config = output_text(inner1)
-        self.out_config.pack(fill="both", expand=True)
-
-    def _build_config_commands_card(self, parent: tk.Frame) -> None:
-        card2 = tk.Frame(parent, bg=BG_INPUT, highlightthickness=1,
-                         highlightbackground=BORDER_NRM)
-        card2.pack(side="left", fill="both", expand=True, padx=(6, 0))
-        inner2 = tk.Frame(card2, bg=BG_INPUT)
-        inner2.pack(fill="both", expand=True, padx=12, pady=8)
-
-        tk.Label(inner2, text="COMANDOS DISPONIVEIS", bg=BG_INPUT,
-                 fg=NEON_CYAN, font=FONT_BODY_B).pack(anchor="w")
-
-        lbf = tk.Frame(inner2, bg=BG_INPUT)
-        lbf.pack(fill="both", expand=True, pady=(4, 0))
-
-        self._sc_listbox = tk.Listbox(lbf, bg=BG_INPUT, fg=NEON_CYAN,
-            selectbackground=NEON_PURP, selectforeground="white",
-            relief="flat", borderwidth=0,
-            font=FONT_MEDIUM, highlightthickness=0)
-        self._sc_listbox.pack(side="left", fill="both", expand=True)
-
-        sc_scroll = tk.Scrollbar(lbf, orient="vertical",
-                                 command=self._sc_listbox.yview)
-        sc_scroll.pack(side="right", fill="y")
-        self._sc_listbox.configure(yscrollcommand=sc_scroll.set)
-
-        self._sc_commands: list[tuple[str, str]] = []
-
-        abar = tk.Frame(inner2, bg=BG_INPUT)
-        abar.pack(fill="x", pady=(4, 0))
-        action_button(abar, "\u25b6 Executar",
-                      lambda: self._run(self._exec_sc_cmd), NEON_CYAN).pack(side="left")
-
-        self.out_sc_cmd = output_text(inner2, height=6)
-        self.out_sc_cmd.pack(fill="x", pady=(4, 0))
-
-        self._load_sc_commands()
-        self._sc_listbox.bind("<<ListboxSelect>>", self._on_sc_select)
-
-    def _load_sc_commands(self) -> None:
-        self._sc_listbox.delete(0, "end")
-        self._sc_commands = get_all_show_commands()
-        for name, cmd in self._sc_commands:
-            self._sc_listbox.insert("end", f"  {name}")
-
-    def _on_sc_select(self, _event=None) -> None:
-        sel = self._sc_listbox.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        if idx >= len(self._sc_commands):
-            return
-        self._sc_selected_cmd = self._sc_commands[idx][1]
-
-    def _exec_sc_cmd(self) -> None:
-        cmd = getattr(self, "_sc_selected_cmd", None)
-        if not cmd:
-            self._write(self.out_sc_cmd, "\u2718  Selecione um comando na lista")
-            return
-        self._loading(self.out_sc_cmd, f"Executando: {cmd}\u2026")
-        self._write(self.out_sc_cmd, self.session.run_cli_rpc(cmd or ""))
-
     def _build_config_page(self) -> None:
         p = self._make_page("config")
-        self._page_title(p, "Configuracao Atual", NEON_CYAN,
-                         "Comandos de visualizacao do catalogo de servicos")
-        row = tk.Frame(p, bg=BG_BASE)
-        row.pack(fill="both", expand=True)
-        self._build_config_current_card(row)
-        self._build_config_commands_card(row)
+        self._page_title(p, "Configuracao Atual", NEON_CYAN, "")
+        self.out_config = output_text(p)
+        self.out_config.pack(fill="both", expand=True, pady=(0, 10))
+        action_button(p, "\u21bb  Carregar Configuracao Atual",
+                      lambda: self._run(self._fetch_config), NEON_CYAN).pack()
 
     def _build_route_page(self) -> None:
         p = self._make_page("route")
-        self._page_title(p, "Tabela de Roteamento", NEON_CYAN,
-                         "CLI: display ip routing-table")
+        self._page_title(p, "Tabelas e Status do Roteador", NEON_CYAN,
+                         "Visualizacao de tabelas, vizinhos e metricas do dispositivo")
         row = tk.Frame(p, bg=BG_CARD)
         row.pack(fill="x", pady=(0, 8))
         tk.Label(row, text="Filtro:", bg=BG_CARD, fg=FG_DIM,
                  font=FONT_BODY).pack(side="left", padx=(0, 8))
-        self.route_filter_var = tk.StringVar(value="routing")
+        self.route_filter_var = tk.StringVar(value="Tabela de Rotas do Roteador")
         ttk.Combobox(row, textvariable=self.route_filter_var,
-                     values=["routing", "bgp", "ospf", "huawei_bgp"],
-                     state="readonly", width=14, font=FONT_BODY).pack(side="left")
+                     values=list(ROUTE_FILTER_LABELS.values()),
+                     state="readonly", width=48, font=FONT_BODY).pack(side="left")
         self.out_route = output_text(p)
         self.out_route.pack(fill="both", expand=True, pady=(0, 10))
-        action_button(p, "\u21bb  get routing",
+        action_button(p, "\u21bb  Carregar",
                       lambda: self._run(self._fetch_route), NEON_CYAN).pack()
 
     def _build_arp_page(self) -> None:
@@ -401,8 +341,7 @@ class HuaweiRouterApp:
 
     def _build_cmd_page(self) -> None:
         p = self._make_page("cmd")
-        self._page_title(p, "Editor de Comandos", NEON_MAG,
-                         "Comandos avulsos show/config — templates no painel lateral")
+        self._page_title(p, "Editor de Comandos", NEON_MAG, "")
 
         card = tk.Frame(p, bg=BG_INPUT, highlightthickness=1,
                         highlightbackground=BORDER_NRM)
@@ -413,12 +352,12 @@ class HuaweiRouterApp:
         split = tk.Frame(inner, bg=BG_INPUT)
         split.pack(fill="both", expand=True)
 
-        # ── Left: template listbox ────────────────────────────────────
+        # ── Left: command listbox ─────────────────────────────────────
         left = tk.Frame(split, bg=BG_INPUT, width=260)
         left.pack(side="left", fill="y", padx=(0, 10))
         left.pack_propagate(False)
 
-        tk.Label(left, text="TEMPLATES", bg=BG_INPUT, fg=FG_DIM,
+        tk.Label(left, text="COMANDOS DISPONIVEIS", bg=BG_INPUT, fg=FG_DIM,
                  font=FONT_SMALL_B).pack(anchor="w")
         self._tpl_listbox = tk.Listbox(left, bg=BG_INPUT, fg=NEON_CYAN,
             selectbackground=NEON_PURP, selectforeground="white",
@@ -426,15 +365,32 @@ class HuaweiRouterApp:
             font=FONT_MEDIUM, highlightthickness=0)
         self._tpl_listbox.pack(fill="both", expand=True, pady=(4, 0))
 
+        # Comandos cobertos por abas dedicadas — excluir da listbox
+        _EXCLUDED_CMDS: set[str] = {
+            "display current-configuration",
+            "display version", "display device", "display license",
+            "display cpu-usage", "display memory-usage",
+            "display interface brief", "display lldp neighbor brief",
+            "display arp",
+            "display interface", "display counters interface",
+            "display ip routing-table", "display bgp peer",
+            "display ip vpn-instance", "display ospf peer",
+            "display qos policy", "display mpls ldp peer",
+        }
+
         self._tpl_cmd_map: dict[str, str] = {}
         for name in CMD_TEMPLATES:
-            self._tpl_cmd_map[name] = CMD_TEMPLATES[name]
+            cmd = CMD_TEMPLATES[name]
+            if cmd and cmd not in _EXCLUDED_CMDS:
+                self._tpl_cmd_map[name] = cmd
+
+        existing_cmds = set(self._tpl_cmd_map.values())
         show_cmds = get_all_show_commands()
-        existing = set(self._tpl_cmd_map.values())
-        for _svc_name, cmd in show_cmds:
-            if cmd not in existing:
-                existing.add(cmd)
-                self._tpl_cmd_map[cmd] = cmd
+        for svc_name, cmd in show_cmds:
+            if cmd not in existing_cmds and cmd not in _EXCLUDED_CMDS:
+                existing_cmds.add(cmd)
+                self._tpl_cmd_map[svc_name] = cmd
+
         for name in self._tpl_cmd_map:
             self._tpl_listbox.insert("end", name)
         self._tpl_listbox.bind("<<ListboxSelect>>", self._on_tpl_select)
@@ -565,7 +521,7 @@ class HuaweiRouterApp:
 
         tk.Label(filt_row, text="Categoria:", bg=BG_CARD, fg=FG_DIM,
                  font=FONT_BODY).pack(side="left", padx=(0, 8))
-        self._svc_cat_var = tk.StringVar(value="todas")
+        self._svc_cat_var = tk.StringVar(value="Todas as Categorias")
         self._svc_cat_cb = ttk.Combobox(filt_row,
             textvariable=self._svc_cat_var, state="readonly",
             width=20, font=FONT_BODY)
@@ -652,8 +608,8 @@ class HuaweiRouterApp:
         if not vnf:
             self._svc_vnf_lbl.configure(text="VNF: (nenhum selecionado)")
             self._svc_type_lbl.configure(text="Tipo: \u2014")
-            self._svc_cat_cb.configure(values=["todas"])
-            self._svc_cat_var.set("todas")
+            self._svc_cat_cb.configure(values=["Todas as Categorias"])
+            self._svc_cat_var.set("Todas as Categorias")
             self._svc_listbox.insert("end", "  Selecione um VNF na aba Topologia")
             self._clear_detail_panel()
             return
@@ -671,11 +627,14 @@ class HuaweiRouterApp:
 
         all_cats = get_categories_for(vnf_type)
         config_cats = [c for c in all_cats if c.startswith("config-")]
-        self._svc_cat_cb.configure(values=["todas"] + config_cats)
-        if self._svc_cat_var.get() not in ["todas"] + config_cats:
-            self._svc_cat_var.set("todas")
+        cat_labels = [SERVICE_CAT_LABELS.get(c, c) for c in config_cats]
+        self._svc_cat_cb.configure(values=["Todas as Categorias"] + cat_labels)
+        if self._svc_cat_var.get() not in ["Todas as Categorias"] + cat_labels:
+            self._svc_cat_var.set("Todas as Categorias")
 
-        cat_filter = None if self._svc_cat_var.get() == "todas" else self._svc_cat_var.get()
+        selected_cat = self._svc_cat_var.get()
+        label_to_cat = {v: k for k, v in SERVICE_CAT_LABELS.items()}
+        cat_filter = None if selected_cat == "Todas as Categorias" else label_to_cat.get(selected_cat)
         services = get_services_for(vnf_type, category=cat_filter)
         services = [s for s in services if s.config_mode]
         self._svc_services = services
@@ -880,7 +839,8 @@ class HuaweiRouterApp:
                 msg = f"Config: {exc}"
                 self.root.after(0, lambda m=msg: self._set_status(m, NEON_AMBER))
                 self._set_conn_btn()
-            except Exception:
+            except Exception as exc:
+                log.exception("Falha inesperada em _do_connect: %s", exc)
                 self.root.after(0, lambda: self._set_status(
                     on_error_msg, NEON_AMBER))
                 self._set_conn_btn()
@@ -930,17 +890,16 @@ class HuaweiRouterApp:
     # ══════════════════════════════════════════════════════════════════
     #  FETCH METHODS
     # ══════════════════════════════════════════════════════════════════
-    def _fetch_with_filter(self, filter_var: tk.StringVar, widget, default_cmd: str) -> None:
-        fkey = filter_var.get()
-        cmd  = CLI_FILTERS.get(fkey, default_cmd)
-        self._loading(widget, f"Executando: {cmd}\u2026")
-        self._write(widget, self.session.run_cli_rpc(cmd or ""))
-
     def _fetch_config(self) -> None:
-        self._fetch_with_filter(self.config_filter_var, self.out_config, "display current-configuration")
+        self._loading(self.out_config, "Carregando configuracao atual\u2026")
+        self._write(self.out_config, self.session.run_cli_rpc("display current-configuration"))
 
     def _fetch_route(self) -> None:
-        self._fetch_with_filter(self.route_filter_var, self.out_route, "display ip routing-table")
+        label_to_key = {v: k for k, v in ROUTE_FILTER_LABELS.items()}
+        fkey = label_to_key.get(self.route_filter_var.get(), "routing")
+        cmd  = CLI_FILTERS.get(fkey, "display ip routing-table")
+        self._loading(self.out_route, f"Executando: {cmd}\u2026")
+        self._write(self.out_route, self.session.run_cli_rpc(cmd or ""))
 
     def _fetch_arp(self) -> None:
         self._loading(self.out_arp, "Executando: display arp\u2026")
@@ -1045,6 +1004,7 @@ class HuaweiRouterApp:
                                 host=host, status="ok", file=path)
             log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
         except OSError as ex:
+            log.error("Backup falhou: %s", ex)
             self._write(self.out_backup, f"\u2718  Erro ao salvar:\n  {ex}")
 
     def _choose_backup_dir(self) -> None:
@@ -1064,7 +1024,8 @@ class HuaweiRouterApp:
             verify_ssl=NCE_VERIFY_SSL,
             use_mock=use_mock,
         )
-        log.info("Topology backend: mock=%s host=%s", use_mock, NCE_HOST or "(local)")
+        log.info("Topology backend: mock=%s", use_mock)
+        log.debug("Topology backend: mock=%s host=%s", use_mock, NCE_HOST or "(local)")
 
     def _refresh_vnfs(self) -> None:
         vnfs = load_vnf_inventory()

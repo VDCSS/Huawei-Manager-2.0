@@ -123,20 +123,21 @@ class NetmikoSession:
         if key:
             kwargs["use_keys"] = True
             kwargs["ssh_private_key_file"] = key
-            log.info("Auth com chave SSH: %s", key)
+            log.debug("Auth com chave SSH: %s", key)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         sess_dir = Path("sessions")
         sess_dir.mkdir(exist_ok=True)
         sess_log = sess_dir / f"{self._host}_{self._port}_{ts}.log"
         kwargs["session_log"] = str(sess_log)
-        log.info("Session log: %s", sess_log)
+        log.debug("Session log: %s", sess_log)
 
         with self._audit.timed("connect", user=self._user, host=self._host) as ctx:
             self._conn = ConnectHandler(**kwargs)
             ctx.set_status("ok")
 
-        log.info("Sessao SSH aberta via Netmiko — %s:%d", self._host, self._port)
+        log.info("Sessao SSH aberta")
+        log.debug("Sessao SSH aberta — %s", self._host)
         self._audit.log_operation(
             "connect", user=self._user, host=self._host,
             status="ok", session_id=self._session_id,
@@ -146,8 +147,8 @@ class NetmikoSession:
         if self._conn:
             try:
                 self._conn.disconnect()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("disconnect: %s", exc)
             self._conn = None
             log.info("Sessao SSH encerrada")
 
@@ -163,7 +164,7 @@ class NetmikoSession:
             out = self._conn.send_command(command, read_timeout=120)
             return clean_output(str(out))
         except Exception as e:
-            log.error("Comando falhou: %s — %s", command, e)
+            log.exception("Comando falhou: %s", command)
             return f"ERRO: {e}"
 
     def run_cli_timing(self, cmd: str) -> str:
@@ -181,7 +182,7 @@ class NetmikoSession:
                     return clean_output(str(out))
                 except Exception as e:
                     ctx.set_status("error")
-                    log.error("CLI timing falhou: %s — %s", cmd, e)
+                    log.exception("CLI timing falhou: %s", cmd)
                     return f"ERRO: {e}"
 
     # ── mapeia filtro (key) para comando CLI ──────────────────────────
@@ -275,7 +276,7 @@ class NetmikoSession:
                     return True, f"OK Configuracao aplicada\n{output}"
                 except Exception as e:
                     ctx.set_status("error")
-                    log.error("edit-config falhou: %s", e)
+                    log.exception("edit-config falhou")
                     return False, f"ERRO: {e}"
 
     # ── schemas (nao aplicavel via CLI) ───────────────────────────────
@@ -300,5 +301,5 @@ class NetmikoSession:
                     return result
                 except Exception as e:
                     ctx.set_status("error")
-                    log.error("CLI falhou: %s", e)
+                    log.exception("CLI falhou")
                     return f"ERRO: {e}"

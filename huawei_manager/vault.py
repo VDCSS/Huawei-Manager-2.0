@@ -135,7 +135,7 @@ class VaultBackend(SecretsBackend):
 
         if not self._client.is_authenticated():
             raise RuntimeError("Vault auth falhou — verifique VAULT_ADDR e VAULT_TOKEN")
-        log.info("Vault backend: %s  path=%s", addr, self._path)
+        log.debug("Vault backend: %s  path=%s", addr, self._path)
 
     def _read(self) -> dict:
         resp = self._client.secrets.kv.v2.read_secret_version(
@@ -177,7 +177,7 @@ class AWSBackend(SecretsBackend):
         self._client = boto3.client("secretsmanager", region_name=region)
         self._cache: dict = {}
         self._refresh()
-        log.info("AWS Secrets Manager: %s  region=%s", self._secret_name, region)
+        log.debug("AWS Secrets Manager: %s  region=%s", self._secret_name, region)
 
     def _refresh(self) -> None:
         resp = self._client.get_secret_value(SecretId=self._secret_name)
@@ -317,6 +317,7 @@ def rotate_ssh_key(
                 push_msg = f"  ✔ Enviada ao roteador via CLI\n  {output[:200]}"
                 deployed = True
             except Exception as e:
+                log.warning("Falha ao enviar chave SSH via CLI: %s", e)
                 push_msg = f"  ⚠ Falha ao enviar via CLI: {e}"
 
         # ── persistir no backend APENAS se foi enviado ao roteador ─────
