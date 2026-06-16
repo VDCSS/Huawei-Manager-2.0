@@ -8,7 +8,6 @@ import os
 import tkinter as tk
 from tkinter import filedialog, ttk
 
-from huawei_manager._config import NCE_HOST, NCE_PORT
 from huawei_manager.constants import (
     BG_BASE,
     BG_CARD,
@@ -258,10 +257,9 @@ class PageBuilder:
             on_delete=self._delete_device)
         self._topo_canvas.pack(fill="both", expand=True)
 
-        nce_mode = "MOCK (vnf_inventory.json)" if not NCE_HOST else f"REAL ({NCE_HOST}:{NCE_PORT})"
         self._nce_status_lbl = tk.Label(
-            p, text=f"Inventario: local ({nce_mode})",
-            bg=BG_CARD, fg=NEON_AMBER if not NCE_HOST else NEON_CYAN,
+            p, text="Inventario: vnf_inventory.json",
+            bg=BG_CARD, fg=NEON_AMBER,
             font=FONT_SMALL)
         self._nce_status_lbl.pack(anchor="w", pady=(4, 0))
 

@@ -2,7 +2,6 @@ import json
 
 from huawei_manager.topology import (
     VNF,
-    NorthboundController,
     _normalize_status,
     load_vnf_inventory,
     save_vnf_inventory,
@@ -69,24 +68,6 @@ class TestSaveVnfInventory:
         raw = json.loads(p.read_text())
         assert "vnfs" in raw
         assert len(raw["vnfs"]) == 1
-
-
-class TestNorthboundControllerMock:
-    def test_mock_mode_returns_vnfs(self, tmp_path):
-        data = {"vnfs": [dict(id="r1", name="R1", host="10.0.0.1",
-                              port=22, type="ROUTER", status="online",
-                              username="admin")]}
-        inv_file = tmp_path / "vnf_inventory.json"
-        inv_file.write_text(json.dumps(data))
-        ctrl = NorthboundController(use_mock=True)
-        ctrl._use_mock = True
-        vnfs = ctrl.list_vnfs()
-        assert isinstance(vnfs, list)
-
-    def test_mock_mode_no_exception(self):
-        ctrl = NorthboundController(use_mock=True)
-        vnfs = ctrl.list_vnfs()
-        assert isinstance(vnfs, list)
 
 
 class TestNormalizeStatus:

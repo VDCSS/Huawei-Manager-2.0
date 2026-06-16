@@ -1,6 +1,6 @@
 # HUAWEI MANAGER — Netmiko/CLI + SDN + VNF
 
-> Interface gráfica corporativa para administração de equipamentos Huawei via **Netmiko (SSH/CLI)**, com suporte a **multi-VNF**, **topologia SDN**, **catálogo de serviços** e **modo lab** sem necessidade de iMaster NCE.
+> Interface gráfica corporativa para administração de equipamentos Huawei via **Netmiko (SSH/CLI)**, com suporte a **multi-VNF**, **topologia SDN**, **catálogo de serviços** e **modo lab** integrado.
 
 ---
 
@@ -23,8 +23,6 @@
 - **Log de auditoria** estruturado em JSON Lines com tempo de resposta, status e session-id
 
 ### Fase 4 — Topologia SDN / Multi-VNF
-- **NorthboundController** para Huawei iMaster NCE (RESTCONF v2)
-- Modo **MOCK** integrado — funciona 100% sem iMaster, usando `vnf_inventory.json`
 - **Canvas Tkinter** com barra SDN no topo + grid 4 colunas, nós coloridos por tipo
 - Barra roxa com contador de dispositivos gerenciados + tooltip flutuante
 - Status online/offline/unknown com simulação automática
@@ -50,7 +48,7 @@
 | **Linguagem** | Python 3.12+ |
 | **Interface** | Tkinter / ttk (native GUI) |
 | **SSH/CLI** | Netmiko (paramiko) |
-| **REST (NCE)** | requests |
+
 | **Secrets** | python-dotenv / hvac / boto3 |
 | **Criptografia** | cryptography (ED25519) |
 | **Auditoria** | JSON Lines estruturado |
@@ -111,18 +109,10 @@ ROUTER_PASSWORD=
 ROUTER_SSH_KEY=~/.ssh/huawei_rsa
 ROUTER_HOSTKEY_VERIFY=false
 
-# Opcional — iMaster NCE real:
-NCE_HOST=
-NCE_PORT=18002
-NCE_USERNAME=
-NCE_PASSWORD=
-NCE_VERIFY_SSL=false
-
 # Secrets backend: env | vault | aws | sops
 SECRETS_BACKEND=env
 ```
 
-> Se `NCE_HOST` estiver vazio, o sistema opera em **modo MOCK** com `vnf_inventory.json` — sem precisar de iMaster NCE.
 
 ### SOPS (produção)
 
@@ -199,16 +189,13 @@ huawei-manager
 ## Modos de Operação
 
 ### Modo Lab / Mock (padrão)
-- `NCE_HOST` vazio → `NorthboundController(use_mock=True)`
-- 12 VNFs pré-carregados do `vnf_inventory.json`
+- Inventário local (`vnf_inventory.json`)
 - Status simulados com variação automática
 - 144 serviços executáveis com output realista simulado
 
-### Modo Real (iMaster NCE)
-- Configure `NCE_HOST`, `NCE_PORT`, `NCE_USERNAME`, `NCE_PASSWORD` no `.env`
-- `NorthboundController` consulta dispositivos via RESTCONF
-- Status obtidos do manage-status do NCE
-- Topologia real com links do NCE
+### Modo Real (SSH direto)
+- Conecte a um VNF real via SSH/CLI (se houver dispositivo acessível)
+- Execute serviços no modo `cli` via Netmiko
 
 ### Modo Híbrido
 - Conecte a um VNF real via SSH/CLI (se houver dispositivo acessível)
@@ -221,8 +208,7 @@ huawei-manager
 
 - Python 3.12+
 - Acesso SSH ao equipamento Huawei (SSH/CLI, porta 22)
-- Para modo real: iMaster NCE acessível via RESTCONF (porta 18002)
-- Pacotes: `python-dotenv`, `netmiko`, `requests`, `cryptography`, `lxml`
+- Pacotes: `python-dotenv`, `netmiko`, `cryptography`, `lxml`
 
 ---
 

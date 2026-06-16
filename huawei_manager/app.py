@@ -31,7 +31,7 @@ from huawei_manager.constants import (
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.pages import PageBuilder
 from huawei_manager.session import NetmikoSession
-from huawei_manager.topology import VNF, NorthboundController, TopologyCanvas
+from huawei_manager.topology import VNF, TopologyCanvas
 from huawei_manager.widgets import action_button, neon_button
 
 
@@ -54,7 +54,6 @@ class AppCore:
         self._admin_locked_until: float = 0
 
         self._target_vnf: VNF | None = None
-        self._nce_ctrl: NorthboundController | None = None
         self._vnfs: list[VNF] = []
         self._topo_canvas: TopologyCanvas | None = None
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="hw")

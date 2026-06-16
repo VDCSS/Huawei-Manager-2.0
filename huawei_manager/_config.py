@@ -61,11 +61,6 @@ PASS      = _s("ROUTER_PASSWORD")
 SSH_KEY   = os.path.expanduser(_s("ROUTER_SSH_KEY", "~/.ssh/huawei_ed25519"))
 HK_VERIFY = _s("ROUTER_HOSTKEY_VERIFY", "true").lower() == "true"
 
-NCE_HOST       = _s("NCE_HOST")
-NCE_PORT       = int(_s("NCE_PORT", "18002"))
-NCE_USER       = _s("NCE_USERNAME")
-NCE_PASS       = _s("NCE_PASSWORD")
-NCE_VERIFY_SSL = _s("NCE_VERIFY_SSL", "false").lower() == "true"
 
 ADMIN_USERNAME     = _s("ADMIN_USERNAME")
 ADMIN_PASSWORD     = _s("ADMIN_PASSWORD")

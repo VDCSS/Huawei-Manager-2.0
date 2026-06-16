@@ -15,11 +15,6 @@ from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutExc
 from huawei_manager._config import (
     ADMIN_PASSWORD,
     ADMIN_USERNAME,
-    NCE_HOST,
-    NCE_PASS,
-    NCE_PORT,
-    NCE_USER,
-    NCE_VERIFY_SSL,
     TECNICO_PASSWORD,
     TECNICO_USERNAME,
     audit,
@@ -43,7 +38,6 @@ from huawei_manager.constants import (
 from huawei_manager.services import VNF_TYPES, ServiceDef, execute_service
 from huawei_manager.topology import (
     VNF,
-    NorthboundController,
     load_vnf_inventory,
     probe_vnfs,
     save_vnf_inventory,
@@ -292,15 +286,7 @@ class EventHandlers:
     #  TOPOLOGIA / VNFs
     # ══════════════════════════════════════════════════════════════════
     def _init_topology_backend(self) -> None:
-        use_mock = not NCE_HOST
-        self._nce_ctrl = NorthboundController(
-            host=NCE_HOST, port=NCE_PORT,
-            username=NCE_USER, password=NCE_PASS,
-            verify_ssl=NCE_VERIFY_SSL,
-            use_mock=use_mock,
-        )
-        log.info("Topology backend: mock=%s", use_mock)
-        log.debug("Topology backend: mock=%s host=%s", use_mock, NCE_HOST or "(local)")
+        log.info("Topology backend: vnf_inventory.json")
 
     def _refresh_vnfs(self) -> None:
         if getattr(self, "_vnfs_busy", False):
@@ -314,9 +300,11 @@ class EventHandlers:
                 vnfs = probe_vnfs(vnfs)
             save_vnf_inventory(vnfs)
             self.root.after(0, lambda: self._update_vnfs_ui(vnfs))
-            self.root.after(0, lambda: self._nce_status_lbl.configure(
-                text=("Inventario: {} dispositivos  \u2022  {}"
-                           .format(len(vnfs), datetime.datetime.now().strftime('%H:%M:%S')))
+            self.root.after(0, lambda: (
+                self._nce_status_lbl.configure(
+                    text="Inventario: {} dispositivos  \u2022  {}"
+                    .format(len(vnfs), datetime.datetime.now().strftime('%H:%M:%S'))
+                )
             ) if hasattr(self, "_nce_status_lbl") else None)
         finally:
             self._vnfs_busy = False
