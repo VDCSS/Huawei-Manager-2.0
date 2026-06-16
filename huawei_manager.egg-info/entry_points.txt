@@ -1,2 +1,0 @@
-[console_scripts]
-huawei-manager = huawei_manager:main
