@@ -102,10 +102,10 @@
 git clone https://github.com/VDCSS/Huawei-Manager-2.0.git
 cd Huawei-Manager-2.0
 
-python3 -m venv .venv
-source .venv/bin/activate
+cp .env.example .env
+# Edite .env com as credenciais do seu ambiente
 
-pip install -r requirements.txt
+make install
 ```
 
 ## Configuração
@@ -156,10 +156,13 @@ python3 huawei_manager_gui.py
 > ⚠ A interface requer Tkinter com servidor gráfico (DISPLAY). Não funciona em CI/terminal headless.
 
 ```bash
-# Opção 1 — entry point thin (raiz)
+# Opção 1 — via Makefile
+make run
+
+# Opção 2 — entry point thin (raiz)
 python3 huawei_manager_gui.py
 
-# Opção 2 — entry point via pip install
+# Opção 3 — entry point via pip install
 huawei-manager
 ```
 
