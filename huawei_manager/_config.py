@@ -48,8 +48,6 @@ except Exception as _e:
     from huawei_manager.vault import EnvBackend
     _secrets = EnvBackend()
 
-audit = AuditLogger()
-
 # ─── CONFIG ───────────────────────────────────────────────────────────
 def _s(key: str, default: str = "") -> str:
     return _secrets.get(key, default)
@@ -66,3 +64,6 @@ ADMIN_USERNAME     = _s("ADMIN_USERNAME")
 ADMIN_PASSWORD     = _s("ADMIN_PASSWORD")
 TECNICO_USERNAME   = _s("TECNICO_USERNAME")
 TECNICO_PASSWORD   = _s("TECNICO_PASSWORD")
+AUDIT_HMAC_KEY     = _s("AUDIT_HMAC_KEY", "")
+
+audit = AuditLogger(hmac_key=AUDIT_HMAC_KEY)

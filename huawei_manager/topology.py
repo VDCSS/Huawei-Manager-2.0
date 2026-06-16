@@ -19,6 +19,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from threading import Lock
 
 from huawei_manager.constants import (
     FONT_BODY,
@@ -33,6 +34,7 @@ from huawei_manager.constants import (
 log = logging.getLogger("huawei.topology")
 
 VNF_INVENTORY_FILE = "vnf_inventory.json"
+_INV_LOCK = Lock()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -121,19 +123,21 @@ def load_vnf_inventory(filename: str = VNF_INVENTORY_FILE) -> list[VNF]:
     path = Path(filename)
     if not path.exists():
         return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return [VNF.from_dict(d) for d in data.get("vnfs", [])]
-    except Exception as e:
-        log.warning("Erro ao ler %s: %s", filename, e)
-        return []
+    with _INV_LOCK:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return [VNF.from_dict(d) for d in data.get("vnfs", [])]
+        except Exception as e:
+            log.warning("Erro ao ler %s: %s", filename, e)
+            return []
 
 
 def save_vnf_inventory(vnfs: list[VNF], filename: str = VNF_INVENTORY_FILE) -> None:
     data = {"vnfs": [asdict(v) for v in vnfs]}
-    Path(filename).write_text(
-        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    with _INV_LOCK:
+        Path(filename).write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
 
 

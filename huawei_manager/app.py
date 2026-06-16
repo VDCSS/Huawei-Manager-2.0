@@ -365,6 +365,7 @@ class AppCore:
     # ── Cleanup ───────────────────────────────────────────────────────
     def _on_close(self) -> None:
         self.session.disconnect()
+        self._executor.shutdown(wait=False)
         self.root.destroy()
 
 

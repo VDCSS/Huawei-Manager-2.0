@@ -26,6 +26,8 @@ Uso:
 """
 from __future__ import annotations
 
+import hashlib
+import hmac as hmac_mod
 import json
 import logging
 import threading
@@ -104,15 +106,39 @@ class _TimedCtx:
 #  AUDIT LOGGER
 # ═══════════════════════════════════════════════════════════════════════
 class AuditLogger:
-    """Logger de auditoria thread-safe, saída em JSON Lines."""
+    """Logger de auditoria thread-safe, saída em JSON Lines com HMAC."""
 
-    def __init__(self, filename: str = AUDIT_FILE) -> None:
+    def __init__(self, filename: str = AUDIT_FILE, hmac_key: str = "") -> None:
         self._path = Path(filename)
-        _log.info("AuditLogger → %s", self._path.resolve())
+        self._hmac_key = hmac_key
+        _log.info("AuditLogger → %s  hmac=%s", self._path.resolve(), "on" if hmac_key else "off")
+
+    # ── HMAC ────────────────────────────────────────────────────────────
+    def _hmac(self, data: dict) -> str:
+        if not self._hmac_key:
+            return ""
+        raw = json.dumps(data, sort_keys=True, ensure_ascii=False)
+        return hmac_mod.new(
+            self._hmac_key.encode(), raw.encode(), hashlib.sha256
+        ).hexdigest()
+
+    @staticmethod
+    def _verify_hmac(entry: dict, key: str) -> bool:
+        if not key:
+            return True
+        expected = entry.pop("hmac", "")
+        raw = json.dumps(entry, sort_keys=True, ensure_ascii=False)
+        computed = hmac_mod.new(
+            key.encode(), raw.encode(), hashlib.sha256
+        ).hexdigest()
+        entry["hmac"] = expected
+        return hmac_mod.compare_digest(computed, expected)
 
     # ── escrita thread-safe ───────────────────────────────────────────
     def _write(self, entry: AuditEntry) -> None:
-        line = json.dumps(asdict(entry), ensure_ascii=False)
+        d = asdict(entry)
+        d["hmac"] = self._hmac(d)
+        line = json.dumps(d, ensure_ascii=False)
         with _lock:
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(line + "\n")
@@ -171,7 +197,8 @@ class AuditLogger:
 
     # ── leitura das últimas N entradas ────────────────────────────────
     def tail(self, n: int = 10) -> list[dict]:
-        """Retorna as últimas n entradas como lista de dicts."""
+        """Retorna as últimas n entradas como lista de dicts.
+        Entradas com HMAC inválido são marcadas com _hmac_valid=False."""
         if not self._path.exists():
             return []
         lines = self._path.read_text(encoding="utf-8").splitlines()
@@ -181,7 +208,15 @@ class AuditLogger:
             if not line:
                 continue
             try:
-                entries.append(json.loads(line))
+                data = json.loads(line)
+                if self._hmac_key and "hmac" in data:
+                    valid = self._verify_hmac(data, self._hmac_key)
+                    data["_hmac_valid"] = valid
+                elif self._hmac_key:
+                    data["_hmac_valid"] = False
+                else:
+                    data["_hmac_valid"] = True
+                entries.append(data)
             except json.JSONDecodeError:
                 pass
             if len(entries) >= n:
@@ -199,5 +234,7 @@ class AuditLogger:
             op  = e.get("op",     "?")[:14]
             st  = e.get("status", "?")[:8]
             dt  = e.get("duration_ms", 0)
-            lines.append(f"  {ts}  {op:<14}  {st:<8}  {dt:>7.1f}ms")
+            hmac_ok = e.get("_hmac_valid", True)
+            prefix = "  " if hmac_ok else "\u26a0"
+            lines.append(f"{prefix} {ts}  {op:<14}  {st:<8}  {dt:>7.1f}ms")
         return "\n".join(lines)

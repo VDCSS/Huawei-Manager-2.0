@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 import io
 import os
+import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -247,11 +248,19 @@ class EventHandlers:
             label += f"  |  Alvo: {vnf.name} ({vnf.host})"
         self._svc_vnf_lbl.configure(text=label)
 
+        _REJECT_PARAM = re.compile(r"[;&|`$(){}]")
+
         final_svc = svc
         if svc.config_mode and self._svc_param_entries:
             cmd = svc.description
             for name, entry in self._svc_param_entries.items():
-                cmd = cmd.replace(f"<{name}>", entry.get().strip())
+                val = entry.get().strip()
+                if _REJECT_PARAM.search(val):
+                    self._write(self._svc_output,
+                        f"\u2718  Parametro '{name}' contem caracteres invalidos "
+                        f"(& ; | ` $ ( ) {{ }}).")
+                    return
+                cmd = cmd.replace(f"<{name}>", val)
             final_svc = ServiceDef(
                 id=svc.id, name=svc.name, description=svc.description,
                 category=svc.category, vnf_types=svc.vnf_types,
@@ -507,6 +516,9 @@ class EventHandlers:
 
             try:
                 port_val = int(vars_dict["port"].get().strip() or "22")
+                if not (1 <= port_val <= 65535):
+                    messagebox.showwarning("Validacao", "Porta deve estar entre 1 e 65535.")
+                    return
             except ValueError:
                 port_val = 22
 
