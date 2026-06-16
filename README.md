@@ -62,23 +62,27 @@
 
 ```
 .
-├── huawei_manager/            # Pacote Python principal
-│   ├── app.py                 # Aplicação principal (GUI Tkinter)
-│   ├── session.py             # Sessão SSH via Netmiko
-│   ├── constants.py           # Cores, filtros CLI, templates
-│   ├── widgets.py             # Widget helpers neon
-│   ├── utils.py               # ANSI cleanup, sanitize
-│   ├── vault.py               # Abstração de secrets (env/sops/vault/aws)
-│   ├── audit_log.py           # Logger de auditoria JSON Lines
-│   ├── topology.py            # Controller SDN + Canvas topologia
-│   └── services.py            # Catálogo de serviços por tipo VNF
-├── huawei_netmiko_gui.py      # Entry point (thin)
+├── src/
+│   ├── huawei_manager/        # Pacote Python principal
+│   │   ├── app.py             # Aplicação principal (GUI Tkinter)
+│   │   ├── session.py         # Sessão SSH via Netmiko
+│   │   ├── constants.py       # Cores, filtros CLI, templates
+│   │   ├── widgets.py         # Widget helpers neon
+│   │   ├── utils.py           # ANSI cleanup, sanitize
+│   │   ├── vault.py           # Abstração de secrets (env/sops/vault/aws)
+│   │   ├── audit_log.py       # Logger de auditoria JSON Lines
+│   │   ├── topology.py        # Controller SDN + Canvas topologia
+│   │   └── services.py        # Catálogo de serviços por tipo VNF
+│   └── huawei_manager_gui.py  # Entry point (thin, src/)
+├── huawei_manager_gui.py      # Entry point (thin, raiz)
 ├── vnf_inventory.json         # Inventário local de VNFs (modo mock)
+├── .env.example               # Template de credenciais
 ├── .env                       # Credenciais e configuração (texto plano, lab)
 ├── secrets.enc.yaml           # Credenciais criptografadas via SOPS (produção)
 ├── .sops.yaml                 # Regras de criação SOPS com chave age
 ├── pyproject.toml             # Build setuptools + entry point `huawei-manager`
 ├── requirements.txt           # Dependências pip
+├── .github/workflows/ci.yml   # CI (ruff → pytest → pyright)
 ├── .venv/                     # Virtual environment
 └── .gitignore
 ```
@@ -137,16 +141,18 @@ rm secrets.yaml
 # Usar
 export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
 export SECRETS_BACKEND=sops
-python3 huawei_netmiko_gui.py
+python3 huawei_manager_gui.py
 ```
 
 ## Execução
 
-```bash
-# Opção 1 — entry point thin
-python3 huawei_netmiko_gui.py
+> ⚠ A interface requer Tkinter com servidor gráfico (DISPLAY). Não funciona em CI/terminal headless.
 
-# Opção 2 — entry point global (após pip install -e .)
+```bash
+# Opção 1 — entry point thin (raiz)
+python3 huawei_manager_gui.py
+
+# Opção 2 — entry point via pip install
 huawei-manager
 ```
 

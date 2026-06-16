@@ -12,3 +12,4 @@ archive/
 logs/
 *.jsonl
 AGENTS.md
+dev/
