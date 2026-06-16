@@ -1,10 +1,6 @@
-import os
-import sys
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.session import NetmikoSession

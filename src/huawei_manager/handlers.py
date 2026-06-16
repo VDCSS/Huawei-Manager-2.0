@@ -310,11 +310,11 @@ class EventHandlers:
             save_vnf_inventory(vnfs)
             self.root.after(0, lambda: self._update_vnfs_ui(vnfs))
             self.root.after(0, lambda: (
-                self._nce_status_lbl.configure(
+                self._vnf_status_lbl.configure(
                     text="Inventario: {} dispositivos  \u2022  {}"
                     .format(len(vnfs), datetime.datetime.now().strftime('%H:%M:%S'))
                 )
-            ) if hasattr(self, "_nce_status_lbl") else None)
+            ) if hasattr(self, "_vnf_status_lbl") else None)
         finally:
             self._vnfs_busy = False
 

@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -48,17 +47,10 @@ class TestEnvBackend:
 
 
 class TestSopsBackend:
-    def test_no_secret_file_raises(self):
-        orig = Path("secrets.enc.yaml")
-        if not orig.exists():
-            pytest.skip("secrets.enc.yaml not present")
-        tmp = orig.with_suffix(".yaml.bak")
-        orig.rename(tmp)
-        try:
-            with pytest.raises(RuntimeError):
-                SopsBackend()
-        finally:
-            tmp.rename(orig)
+    def test_no_secret_file_raises(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(RuntimeError):
+            SopsBackend()
 
 
 class TestGetBackend:

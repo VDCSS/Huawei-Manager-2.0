@@ -63,27 +63,34 @@
 ```
 .
 ├── src/
-│   ├── huawei_manager/        # Pacote Python principal
-│   │   ├── app.py             # Aplicação principal (GUI Tkinter)
-│   │   ├── session.py         # Sessão SSH via Netmiko
-│   │   ├── constants.py       # Cores, filtros CLI, templates
-│   │   ├── widgets.py         # Widget helpers neon
-│   │   ├── utils.py           # ANSI cleanup, sanitize
-│   │   ├── vault.py           # Abstração de secrets (env/sops/vault/aws)
-│   │   ├── audit_log.py       # Logger de auditoria JSON Lines
-│   │   ├── topology.py        # Controller SDN + Canvas topologia
-│   │   └── services.py        # Catálogo de serviços por tipo VNF
-│   └── huawei_manager_gui.py  # Entry point (thin, src/)
-├── huawei_manager_gui.py      # Entry point (thin, raiz)
-├── vnf_inventory.json         # Inventário local de VNFs (modo mock)
-├── .env.example               # Template de credenciais
-├── .env                       # Credenciais e configuração (texto plano, lab)
-├── secrets.enc.yaml           # Credenciais criptografadas via SOPS (produção)
-├── .sops.yaml                 # Regras de criação SOPS com chave age
-├── pyproject.toml             # Build setuptools + entry point `huawei-manager`
-├── requirements.txt           # Dependências pip
-├── .github/workflows/ci.yml   # CI (ruff → pytest → pyright)
-├── .venv/                     # Virtual environment
+│   ├── huawei_manager/            # Pacote Python principal
+│   │   ├── app.py                 # Aplicação principal (GUI Tkinter)
+│   │   ├── pages.py               # Construtor de páginas (8 abas)
+│   │   ├── handlers.py            # Eventos SSH, auth, VNFs
+│   │   ├── _config.py             # Config (logging, secrets, audit)
+│   │   ├── session.py             # Sessão SSH via Netmiko
+│   │   ├── constants.py           # Cores, filtros CLI, templates
+│   │   ├── widgets.py             # Widget helpers neon
+│   │   ├── utils.py               # ANSI cleanup, sanitize
+│   │   ├── vault.py               # Abstração de secrets (env/sops/vault/aws)
+│   │   ├── audit_log.py           # Logger de auditoria JSON Lines
+│   │   ├── topology.py            # Controller SDN + Canvas topologia
+│   │   └── services.py            # Catálogo de serviços por tipo VNF
+│   └── huawei_manager_gui.py      # Entry point (thin, src/)
+├── huawei_manager_gui.py          # Entry point (thin, raiz)
+├── tests/                         # Testes automatizados (pytest)
+├── requirements/
+│   ├── prod.txt                   # Dependências de runtime
+│   └── dev.txt                    # Dependências de desenvolvimento
+├── Makefile                       # Atalhos: install, run, test, lint, typecheck
+├── vnf_inventory.json             # Inventário local de VNFs (modo mock)
+├── .env.example                   # Template de credenciais
+├── .env                           # Credenciais e configuração (texto plano, lab)
+├── secrets.enc.yaml               # Credenciais criptografadas via SOPS (produção)
+├── .sops.yaml                     # Regras de criação SOPS com chave age
+├── pyproject.toml                 # Build setuptools + entry point `huawei-manager`
+├── .github/workflows/ci.yml       # CI (ruff → pytest → pyright)
+├── .venv/                         # Virtual environment
 └── .gitignore
 ```
 
@@ -164,16 +171,15 @@ huawei-manager
 
 | Aba | Descrição |
 |-----|-----------|
-| **📋 Configuração** | `display current-configuration` com filtros de comando |
+| **🏠 Dashboard** | Resumo: conexão, VNFs, últimas operações, atalhos |
+| **🗺 Topologia / VNFs** | Canvas SDN com VNFs clicáveis, seleção de alvo SSH |
+| **📋 Configuração Atual** | `display current-configuration` com filtros de comando |
 | **🌐 Roteamento** | Tabela de roteamento, BGP, OSPF |
 | **📡 Tabela ARP** | Tabela ARP via comando CLI |
 | **💻 Info do Sistema** | Versão, CPU, memória, interfaces, LLDP |
-| **⌨ Editor RPC/XML** | Editor de comandos CLI com templates |
+| **⌨ Editor de Comandos** | Editor de comandos CLI com templates |
 | **💾 Backup** | Backup da running-config para arquivo TXT |
-| **🔍 YANG Capabilities** | display version e informações do dispositivo |
-| **🗺 Topologia / VNFs** | Canvas SDN com VNFs clicáveis, seleção de alvo SSH |
 | **⚡ Serviços** | Catálogo completo (+120 comandos) por tipo de VNF |
-| **🔐 Segurança** | Status do vault, rotação de chave SSH, log de auditoria |
 
 ### Topologia / VNFs
 - Abra a aba **🗺 Topologia / VNFs**
@@ -214,7 +220,7 @@ huawei-manager
 
 - Python 3.12+
 - Acesso SSH ao equipamento Huawei (SSH/CLI, porta 22)
-- Pacotes: `python-dotenv`, `netmiko`, `cryptography`, `lxml`
+- Pacotes: `python-dotenv`, `netmiko`, `cryptography`, `pyyaml`
 
 ---
 

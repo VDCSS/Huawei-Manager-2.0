@@ -257,11 +257,11 @@ class PageBuilder:
             on_delete=self._delete_device)
         self._topo_canvas.pack(fill="both", expand=True)
 
-        self._nce_status_lbl = tk.Label(
+        self._vnf_status_lbl = tk.Label(
             p, text="Inventario: vnf_inventory.json",
             bg=BG_CARD, fg=NEON_AMBER,
             font=FONT_SMALL)
-        self._nce_status_lbl.pack(anchor="w", pady=(4, 0))
+        self._vnf_status_lbl.pack(anchor="w", pady=(4, 0))
 
         self._spawn(self._refresh_vnfs)
 
