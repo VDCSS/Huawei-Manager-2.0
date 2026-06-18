@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+case "${1:-}" in
+    manager)
+        shift
+        exec huawei-manager "$@"
+        ;;
+    *)
+        echo "Huawei Manager — CLI"
+        echo ""
+        echo "Subcomandos:"
+        echo "  manager    Abre a interface grafica"
+        ;;
+esac

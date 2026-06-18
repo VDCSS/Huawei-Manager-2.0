@@ -329,10 +329,7 @@ class EventHandlers:
         if self._access_level != "user":
             self._access_level = "user"
             self._mock_mode = False
-            if self._topo_canvas:
-                self._topo_canvas.set_access("user")
-            self._admin_btn.configure(text="\U0001f512  Acesso")
-            self._update_vnfs_ui(self._vnfs)
+            self._rebuild_page("topology")
             log.info("Acesso: deslogado")
             return
 
@@ -398,11 +395,7 @@ class EventHandlers:
             if level != "user":
                 self._access_level = level
                 self._admin_attempts = 0
-                if self._topo_canvas:
-                    self._topo_canvas.set_access(level)
-                label = "\U0001f513  Admin" if level == "admin" else "\U0001f6e0  Tecnico"
-                self._admin_btn.configure(text=label)
-                self._update_vnfs_ui(self._vnfs)
+                self._rebuild_page("topology")
                 self._auth_win = None
                 win.destroy()
                 log.info("Acesso: %s autenticado", level)

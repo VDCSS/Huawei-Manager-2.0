@@ -1,6 +1,6 @@
-# HUAWEI MANAGER — Netmiko/CLI + SDN + VNF
+# HUAWEI MANAGER
 
-> Interface gráfica corporativa para administração de equipamentos Huawei via **Netmiko (SSH/CLI)**, com suporte a **multi-VNF**, **topologia SDN**, **catálogo de serviços** e **modo lab** integrado.
+> Interface gráfica corporativa para administração de equipamentos Huawei via SSH/CLI, com suporte a multi-VNF, topologia SDN, catálogo de serviços e modo lab integrado.
 
 ---
 
@@ -101,12 +101,17 @@
 ```bash
 git clone https://github.com/VDCSS/Huawei-Manager-2.0.git
 cd Huawei-Manager-2.0
-
 cp .env.example .env
 # Edite .env com as credenciais do seu ambiente
-
 make install
 ```
+
+O comando `make install` faz tudo:
+1. Cria ambiente virtual (`.venv`)
+2. Instala o pacote com dependências
+3. Instala o ícone em `~/.local/share/icons/`
+4. Instala o atalho de menu em `~/.local/share/applications/`
+5. Instala o comando `huawei` no terminal com tab complete
 
 ## Configuração
 
@@ -124,46 +129,35 @@ ROUTER_HOSTKEY_VERIFY=false
 SECRETS_BACKEND=env
 ```
 
-
-### SOPS (produção)
-
-Para ambiente produtivo, criptografe as credenciais com SOPS:
-
-```bash
-# Instalar age + sops (primeira vez)
-sudo apt install age
-# ou: baixar de https://github.com/FiloSottile/age/releases
-
-# Baixar sops de https://github.com/getsops/sops/releases
-chmod +x sops && sudo mv sops /usr/local/bin/
-
-# Gerar chave age
-age-keygen -o ~/.config/sops/age/keys.txt
-
-# Criar secrets.yaml (YAML com as mesmas chaves do .env)
-# Criptografar e deletar plaintext
-sops --encrypt secrets.yaml > secrets.enc.yaml
-rm secrets.yaml
-
-# Usar
-export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
-export SECRETS_BACKEND=sops
-python3 huawei_manager_gui.py
-```
-
 ## Execução
 
 > ⚠ A interface requer Tkinter com servidor gráfico (DISPLAY). Não funciona em CI/terminal headless.
 
 ```bash
-# Opção 1 — via Makefile
+# No menu de aplicações
+# Procure "Huawei Manager" e clique
+
+# No terminal — via Makefile
 make run
 
-# Opção 2 — entry point thin (raiz)
-python3 huawei_manager_gui.py
+# No terminal — via comando nativo
+huawei manager
+```
 
-# Opção 3 — entry point via pip install
-huawei-manager
+O comando `huawei manager` tem tab complete: digite `huawei` + TAB + Enter.
+
+## Atualização
+
+```bash
+git pull
+make reinstall
+```
+
+## Desinstalação
+
+```bash
+make uninstall          # remove atalho, ícone e comando do sistema
+rm -rf .venv            # remove ambiente virtual (opcional)
 ```
 
 ---

@@ -228,7 +228,10 @@ class PageBuilder:
         ctrl = tk.Frame(p, bg=BG_CARD)
         ctrl.pack(fill="x", pady=(0, 10))
 
-        self._admin_btn = action_button(ctrl, "\U0001f512  Acesso",
+        admin_label = "\U0001f512  Acesso"
+        if self._access_level in ("admin", "tecnico"):
+            admin_label = "\U0001f513  Admin" if self._access_level == "admin" else "\U0001f6e0  Tecnico"
+        self._admin_btn = action_button(ctrl, admin_label,
                                         self._show_auth_dialog, NEON_PURP)
         self._admin_btn.pack(side="left", padx=(0, 8))
 

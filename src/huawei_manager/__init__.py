@@ -1,4 +1,4 @@
-# Huawei Manager — Netmiko + SDN + VNFs + Segurança
+# Huawei Manager
 
 __version__ = "2.0.0"
 

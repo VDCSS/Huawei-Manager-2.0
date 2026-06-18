@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "huawei-manager"
 version = "2.0.0"
-description = "Huawei SSH/CLI Manager via Netmiko + SDN + VNFs"
+description = "Huawei SSH/CLI Manager"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "Proprietary"}

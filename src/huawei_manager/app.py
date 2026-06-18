@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from tkinter import messagebox
 
 from huawei_manager._config import _secrets, audit
@@ -19,7 +20,6 @@ from huawei_manager.constants import (
     FONT_H1,
     FONT_H2_B,
     FONT_HERO_B,
-    FONT_LARGE,
     FONT_MEDIUM_B,
     FONT_SMALL,
     FONT_XSMALL,
@@ -43,6 +43,13 @@ class AppCore:
         self.root.geometry("1220x740")
         self.root.configure(bg=BG_BASE)
         self.root.resizable(True, True)
+        try:
+            icon_path = Path("share/icons/huawei-manager.png")
+            if icon_path.exists():
+                img = tk.PhotoImage(file=str(icon_path))
+                self.root.iconphoto(True, img)
+        except Exception:
+            pass
 
         self.session = NetmikoSession(_secrets, audit)
         self._active_btn: tk.Frame | None = None
@@ -110,12 +117,11 @@ class AppCore:
         hdr.pack(fill="x", padx=18, pady=(10, 6))
         hdr.pack_propagate(False)
 
-        tk.Label(hdr, text="HUAWEI",    bg=BG_BASE, fg=NEON_CYAN,
+        tk.Label(hdr, text="HUAWEI",  bg=BG_BASE, fg=NEON_CYAN,
                  font=FONT_HERO_B).pack(side="left")
-        tk.Label(hdr, text=" MANAGER",  bg=BG_BASE, fg=FG_MAIN,
+        tk.Label(hdr, text=" MANAGER", bg=BG_BASE, fg=FG_MAIN,
                  font=FONT_HERO_B).pack(side="left")
-        tk.Label(hdr, text="  SSH/CLI + SDN", bg=BG_BASE, fg=NEON_PURP,
-                 font=FONT_LARGE).pack(side="left")
+
 
         badge = tk.Frame(hdr, bg=BG_BASE)
         badge.pack(side="right")
@@ -171,7 +177,7 @@ class AppCore:
         foot = tk.Frame(self.root, bg="#08081a", height=22)
         foot.pack(fill="x", side="bottom")
         tk.Label(foot,
-                 text="Huawei Manager  \u2022  Netmiko  \u2022  SDN  \u2022  Multi-VNF",
+                 text="Huawei Manager  \u2022  v2.0.0",
                  bg="#08081a", fg=FG_DIM, font=FONT_XSMALL).pack(side="left", padx=12)
         self.clock_lbl = tk.Label(foot, bg="#08081a", fg=NEON_PURP,
                                   font=FONT_XSMALL)
@@ -215,6 +221,13 @@ class AppCore:
             btn._activate()  # type: ignore[attr-defined]
             self._active_btn = btn
         self._current_page = key
+
+    def _rebuild_page(self, key: str) -> None:
+        if key in self.pages:
+            self.pages[key].master.destroy()
+            del self.pages[key]
+        if self._current_page == key:
+            self._show_page(key)
 
     def _tick_clock(self) -> None:
         self.clock_lbl.configure(
