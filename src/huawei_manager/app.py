@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import queue
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -64,11 +65,13 @@ class AppCore:
         self._vnfs: list[VNF] = []
         self._topo_canvas: TopologyCanvas | None = None
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="hw")
+        self._ui_queue: queue.SimpleQueue = queue.SimpleQueue()
 
         self._current_page: str | None = None
         self._PAGE_KEYS = ["home", "topology", "config", "route", "arp",
                            "info", "cmd", "backup", "services"]
 
+        self._poll_queue()
         self._build_layout()
         self._setup_bindings()
         self._show_page("home")
@@ -250,7 +253,7 @@ class AppCore:
 
     def _set_conn_btn(self, text: str = "  CONECTAR  ", disabled: bool = False) -> None:
         state = "disabled" if disabled else "normal"
-        self.root.after(0, lambda: self.conn_btn.configure(text=text, state=state))
+        self._dispatch(lambda: self.conn_btn.configure(text=text, state=state))
 
     # ── Atalhos de teclado ─────────────────────────────────────────────
     def _setup_bindings(self) -> None:
@@ -352,6 +355,18 @@ class AppCore:
         self._on_ctrl_l()
 
     # ── Helpers de threading ──────────────────────────────────────────
+    def _dispatch(self, fn) -> None:
+        self._ui_queue.put(fn)
+
+    def _poll_queue(self) -> None:
+        while True:
+            try:
+                fn = self._ui_queue.get_nowait()
+                fn()
+            except queue.Empty:
+                break
+        self.root.after(50, self._poll_queue)
+
     def _spawn(self, fn, *args) -> None:
         self._executor.submit(fn, *args)
 
@@ -362,14 +377,14 @@ class AppCore:
         self._spawn(func)
 
     def _write(self, widget, text: str) -> None:
-        self.root.after(0, lambda: (
+        self._dispatch(lambda: (
             widget.configure(state="normal"),
             widget.delete("1.0", "end"),
             widget.insert("end", text),
             widget.configure(state="disabled")))
 
     def _loading(self, widget, msg: str) -> None:
-        self.root.after(0, lambda: (
+        self._dispatch(lambda: (
             widget.configure(state="normal"),
             widget.delete("1.0", "end"),
             widget.insert("end", f"\u23f3  {msg}\n"),

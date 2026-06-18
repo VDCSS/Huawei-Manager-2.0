@@ -49,8 +49,12 @@ install-icon:
 
 # ── Shell dispatcher "huawei manager" + tab complete ────────────
 install-shell:
-	install -Dm 755 share/shell/huawei $(BIN_DIR)/huawei
+	sed 's|__VENV_DIR__|$(abspath $(VENV))|g' share/shell/huawei > $(BIN_DIR)/huawei
+	chmod 755 $(BIN_DIR)/huawei
 	install -Dm 644 share/shell/completion/huawei $(COMP_DIR)/huawei
+	{ echo '#!/usr/bin/env bash'; echo 'exec $(abspath $(VENV))/bin/huawei-manager "$$@"'; } \
+		> $(BIN_DIR)/huawei-manager
+	chmod 755 $(BIN_DIR)/huawei-manager
 	@echo "✔ Comando 'huawei' instalado."
 	@echo "  Recarregue o shell: exec bash"
 	@echo "  Teste: huawei<TAB> → huawei manager"
@@ -61,6 +65,7 @@ uninstall:
 	rm -f $(ICONS_DIR)/48x48/apps/huawei-manager.png
 	rm -f $(ICONS_DIR)/256x256/apps/huawei-manager.png
 	rm -f $(BIN_DIR)/huawei
+	rm -f $(BIN_DIR)/huawei-manager
 	rm -f $(COMP_DIR)/huawei
 	update-desktop-database $(APPS_DIR) 2>/dev/null || true
 	@echo "✔ Huawei Manager removido do sistema."

@@ -2,7 +2,7 @@
 case "${1:-}" in
     manager)
         shift
-        exec huawei-manager "$@"
+        exec __VENV_DIR__/bin/huawei-manager "$@"
         ;;
     *)
         echo "Huawei Manager — CLI"

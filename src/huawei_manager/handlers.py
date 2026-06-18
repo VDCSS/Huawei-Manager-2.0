@@ -77,24 +77,24 @@ class EventHandlers:
             try:
                 self.session.connect()
                 sid = self.session._session_id or "?"
-                self.root.after(0, lambda: self._set_status(
+                self._dispatch(lambda: self._set_status(
                     on_success_fmt.format(sid=sid), NEON_CYAN))
                 self._set_conn_btn("  DESCONECTAR  ")
             except NetmikoAuthenticationException:
-                self.root.after(0, lambda: self._set_status(
+                self._dispatch(lambda: self._set_status(
                     "Falha de autenticacao", NEON_AMBER))
                 self._set_conn_btn()
             except NetmikoTimeoutException:
-                self.root.after(0, lambda: self._set_status(
+                self._dispatch(lambda: self._set_status(
                     "Timeout de conexao", NEON_AMBER))
                 self._set_conn_btn()
             except ValueError as exc:
                 msg = f"Config: {exc}"
-                self.root.after(0, lambda m=msg: self._set_status(m, NEON_AMBER))
+                self._dispatch(lambda: self._set_status(msg, NEON_AMBER))
                 self._set_conn_btn()
             except Exception as exc:
                 log.exception("Falha inesperada em _do_connect: %s", exc)
-                self.root.after(0, lambda: self._set_status(
+                self._dispatch(lambda: self._set_status(
                     on_error_msg, NEON_AMBER))
                 self._set_conn_btn()
 
@@ -229,7 +229,7 @@ class EventHandlers:
                 + "\n".join(conteudo.splitlines()[:40])
             )
             self._write(self.out_backup, resumo)
-            self.root.after(0, lambda: self._set_status(f"Backup: {nome}", NEON_CYAN))
+            self._dispatch(lambda: self._set_status(f"Backup: {nome}", NEON_CYAN))
             audit.log_operation("backup", user=self.session._user,
                                 host=host, status="ok", file=path)
             log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
@@ -308,8 +308,8 @@ class EventHandlers:
             else:
                 vnfs = probe_vnfs(vnfs)
             save_vnf_inventory(vnfs)
-            self.root.after(0, lambda: self._update_vnfs_ui(vnfs))
-            self.root.after(0, lambda: (
+            self._dispatch(lambda: self._update_vnfs_ui(vnfs))
+            self._dispatch(lambda: (
                 self._vnf_status_lbl.configure(
                     text="Inventario: {} dispositivos  \u2022  {}"
                     .format(len(vnfs), datetime.datetime.now().strftime('%H:%M:%S'))
