@@ -16,3 +16,4 @@ dev/
 .ruff_cache/
 huawei_manager.egg-info/
 .ssh_rotation_ts
+data/vnf_inventory.json

@@ -42,6 +42,7 @@ _INV_LOCK = Lock()
 # ═══════════════════════════════════════════════════════════════════════
 @dataclass
 class VNF:
+    """Representa um dispositivo VNF com dados de conexão e status."""
     id:       str
     name:     str
     host:     str
@@ -56,13 +57,16 @@ class VNF:
     extra:    dict    = field(default_factory=dict)
 
     def label(self) -> str:
+        """Retorna o nome legível do VNF (name ou id)."""
         return self.name or self.id
 
     def address(self) -> str:
+        """Retorna host:porta como string."""
         return f"{self.host}:{self.port}"
 
     @classmethod
     def from_dict(cls, d: dict) -> VNF:
+        """Cria VNF a partir de um dicionário, ignorando chaves extras."""
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -72,6 +76,7 @@ class VNF:
 _mock_last_update: float = 0.0
 
 def simulate_status(vnfs: list[VNF]) -> list[VNF]:
+    """Simula variação aleatória de status dos VNFs (modo mock)."""
     global _mock_last_update
     now = time.time()
     if now - _mock_last_update < 15:
@@ -91,11 +96,13 @@ def simulate_status(vnfs: list[VNF]) -> list[VNF]:
 #  PROBE TCP (REAL)
 # ═══════════════════════════════════════════════════════════════════════
 def _check_vnf(vnf: VNF, timeout: int = 3) -> str:
+    """Tenta conexão TCP ao VNF; retorna 'online' ou lança exceção."""
     socket.create_connection((vnf.host, vnf.port or 22), timeout=timeout).close()
     return "online"
 
 
 def probe_vnfs(vnfs: list[VNF], timeout: int = 5) -> list[VNF]:
+    """Verifica status de múltiplos VNFs via TCP paralelo."""
     with ThreadPoolExecutor(max_workers=min(10, len(vnfs) or 1)) as ex:
         fut = {ex.submit(_check_vnf, v, timeout): v for v in vnfs if v.host}
         for f in as_completed(fut):
@@ -108,6 +115,7 @@ def probe_vnfs(vnfs: list[VNF], timeout: int = 5) -> list[VNF]:
 
 
 def _normalize_status(raw: str) -> str:
+    """Normaliza string de status para online/offline/unknown."""
     raw = raw.lower()
     if raw in ("online", "reachable", "active", "managed"):
         return "online"
@@ -120,6 +128,7 @@ def _normalize_status(raw: str) -> str:
 #  INVENTÁRIO LOCAL
 # ═══════════════════════════════════════════════════════════════════════
 def load_vnf_inventory(filename: str = VNF_INVENTORY_FILE) -> list[VNF]:
+    """Carrega inventário de VNFs do arquivo JSON."""
     path = Path(filename)
     if not path.exists():
         return []
@@ -133,6 +142,7 @@ def load_vnf_inventory(filename: str = VNF_INVENTORY_FILE) -> list[VNF]:
 
 
 def save_vnf_inventory(vnfs: list[VNF], filename: str = VNF_INVENTORY_FILE) -> None:
+    """Salva inventário de VNFs no arquivo JSON."""
     data = {"vnfs": [asdict(v) for v in vnfs]}
     with _INV_LOCK:
         Path(filename).write_text(
@@ -150,6 +160,7 @@ class ToolTip:
     """Tooltip flutuante que mostra informações do VNF ao passar o mouse."""
 
     def __init__(self, canvas, theme: dict) -> None:
+        """Inicializa o tooltip com referência ao canvas e tema."""
         self._canvas = canvas
         self._theme  = theme
         self._win: tk.Toplevel | None = None
@@ -157,6 +168,7 @@ class ToolTip:
         self._after_id: str | None    = None
 
     def show(self, vnf: VNF, x: int, y: int, admin: bool = False) -> None:
+        """Exibe tooltip com informações do VNF na posição (x, y)."""
         self.hide()
         self._win = tk.Toplevel(self._canvas)
         self._win.wm_overrideredirect(True)
@@ -191,6 +203,7 @@ class ToolTip:
                      anchor="w", justify="left").pack(fill="x", padx=8, pady=1)
 
     def hide(self) -> None:
+        """Esconde o tooltip."""
         if self._win:
             self._win.destroy()
             self._win = None
@@ -215,6 +228,7 @@ class TopologyCanvas:
         on_edit:   Callable[[VNF], None] | None = None,
         on_delete: Callable[[VNF], None] | None = None,
     ) -> None:
+        """Inicializa o canvas com tema, callbacks e mapa de cores por tipo."""
         self._theme    = theme
         self._on_select = on_select
         self._edit_cb:   Callable[[VNF], None] | None = on_edit
@@ -245,29 +259,37 @@ class TopologyCanvas:
         self._canvas.bind("<Configure>", lambda _: self._draw())
 
     def set_access(self, level: str) -> None:
+        """Define o nível de acesso (user/admin/tecnico) para controle visual."""
         self._access_level = level
 
     def pack(self, **kw):
+        """Delega pack ao frame interno do canvas."""
         self._frame.pack(**kw)
 
     def grid(self, **kw):
+        """Delega grid ao frame interno do canvas."""
         self._frame.grid(**kw)
 
     def update_vnfs(self, vnfs: list[VNF]) -> None:
+        """Atualiza a lista de VNFs e redesenha o canvas."""
         self._vnfs = vnfs
         self._draw()
 
     def get_selected(self) -> VNF | None:
+        """Retorna o VNF atualmente selecionado ou None."""
         return self._selected
 
     def deselect(self) -> None:
+        """Limpa a seleção atual e redesenha."""
         self._selected = None
         self._draw()
 
     def _color_for(self, vnf: VNF) -> str:
+        """Retorna a cor associada ao tipo do VNF."""
         return self._type_colors.get(vnf.type, self._type_colors.get("unknown") or "")
 
     def _layout(self) -> dict[str, tuple[float, float]]:
+        """Calcula posições dos nós VNF em grid de 4 colunas."""
         positions: dict[str, tuple[float, float]] = {}
         n = len(self._vnfs)
         if n == 0:
@@ -291,6 +313,7 @@ class TopologyCanvas:
         return positions
 
     def _draw_empty_state(self) -> None:
+        """Desenha mensagem de estado vazio no canvas."""
         c = self._canvas
         w = c.winfo_width() or 800
         h = c.winfo_height() or 400
@@ -301,6 +324,7 @@ class TopologyCanvas:
                       justify="center")
 
     def _draw_sdn_bar(self) -> None:
+        """Desenha a barra SDN roxa com contador de dispositivos."""
         c = self._canvas
         t = self._theme
         cw = c.winfo_width() or 800
@@ -323,6 +347,7 @@ class TopologyCanvas:
                       fill=t["FG_DIM"], font=FONT_BODY, anchor="e")
 
     def _draw_vnf_node(self, vnf: VNF, x: float, y: float, admin: bool = False) -> None:
+        """Desenha um nó VNF no canvas com cor, status e bindings de evento."""
         c = self._canvas
         t = self._theme
         nw, nh = self.NODE_W, self.NODE_H
@@ -393,6 +418,7 @@ class TopologyCanvas:
                        lambda e, v=vnf: self._on_context_menu(e, v))
 
     def _draw(self) -> None:
+        """Redesenha todo o canvas: barra SDN e nós VNF."""
         self._canvas.delete("all")
 
         if not self._vnfs:
@@ -411,12 +437,14 @@ class TopologyCanvas:
             self._tooltip.hide()
 
     def _on_click(self, vnf: VNF) -> None:
+        """Seleciona o VNF clicado e dispara callback on_select."""
         self._selected = vnf
         self._draw()
         if self._on_select:
             self._on_select(vnf)
 
     def _on_enter(self, event, vnf: VNF, item_id: int, color: str) -> None:
+        """Destaca o nó e exibe tooltip ao passar o mouse."""
         self._canvas.itemconfig(item_id, fill=self._theme["BG_INPUT"])
         if self._tooltip:
             x = self._canvas.winfo_pointerx()
@@ -424,11 +452,13 @@ class TopologyCanvas:
             self._tooltip.show(vnf, x, y, admin=self._access_level in ("admin", "tecnico"))
 
     def _on_leave(self, event, item_id: int, fill: str) -> None:
+        """Restaura a cor do nó e esconde tooltip ao sair com o mouse."""
         self._canvas.itemconfig(item_id, fill=fill)
         if self._tooltip:
             self._tooltip.hide()
 
     def _on_context_menu(self, event, vnf: VNF) -> None:
+        """Exibe menu de contexto com editar/excluir (admin/tecnico)."""
         menu = tk.Menu(self._canvas, tearoff=0, bg=self._theme["BG_INPUT"],
                        fg=self._theme["FG_MAIN"], font=FONT_MEDIUM,
                        activebackground=self._theme["NEON_PURP"],
@@ -442,10 +472,12 @@ class TopologyCanvas:
             menu.post(event.x_root, event.y_root)
 
     def _on_edit(self, vnf: VNF) -> None:
+        """Dispara callback de edição para o VNF."""
         if self._edit_cb:
             self._edit_cb(vnf)
 
     def _on_delete(self, vnf: VNF) -> None:
+        """Dispara callback de exclusão para o VNF."""
         if self._delete_cb:
             self._delete_cb(vnf)
 

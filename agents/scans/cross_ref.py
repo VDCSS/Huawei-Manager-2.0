@@ -1,0 +1,74 @@
+"""Agente: verifica constantes definidas em constants.py × usadas no projeto.
+
+Apenas constants.py é a fonte canónica de constantes — o scan cruza
+cada constante ALL_CAPS com as referências reais em todos os src/.
+"""
+
+from __future__ import annotations
+
+import ast
+import logging
+from pathlib import Path
+
+from agents import AgentItem, AgentResult
+
+log = logging.getLogger("huawei.agents.cross_ref")
+
+SKIP = {"True", "False", "None"}
+
+
+def _collect_const_assignments(tree: ast.AST) -> set[str]:
+    """Devolve nomes ALL_CAPS definidos via Assign no módulo."""
+    result: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id.isupper():
+                    result.add(t.id)
+    return result
+
+
+def _collect_all_caps_uses(root: Path) -> set[str]:
+    """Devolve todos os ALL_CAPS referenciados (ast.Name Load) em src/."""
+    used: set[str] = set()
+    src = root / "src"
+    for fpath in src.rglob("*.py"):
+        try:
+            tree = ast.parse(fpath.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id.isupper():
+                used.add(node.id)
+    return used
+
+
+def scan(root: Path) -> AgentResult:
+    """Cruza definições de constants.py com usos no projeto."""
+    const_file = root / "src" / "huawei_manager" / "constants.py"
+    if not const_file.is_file():
+        return AgentResult(name="cross_ref", status="error",
+                           summary="constants.py não encontrado", items=[])
+
+    defined: set[str] = _collect_const_assignments(
+        ast.parse(const_file.read_text(encoding="utf-8"))
+    )
+    used: set[str] = _collect_all_caps_uses(root)
+    unused = defined - used - SKIP
+
+    items = [
+        AgentItem(
+            severity="info",
+            file="constants.py",
+            message=f"Constante '{name}' definida mas não referenciada",
+            suggestion="Remova a constante ou adicione uso",
+        )
+        for name in sorted(unused)
+    ]
+
+    status: str = "ok"
+    if items:
+        status = "info" if len(items) < 3 else "warning"
+    n = len(items)
+    summary = f"{n} constante(s) de constants.py não referenciada(s)" if n else "Cross-refs OK"
+    return AgentResult(name="cross_ref", status=status, summary=summary, items=items)

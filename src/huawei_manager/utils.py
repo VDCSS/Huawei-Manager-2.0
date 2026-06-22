@@ -14,6 +14,7 @@ SANITIZE_PATTERNS = re.compile(
 
 
 def clean_output(text: str) -> str:
+    """Remove caracteres ANSI, de controle e prompts 'More' da saída."""
     text = _ANSI.sub("", text)
     text = _CTRL.sub("", text)
     text = _MORE.sub("", text)
@@ -21,4 +22,5 @@ def clean_output(text: str) -> str:
 
 
 def sanitize_command(cmd: str) -> str:
+    """Ofusca valores de password/secret/key/token em comandos para log seguro."""
     return SANITIZE_PATTERNS.sub(r"\1=***", cmd)

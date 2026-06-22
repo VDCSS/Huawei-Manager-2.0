@@ -9,10 +9,12 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from huawei_manager.audit_log import AuditLogger
-from huawei_manager.vault import SecretsBackend, get_backend
+from huawei_manager.vault import SecretsBackend, _set_ts_path, get_backend
 
-LOG_DIR = Path("logs")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
+_set_ts_path(PROJECT_ROOT / ".ssh_rotation_ts")
 
 _fh = RotatingFileHandler(
     LOG_DIR / "huawei-manager.log",
@@ -42,14 +44,15 @@ log.info("Logging iniciado \u2014 %s", LOG_DIR.resolve())
 
 # ─── SECRETS / AUDIT ─────────────────────────────────────────────────
 try:
-    _secrets: SecretsBackend = get_backend()
+    _secrets: SecretsBackend = get_backend(project_root=str(PROJECT_ROOT))
 except Exception as _e:
     log.error("Falha ao inicializar secrets backend: %s \u2014 usando fallback env", _e)
     from huawei_manager.vault import EnvBackend
-    _secrets = EnvBackend()
+    _secrets = EnvBackend(env_path=PROJECT_ROOT / ".env")
 
 # ─── CONFIG ───────────────────────────────────────────────────────────
 def _s(key: str, default: str = "") -> str:
+    """Lê um valor do backend de secrets com fallback para default."""
     return _secrets.get(key, default)
 
 HOST      = _s("ROUTER_HOST")
@@ -66,4 +69,7 @@ TECNICO_USERNAME   = _s("TECNICO_USERNAME")
 TECNICO_PASSWORD   = _s("TECNICO_PASSWORD")
 AUDIT_HMAC_KEY     = _s("AUDIT_HMAC_KEY", "")
 
-audit = AuditLogger(hmac_key=AUDIT_HMAC_KEY)
+audit = AuditLogger(
+    filename=str(PROJECT_ROOT / "logs" / "huawei_audit_structured.jsonl"),
+    hmac_key=AUDIT_HMAC_KEY,
+)

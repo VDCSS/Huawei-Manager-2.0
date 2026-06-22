@@ -64,6 +64,7 @@ VNF_CATEGORIES = {
 # ═══════════════════════════════════════════════════════════════════════
 @dataclass
 class ServiceDef:
+    """Define um serviço executável no catálogo: ID, nome, comandos CLI e metadados."""
     id: str
     name: str
     description: str
@@ -77,11 +78,13 @@ class ServiceDef:
     config_mode: bool = False
 
     def cli(self) -> str:
+        """Retorna os comandos CLI concatenados por ponto-e-vírgula."""
         return "; ".join(self.cli_commands)
 
 
 # ── factory helper ──────────────────────────────────────────────────
 def _svc(id_, name, desc, cat, types, cmds=None, config=False):
+    """Factory que cria um ServiceDef com fallback de comandos para a descrição."""
     return ServiceDef(
         id=id_, name=name, description=desc,
         category=cat, vnf_types=types,

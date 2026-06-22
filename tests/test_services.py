@@ -83,6 +83,7 @@ class TestGetAllShowCommands:
 class TestParseParams:
     def test_extracts_params_from_description(self):
         svc = get_service_by_id("router-config-nat-outbound")
+        assert svc is not None
         params = parse_params(svc)
         assert len(params) == 2
         assert params[0][0] == "acl"
@@ -90,24 +91,29 @@ class TestParseParams:
 
     def test_defaults_from_cmd(self):
         svc = get_service_by_id("router-config-acl-number")
+        assert svc is not None
         params = parse_params(svc)
         assert params[0][1] == "3000"
 
     def test_pipe_replaced_with_slash(self):
         svc = get_service_by_id("router-config-vlan-port-type")
+        assert svc is not None
         params = parse_params(svc)
         assert "access/trunk/hybrid" in params[0][0]
 
     def test_no_params_returns_empty(self):
         svc = get_service_by_id("router-routing-table")
+        assert svc is not None
         assert parse_params(svc) == []
 
     def test_non_config_returns_empty(self):
         svc = get_service_by_id("router-bgp-summary")
+        assert svc is not None
         assert parse_params(svc) == []
 
     def test_multiple_same_param_names(self):
         svc = get_service_by_id("router-config-nat-server")
+        assert svc is not None
         params = parse_params(svc)
         ips = [p for p in params if p[0] == "ip"]
         assert len(ips) == 2
@@ -116,17 +122,20 @@ class TestParseParams:
 class TestExecuteServiceMock:
     def test_returns_string(self, mock_session):
         svc = get_service_by_id("router-routing-table")
+        assert svc is not None
         result = execute_service(svc, session_type="mock")
         assert isinstance(result, str)
         assert len(result) > 50
 
     def test_includes_service_name(self, mock_session):
         svc = get_service_by_id("router-routing-table")
+        assert svc is not None
         result = execute_service(svc, session_type="mock")
         assert "Tabela de Roteamento" in result
 
     def test_includes_mock_footer(self, mock_session):
         svc = get_service_by_id("router-routing-table")
+        assert svc is not None
         result = execute_service(svc, session_type="mock")
         assert "MODO MOCK" in result
 
@@ -134,16 +143,19 @@ class TestExecuteServiceMock:
 class TestExecuteServiceCLI:
     def test_calls_send_command(self, mock_netmiko_connection):
         svc = get_service_by_id("router-routing-table")
+        assert svc is not None
         execute_service(svc, session_type="cli", session=mock_netmiko_connection)
         mock_netmiko_connection.send_command.assert_called_once()
 
     def test_calls_send_config_set_for_config_mode(self, mock_netmiko_connection):
         svc = get_service_by_id("router-config-nat-outbound")
+        assert svc is not None
         execute_service(svc, session_type="cli", session=mock_netmiko_connection)
         mock_netmiko_connection.send_config_set.assert_called_once()
 
     def test_no_connection_returns_error(self, mock_session):
         svc = get_service_by_id("router-routing-table")
+        assert svc is not None
         result = execute_service(svc, session_type="cli", session=None)
         assert "Sem conexão" in result
 

@@ -10,7 +10,7 @@ ICONS_DIR = $(HOME)/.local/share/icons/hicolor
 APPS_DIR  = $(HOME)/.local/share/applications
 BIN_DIR   = $(HOME)/.local/bin
 COMP_DIR  = $(HOME)/.local/share/bash-completion/completions
-DESKTOP   = huawei-manager.desktop
+DESKTOP   = share/huawei-manager.desktop
 
 # ── Instalação completa (primeira vez) ──────────────────────────
 install: venv pip-install install-icon install-desktop install-shell
@@ -79,6 +79,9 @@ lint:
 
 typecheck:
 	$(PY) -m pyright
+
+coverage:
+	$(PY) -m pytest --cov=src/huawei_manager --cov-report=term-missing
 
 ci: lint test typecheck
 

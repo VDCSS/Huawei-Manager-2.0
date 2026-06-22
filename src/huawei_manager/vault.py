@@ -25,7 +25,12 @@ from pathlib import Path
 log = logging.getLogger("huawei.vault")
 
 # ── Rotation timestamp ────────────────────────────────────────────────
-_TS_FILE = Path(".ssh_rotation_ts")
+_TS_FILE: Path | None = None
+
+def _set_ts_path(path: str | Path) -> None:
+    """Define o caminho do arquivo de timestamp de rotacao de chave SSH."""
+    global _TS_FILE
+    _TS_FILE = Path(path)
 
 
 def _generate_ed25519() -> tuple[str, str]:
@@ -53,24 +58,31 @@ class SecretsBackend:
     """Interface comum a todos os backends."""
 
     def get(self, key: str, default: str = "") -> str:
+        """Retorna o valor da chave ou default se nao encontrada."""
         raise NotImplementedError
 
     def put(self, key: str, value: str) -> None:
+        """Persiste uma chave/valor no backend."""
         raise NotImplementedError
 
     @property
     def backend_name(self) -> str:
+        """Nome legivel do backend (para exibicao na UI)."""
         return "base"
 
     @property
     def last_rotation(self) -> str | None:
         """ISO timestamp da última rotação de chave SSH, ou None."""
-        if _TS_FILE.exists():
-            return _TS_FILE.read_text().strip()
+        ts = _TS_FILE
+        if ts and ts.exists():
+            return ts.read_text().strip()
         return None
 
     def _record_rotation(self) -> None:
-        _TS_FILE.write_text(datetime.now(UTC).isoformat())
+        """Grava o timestamp atual no arquivo de rotacao."""
+        ts = _TS_FILE
+        if ts:
+            ts.write_text(datetime.now(UTC).isoformat())
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -79,13 +91,19 @@ class SecretsBackend:
 class EnvBackend(SecretsBackend):
     """Lê variáveis do .env / ambiente. Padrão para lab."""
 
-    def __init__(self) -> None:
+    def __init__(self, env_path: str | Path | None = None) -> None:
+        """Carrega variaveis do .env. Aceita caminho customizado."""
         from dotenv import load_dotenv
-        load_dotenv(override=True)
-        self._env_path = Path(".env")
+        if env_path:
+            load_dotenv(dotenv_path=env_path, override=True)
+            self._env_path = Path(env_path)
+        else:
+            load_dotenv(override=True)
+            self._env_path = Path(".env")
         log.info("Secrets backend: %s", self.backend_name)
 
     def get(self, key: str, default: str = "") -> str:
+        """Retorna variavel de ambiente ou default."""
         return os.getenv(key, default)
 
     def put(self, key: str, value: str) -> None:
@@ -112,6 +130,7 @@ class EnvBackend(SecretsBackend):
 
     @property
     def backend_name(self) -> str:
+        """Nome legivel do backend."""
         return "env (.env)"
 
 
@@ -122,6 +141,7 @@ class VaultBackend(SecretsBackend):
     """HashiCorp Vault via hvac. Requer: pip install hvac"""
 
     def __init__(self) -> None:
+        """Autentica no Vault via VAULT_ADDR/VAULT_TOKEN."""
         try:
             import hvac  # noqa: F401 # pyright: ignore[reportMissingModuleSource]
         except ImportError:
@@ -138,24 +158,29 @@ class VaultBackend(SecretsBackend):
         log.debug("Vault backend: %s  path=%s", addr, self._path)
 
     def _read(self) -> dict:
+        """Le todos os secrets do caminho configurado no Vault KV v2."""
         resp = self._client.secrets.kv.v2.read_secret_version(
             mount_point=self._mount, path=self._path)
         return resp["data"]["data"]
 
     def _write(self, data: dict) -> None:
+        """Persiste dict completo no caminho configurado do Vault KV v2."""
         self._client.secrets.kv.v2.create_or_update_secret(
             mount_point=self._mount, path=self._path, secret=data)
 
     def get(self, key: str, default: str = "") -> str:
+        """Retorna valor de uma chave no Vault."""
         return self._read().get(key, default)
 
     def put(self, key: str, value: str) -> None:
+        """Persiste chave/valor no Vault."""
         data = self._read()
         data[key] = value
         self._write(data)
 
     @property
     def backend_name(self) -> str:
+        """Nome legivel do backend."""
         return "HashiCorp Vault"
 
 
@@ -166,6 +191,7 @@ class AWSBackend(SecretsBackend):
     """AWS Secrets Manager via boto3. Requer: pip install boto3"""
 
     def __init__(self) -> None:
+        """Autentica na AWS Secrets Manager via boto3."""
         try:
             import boto3  # noqa: F401 # pyright: ignore[reportMissingImports]
             self._boto3 = boto3
@@ -180,13 +206,16 @@ class AWSBackend(SecretsBackend):
         log.debug("AWS Secrets Manager: %s  region=%s", self._secret_name, region)
 
     def _refresh(self) -> None:
+        """Recarrega o cache do secret da AWS Secrets Manager."""
         resp = self._client.get_secret_value(SecretId=self._secret_name)
         self._cache = json.loads(resp["SecretString"])
 
     def get(self, key: str, default: str = "") -> str:
+        """Lê um valor do cache local do AWS Secrets Manager."""
         return self._cache.get(key, default)
 
     def put(self, key: str, value: str) -> None:
+        """Persiste chave/valor na AWS Secrets Manager."""
         self._cache[key] = value
         self._client.update_secret(
             SecretId=self._secret_name,
@@ -195,6 +224,7 @@ class AWSBackend(SecretsBackend):
 
     @property
     def backend_name(self) -> str:
+        """Nome legivel do backend."""
         return "AWS Secrets Manager"
 
 
@@ -205,6 +235,7 @@ class SopsBackend(SecretsBackend):
     """Le de secrets.enc.yaml descriptografado via SOPS (age)."""
 
     def __init__(self) -> None:
+        """Carrega secrets descriptografados via CLI sops (age)."""
         self._secret_file = Path("secrets.enc.yaml")
         if not self._secret_file.exists():
             raise RuntimeError(
@@ -216,6 +247,7 @@ class SopsBackend(SecretsBackend):
         self._refresh()
 
     def _refresh(self) -> None:
+        """Descriptografa secrets.enc.yaml via sops --decrypt e carrega no cache."""
         result = subprocess.run(
             ["sops", "--decrypt", str(self._secret_file)],
             capture_output=True, text=True, timeout=30,
@@ -231,13 +263,16 @@ class SopsBackend(SecretsBackend):
             raise RuntimeError("PyYAML necessario para SopsBackend: pip install pyyaml")
 
     def get(self, key: str, default: str = "") -> str:
+        """Retorna valor do cache SOPS."""
         return self._cache.get(key, default)
 
     def put(self, key: str, value: str) -> None:
+        """Persiste chave/valor e re-criptografa o arquivo SOPS."""
         self._cache[key] = value
         self._flush()
 
     def _flush(self) -> None:
+        """Serializa cache como YAML e re-criptografa via sops --encrypt."""
         try:
             import yaml
         except ImportError:
@@ -255,13 +290,14 @@ class SopsBackend(SecretsBackend):
 
     @property
     def backend_name(self) -> str:
+        """Nome legivel do backend."""
         return "SOPS (age)"
 
 
 # ═══════════════════════════════════════════════════════════════════════
 #  FACTORY
 # ═══════════════════════════════════════════════════════════════════════
-def get_backend() -> SecretsBackend:
+def get_backend(project_root: str = "") -> SecretsBackend:
     """Retorna o backend configurado em SECRETS_BACKEND (padrão: env)."""
     kind = os.getenv("SECRETS_BACKEND", "env").lower()
     if kind == "vault":
@@ -270,7 +306,8 @@ def get_backend() -> SecretsBackend:
         return AWSBackend()
     if kind == "sops":
         return SopsBackend()
-    return EnvBackend()
+    env_path = Path(project_root) / ".env" if project_root else None
+    return EnvBackend(env_path=env_path)
 
 
 # ═══════════════════════════════════════════════════════════════════════

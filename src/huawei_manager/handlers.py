@@ -13,27 +13,22 @@ from tkinter import messagebox, ttk
 
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
+import huawei_manager.constants as C
 from huawei_manager._config import (
     ADMIN_PASSWORD,
     ADMIN_USERNAME,
+    PROJECT_ROOT,
     TECNICO_PASSWORD,
     TECNICO_USERNAME,
     audit,
     log,
 )
 from huawei_manager.constants import (
-    BG_CARD,
-    BG_INPUT,
-    BORDER_NRM,
     CLI_FILTERS,
-    FG_DIM,
     FONT_BODY,
     FONT_MEDIUM,
     FONT_XLARGE,
     FONT_XLARGE_B,
-    NEON_AMBER,
-    NEON_CYAN,
-    NEON_PURP,
     ROUTE_FILTER_LABELS,
 )
 from huawei_manager.services import VNF_TYPES, ServiceDef, execute_service
@@ -46,8 +41,11 @@ from huawei_manager.topology import (
 )
 from huawei_manager.widgets import action_button
 
+_INVENTORY_PATH = str(PROJECT_ROOT / "data" / "vnf_inventory.json")
+
 
 class EventHandlers:
+    """Mixin de eventos: conexão SSH, fetch, backup, serviços, autenticação e VNFs."""
 
     ADMIN_MAX_ATTEMPTS = 3
     ADMIN_LOCKOUT_SECS = 30
@@ -56,13 +54,15 @@ class EventHandlers:
     #  CONEXAO SSH
     # ══════════════════════════════════════════════════════════════════
     def _get_selected_vnf(self) -> VNF | None:
+        """Retorna o VNF selecionado no canvas ou o alvo salvo em _target_vnf."""
         return (self._topo_canvas.get_selected()
                 if self._topo_canvas else None) or self._target_vnf
 
     def _toggle_connect(self) -> None:
+        """Alterna entre conectar (VNF alvo ou default) e desconectar."""
         if self.session.is_connected:
             self.session.disconnect()
-            self._set_status("Desconectado", NEON_PURP)
+            self._set_status("Desconectado", C.NEON_PURP)
             self._set_conn_btn()
             return
 
@@ -73,39 +73,43 @@ class EventHandlers:
             self._connect_default()
 
     def _do_connect(self, on_success_fmt: str, on_error_msg: str) -> None:
+        """Tenta conectar SSH em background; atualiza status conforme resultado."""
         def _do():
+            """Executa a conexão SSH em background."""
             try:
                 self.session.connect()
                 sid = self.session._session_id or "?"
                 self._dispatch(lambda: self._set_status(
-                    on_success_fmt.format(sid=sid), NEON_CYAN))
+                    on_success_fmt.format(sid=sid), C.NEON_CYAN))
                 self._set_conn_btn("  DESCONECTAR  ")
             except NetmikoAuthenticationException:
                 self._dispatch(lambda: self._set_status(
-                    "Falha de autenticacao", NEON_AMBER))
+                    "Falha de autenticacao", C.NEON_AMBER))
                 self._set_conn_btn()
             except NetmikoTimeoutException:
                 self._dispatch(lambda: self._set_status(
-                    "Timeout de conexao", NEON_AMBER))
+                    "Timeout de conexao", C.NEON_AMBER))
                 self._set_conn_btn()
             except ValueError as exc:
                 msg = f"Config: {exc}"
-                self._dispatch(lambda: self._set_status(msg, NEON_AMBER))
+                self._dispatch(lambda: self._set_status(msg, C.NEON_AMBER))
                 self._set_conn_btn()
             except Exception as exc:
                 log.exception("Falha inesperada em _do_connect: %s", exc)
                 self._dispatch(lambda: self._set_status(
-                    on_error_msg, NEON_AMBER))
+                    on_error_msg, C.NEON_AMBER))
                 self._set_conn_btn()
 
         self._spawn(_do)
 
     def _connect_default(self) -> None:
-        self._set_status("Conectando SSH\u2026", NEON_AMBER)
+        """Conecta ao roteador padrão definido nas configurações."""
+        self._set_status("Conectando SSH\u2026", C.NEON_AMBER)
         self._set_conn_btn(disabled=True)
         self._do_connect("SSH \u2714  {sid}", "Erro ao conectar")
 
     def _connect_with_vnf(self, vnf: VNF) -> None:
+        """Sobrescreve parâmetros SSH com os dados do VNF e conecta."""
         if self.session.is_connected:
             self.session.disconnect()
         self.session.override_host = vnf.host
@@ -113,7 +117,7 @@ class EventHandlers:
         self.session.override_username = vnf.username or None
         self.session.override_password = vnf.password or None
         self.session.override_ssh_key = vnf.ssh_key or None
-        self._set_status(f"Conectando ao VNF {vnf.name}\u2026", NEON_AMBER)
+        self._set_status(f"Conectando ao VNF {vnf.name}\u2026", C.NEON_AMBER)
         self._set_conn_btn(disabled=True)
         self._do_connect(f"VNF \u2714  {vnf.name}  {{sid}}", "Erro ao conectar ao VNF")
 
@@ -121,10 +125,12 @@ class EventHandlers:
     #  FETCH METHODS
     # ══════════════════════════════════════════════════════════════════
     def _fetch_config(self) -> None:
+        """Busca a configuracao atual do roteador (display current-configuration)."""
         self._loading(self.out_config, "Carregando configuracao atual\u2026")
         self._write(self.out_config, self.session.run_cli_rpc("display current-configuration"))
 
     def _fetch_route(self) -> None:
+        """Busca a tabela de roteamento com o filtro selecionado."""
         label_to_key = {v: k for k, v in ROUTE_FILTER_LABELS.items()}
         fkey = label_to_key.get(self.route_filter_var.get(), "routing")
         cmd  = CLI_FILTERS.get(fkey, "display ip routing-table")
@@ -132,10 +138,12 @@ class EventHandlers:
         self._write(self.out_route, self.session.run_cli_rpc(cmd or ""))
 
     def _fetch_arp(self) -> None:
+        """Busca a tabela ARP do roteador."""
         self._loading(self.out_arp, "Executando: display arp\u2026")
         self._write(self.out_arp, self.session.run_cli_rpc("display arp"))
 
     def _fetch_info(self) -> None:
+        """Coleta múltiplas informações do sistema (versão, CPU, memória, interfaces, LLDP)."""
         self._loading(self.out_info, "Coletando informacoes do sistema\u2026")
         buf = io.StringIO()
         commands = [
@@ -157,6 +165,7 @@ class EventHandlers:
     #  EDITOR
     # ══════════════════════════════════════════════════════════════════
     def _on_tpl_select(self, _event=None) -> None:
+        """Insere o template selecionado no editor de comandos."""
         sel = self._tpl_listbox.curselection()
         if not sel:
             return
@@ -166,9 +175,11 @@ class EventHandlers:
         self._cmd_editor.insert("end", cmd)
 
     def _get_editor_cmd(self) -> str:
+        """Retorna o texto atual do editor de comandos."""
         return self._cmd_editor.get("1.0", "end").strip()
 
     def _exec_cmd(self) -> None:
+        """Executa o comando do editor, opcionalmente dentro de system-view."""
         cmd = self._get_editor_cmd()
         if not cmd:
             self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite um comando")
@@ -185,6 +196,7 @@ class EventHandlers:
         self._write(self.out_cmd, result)
 
     def _exec_config(self) -> None:
+        """Envia comandos de configuração do editor via edit_config."""
         cmd = self._get_editor_cmd()
         if not cmd:
             self._write(self.out_cmd,
@@ -198,6 +210,7 @@ class EventHandlers:
     #  BACKUP
     # ══════════════════════════════════════════════════════════════════
     def _do_backup(self) -> None:
+        """Salva a running-config em arquivo TXT e registra na auditoria."""
         fmt = self.backup_fmt.get()
         self._loading(self.out_backup, "Coletando configuracao para backup\u2026")
         conteudo = self.session.run_cli_rpc("display current-configuration")
@@ -229,7 +242,7 @@ class EventHandlers:
                 + "\n".join(conteudo.splitlines()[:40])
             )
             self._write(self.out_backup, resumo)
-            self._dispatch(lambda: self._set_status(f"Backup: {nome}", NEON_CYAN))
+            self._dispatch(lambda: self._set_status(f"Backup: {nome}", C.NEON_CYAN))
             audit.log_operation("backup", user=self.session._user,
                                 host=host, status="ok", file=path)
             log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
@@ -241,6 +254,7 @@ class EventHandlers:
     #  SERVICOS
     # ══════════════════════════════════════════════════════════════════
     def _run_service(self, svc: ServiceDef) -> None:
+        """Executa um serviço no modo mock ou cli, com substituição de parâmetros e sanitização."""
         mode = self._svc_mode_var.get()
         vnf = self._target_vnf
         label = f"Servico: {svc.name}  |  Modo: {mode}"
@@ -269,6 +283,7 @@ class EventHandlers:
             )
 
         def _do():
+            """Executa o serviço selecionado (mock ou SSH real)."""
             self._loading(self._svc_output, f"Executando: {svc.name} ({mode})\u2026")
 
             if mode == "mock":
@@ -295,19 +310,21 @@ class EventHandlers:
     #  TOPOLOGIA / VNFs
     # ══════════════════════════════════════════════════════════════════
     def _init_topology_backend(self) -> None:
+        """Inicializa o backend da topologia (apenas log inicial)."""
         log.info("Topology backend: vnf_inventory.json")
 
     def _refresh_vnfs(self) -> None:
+        """Recarrega o inventário de VNFs, aplica probe/simulação e atualiza a UI."""
         if getattr(self, "_vnfs_busy", False):
             return
         self._vnfs_busy = True
         try:
-            vnfs = load_vnf_inventory()
+            vnfs = load_vnf_inventory(_INVENTORY_PATH)
             if getattr(self, "_mock_mode", False):
                 vnfs = simulate_status(vnfs)
             else:
                 vnfs = probe_vnfs(vnfs)
-            save_vnf_inventory(vnfs)
+            save_vnf_inventory(vnfs, _INVENTORY_PATH)
             self._dispatch(lambda: self._update_vnfs_ui(vnfs))
             self._dispatch(lambda: (
                 self._vnf_status_lbl.configure(
@@ -319,6 +336,7 @@ class EventHandlers:
             self._vnfs_busy = False
 
     def _update_vnfs_ui(self, vnfs: list[VNF]) -> None:
+        """Atualiza o canvas de topologia com a nova lista de VNFs."""
         self._vnfs = vnfs
         if self._topo_canvas:
             self._topo_canvas.set_access(self._access_level)
@@ -326,9 +344,11 @@ class EventHandlers:
 
     # ── Autenticação (Admin / Técnico) ────────────────────────────────
     def _show_auth_dialog(self) -> None:
+        """Exibe diálogo de login; gerencia lockout, níveis de acesso e watcher."""
         if self._access_level != "user":
             self._access_level = "user"
             self._mock_mode = False
+            self._watcher.stop()
             self._rebuild_page("topology")
             log.info("Acesso: deslogado")
             return
@@ -353,35 +373,36 @@ class EventHandlers:
         win = tk.Toplevel(self.root)
         win.title("Autenticacao")
         win.geometry("360x240")
-        win.configure(bg=BG_CARD)
+        win.configure(bg=C.BG_CARD)
         win.resizable(False, False)
         win.transient(self.root)
         win.grab_set()
         self._auth_win = win
 
-        tk.Label(win, text="Acesso Restrito", bg=BG_CARD, fg=NEON_CYAN,
+        tk.Label(win, text="Acesso Restrito", bg=C.BG_CARD, fg=C.NEON_CYAN,
                  font=FONT_XLARGE_B).pack(pady=(16, 8))
 
-        tk.Label(win, text="Usuario:", bg=BG_CARD, fg=FG_DIM,
+        tk.Label(win, text="Usuario:", bg=C.BG_CARD, fg=C.FG_DIM,
                  font=FONT_BODY).pack(anchor="w", padx=24)
         user_var = tk.StringVar()
         user_entry = tk.Entry(win, textvariable=user_var,
-                              bg=BG_INPUT, fg=NEON_CYAN, font=FONT_XLARGE,
+                              bg=C.BG_INPUT, fg=C.NEON_CYAN, font=FONT_XLARGE,
                               relief="flat", bd=0, highlightthickness=1,
-                              highlightbackground=BORDER_NRM)
+                              highlightbackground=C.BORDER_NRM)
         user_entry.pack(padx=24, fill="x", pady=(0, 8))
         user_entry.focus_set()
 
-        tk.Label(win, text="Senha:", bg=BG_CARD, fg=FG_DIM,
+        tk.Label(win, text="Senha:", bg=C.BG_CARD, fg=C.FG_DIM,
                  font=FONT_BODY).pack(anchor="w", padx=24)
         pw_var = tk.StringVar()
         pw_entry = tk.Entry(win, textvariable=pw_var, show="*",
-                            bg=BG_INPUT, fg=NEON_CYAN, font=FONT_XLARGE,
+                            bg=C.BG_INPUT, fg=C.NEON_CYAN, font=FONT_XLARGE,
                             relief="flat", bd=0, highlightthickness=1,
-                            highlightbackground=BORDER_NRM)
+                            highlightbackground=C.BORDER_NRM)
         pw_entry.pack(padx=24, fill="x", pady=(0, 12))
 
         def _verify():
+            """Valida credenciais e define nível de acesso (user/admin/tecnico)."""
             nonlocal now
             user = user_var.get().strip()
             pw = pw_var.get()
@@ -396,6 +417,10 @@ class EventHandlers:
                 self._access_level = level
                 self._admin_attempts = 0
                 self._rebuild_page("topology")
+                if level == "tecnico":
+                    self._watcher.start()
+                else:
+                    self._watcher.stop()
                 self._auth_win = None
                 win.destroy()
                 log.info("Acesso: %s autenticado", level)
@@ -421,12 +446,13 @@ class EventHandlers:
                     pw_var.set("")
                     pw_entry.focus_set()
 
-        action_button(win, "Autenticar", _verify, NEON_CYAN).pack(pady=8)
+        action_button(win, "Autenticar", _verify, C.NEON_CYAN).pack(pady=8)
         pw_entry.bind("<Return>", lambda _: _verify())
         win.bind("<Escape>", lambda _: (setattr(self, "_auth_win", None), win.destroy()))
 
     # ── Device Dialog ────────────────────────────────────────────────
     def _show_device_dialog(self, vnf: VNF | None = None) -> None:
+        """Abre diálogo para cadastrar ou editar um dispositivo VNF."""
         if self._access_level == "user":
             return
         editing = vnf is not None
@@ -435,7 +461,7 @@ class EventHandlers:
         win = tk.Toplevel(self.root)
         win.title("Editar Dispositivo" if editing else "Cadastrar Dispositivo")
         win.geometry("500x480")
-        win.configure(bg=BG_CARD)
+        win.configure(bg=C.BG_CARD)
         win.resizable(False, False)
         win.transient(self.root)
         win.grab_set()
@@ -449,19 +475,19 @@ class EventHandlers:
             ("location", "Localizacao", vnf.location),
         ]
 
-        row_frame = tk.Frame(win, bg=BG_CARD)
+        row_frame = tk.Frame(win, bg=C.BG_CARD)
         row_frame.pack(fill="x", padx=20, pady=(16, 4))
-        tk.Label(row_frame, text="Nome:", bg=BG_CARD, fg=FG_DIM,
+        tk.Label(row_frame, text="Nome:", bg=C.BG_CARD, fg=C.FG_DIM,
                  font=FONT_BODY).pack(side="left", padx=(0, 8))
         name_var = tk.StringVar(value=vnf.name)
-        tk.Entry(row_frame, textvariable=name_var, bg=BG_INPUT,
-                 fg=NEON_CYAN, font=FONT_MEDIUM, relief="flat", bd=0,
-                 highlightthickness=1, highlightbackground=BORDER_NRM).pack(
+        tk.Entry(row_frame, textvariable=name_var, bg=C.BG_INPUT,
+                 fg=C.NEON_CYAN, font=FONT_MEDIUM, relief="flat", bd=0,
+                 highlightthickness=1, highlightbackground=C.BORDER_NRM).pack(
                      side="left", fill="x", expand=True, ipady=4)
 
-        row_frame2 = tk.Frame(win, bg=BG_CARD)
+        row_frame2 = tk.Frame(win, bg=C.BG_CARD)
         row_frame2.pack(fill="x", padx=20, pady=(4, 12))
-        tk.Label(row_frame2, text="Tipo:", bg=BG_CARD, fg=FG_DIM,
+        tk.Label(row_frame2, text="Tipo:", bg=C.BG_CARD, fg=C.FG_DIM,
                  font=FONT_BODY).pack(side="left", padx=(0, 8))
         type_var = tk.StringVar(value=vnf.type)
         type_cb = ttk.Combobox(row_frame2, textvariable=type_var,
@@ -475,29 +501,31 @@ class EventHandlers:
         for fname, flabel, *rest in fields:
             is_secret = len(rest) > 1 and rest[1] is True
             default = rest[0]
-            fr = tk.Frame(win, bg=BG_CARD)
+            fr = tk.Frame(win, bg=C.BG_CARD)
             fr.pack(fill="x", padx=20, pady=3)
-            tk.Label(fr, text=f"{flabel}:", bg=BG_CARD, fg=FG_DIM,
+            tk.Label(fr, text=f"{flabel}:", bg=C.BG_CARD, fg=C.FG_DIM,
                      font=FONT_BODY).pack(side="left", padx=(0, 8))
             var = tk.StringVar(value=default)
             show_char = "*" if is_secret else ""
             entry = tk.Entry(fr, textvariable=var, show=show_char,
-                             bg=BG_INPUT, fg=NEON_CYAN, font=FONT_MEDIUM,
+                             bg=C.BG_INPUT, fg=C.NEON_CYAN, font=FONT_MEDIUM,
                              relief="flat", bd=0, highlightthickness=1,
-                             highlightbackground=BORDER_NRM)
+                             highlightbackground=C.BORDER_NRM)
             entry.pack(side="left", fill="x", expand=True, ipady=4)
             vars_dict[fname] = var
 
             if is_secret:
                 secret_vars[fname] = var
                 def _toggle(e=None, ev=var, en=entry):
+                    """Alterna visibilidade do campo de senha."""
                     en.configure(show="" if en.cget("show") == "*" else "*")
-                btn = tk.Label(fr, text="\U0001f441", bg=BG_CARD, fg=NEON_PURP,
+                btn = tk.Label(fr, text="\U0001f441", bg=C.BG_CARD, fg=C.NEON_PURP,
                                font=FONT_XLARGE, cursor="hand2")
                 btn.pack(side="left", padx=(4, 0))
                 btn.bind("<Button-1>", _toggle)
 
         def _save():
+            """Valida e persiste os dados do dispositivo no inventário."""
             name = name_var.get().strip()
             if not name:
                 messagebox.showwarning("Validacao", "Nome e obrigatorio.")
@@ -515,7 +543,7 @@ class EventHandlers:
             except ValueError:
                 port_val = 22
 
-            vnfs = load_vnf_inventory()
+            vnfs = load_vnf_inventory(_INVENTORY_PATH)
             if editing:
                 new_vnf = VNF(
                     id=vnf.id, name=name,
@@ -545,30 +573,32 @@ class EventHandlers:
                 )
                 vnfs.append(new_vnf)
 
-            save_vnf_inventory(vnfs)
+            save_vnf_inventory(vnfs, _INVENTORY_PATH)
             win.destroy()
             self._spawn(self._refresh_vnfs)
 
-        bar = tk.Frame(win, bg=BG_CARD)
+        bar = tk.Frame(win, bg=C.BG_CARD)
         bar.pack(fill="x", padx=20, pady=(16, 12))
-        action_button(bar, "\U0001f4be  Salvar", _save, NEON_CYAN).pack(side="left", padx=(0, 8))
-        action_button(bar, "\u2716  Cancelar", win.destroy, NEON_PURP).pack(side="left")
+        action_button(bar, "\U0001f4be  Salvar", _save, C.NEON_CYAN).pack(side="left", padx=(0, 8))
+        action_button(bar, "\u2716  Cancelar", win.destroy, C.NEON_PURP).pack(side="left")
         win.bind("<Escape>", lambda _: win.destroy())
 
     def _delete_device(self, vnf: VNF) -> None:
+        """Remove um VNF do inventário após confirmação do usuário."""
         if self._access_level == "user":
             return
         if not messagebox.askyesno("Excluir",
                                     f"Confirmar exclusao de {vnf.name} ({vnf.host})?"):
             return
-        vnfs = load_vnf_inventory()
+        vnfs = load_vnf_inventory(_INVENTORY_PATH)
         vnfs = [v for v in vnfs if v.id != vnf.id]
-        save_vnf_inventory(vnfs)
+        save_vnf_inventory(vnfs, _INVENTORY_PATH)
         if self._target_vnf and self._target_vnf.id == vnf.id:
             self._clear_vnf_target()
         self._spawn(self._refresh_vnfs)
 
     def _on_vnf_selected(self, vnf: VNF) -> None:
+        """Atualiza o alvo SSH e informações ao selecionar um VNF no canvas."""
         self._target_vnf = vnf
         info = f"{vnf.name} ({vnf.host})"
         if self._access_level in ("admin", "tecnico"):
@@ -577,12 +607,13 @@ class EventHandlers:
             info += f"  user:{vnf.username}"
         if hasattr(self, "_vnf_info_lbl"):
             self._vnf_info_lbl.configure(
-                text=f"  Selecionado: {info}", fg=NEON_CYAN)
+                text=f"  Selecionado: {info}", fg=C.NEON_CYAN)
         self._vnf_target_lbl.configure(text=info)
         log.info("VNF selecionado: %s", info)
         self._refresh_service_list()
 
     def _clear_vnf_target(self) -> None:
+        """Limpa o alvo VNF selecionado e volta ao roteador padrão."""
         self._target_vnf = None
         self.session.override_host = None
         self.session.override_port = None
@@ -594,21 +625,22 @@ class EventHandlers:
         self._vnf_target_lbl.configure(text="(roteador padrao)")
         if hasattr(self, "_vnf_info_lbl"):
             self._vnf_info_lbl.configure(
-                text="  Nenhum VNF selecionado", fg=FG_DIM)
+                text="  Nenhum VNF selecionado", fg=C.FG_DIM)
         if self.session.is_connected:
             self.session.disconnect()
-            self._set_status("Desconectado", NEON_PURP)
+            self._set_status("Desconectado", C.NEON_PURP)
             self._set_conn_btn()
         self._refresh_service_list()
 
     def _refresh_dashboard(self) -> None:
+        """Atualiza os indicadores do dashboard (conexão, VNFs, auditoria)."""
         try:
             conn = self.session.is_connected
         except Exception:
             conn = False
         if conn:
             host = getattr(self.session, "_host", "?")
-            self._dash_conn_status.configure(text="Online", fg=NEON_CYAN)
+            self._dash_conn_status.configure(text="Online", fg=C.NEON_CYAN)
             self._dash_conn_host.configure(text=f"Host: {host}")
         else:
             self._dash_conn_status.configure(text="Desconectado", fg="#ff4d4d")

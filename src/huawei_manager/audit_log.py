@@ -49,6 +49,7 @@ _log  = logging.getLogger("huawei.audit")
 # ═══════════════════════════════════════════════════════════════════════
 @dataclass
 class AuditEntry:
+    """Entrada individual de auditoria — uma operacao CLI com metadados."""
     timestamp:   str
     op:          str
     user:        str
@@ -71,6 +72,7 @@ class _TimedCtx:
                  datastore: str | None,
                  session_id: str | None,
                  extra: dict) -> None:
+        """Inicializa o contexto com parametros da operacao a auditar."""
         self._logger     = logger
         self._op         = op
         self._user       = user
@@ -82,12 +84,15 @@ class _TimedCtx:
         self._t0         = 0.0
 
     def set_status(self, status: str) -> None:
+        """Define o status final da operacao (ok, error, timeout, ...)."""
         self._status = status
 
     def _start(self) -> None:
+        """Marca o inicio da medicao com timestamp monotônico."""
         self._t0 = time.monotonic()
 
     def _finish(self) -> None:
+        """Calcula duracao, monta AuditEntry e escreve no log."""
         ms = (time.monotonic() - self._t0) * 1000
         self._logger._write(AuditEntry(
             timestamp   = datetime.now(UTC).isoformat(),
@@ -109,12 +114,14 @@ class AuditLogger:
     """Logger de auditoria thread-safe, saída em JSON Lines com HMAC."""
 
     def __init__(self, filename: str = AUDIT_FILE, hmac_key: str = "") -> None:
+        """Inicializa o logger apontando para o arquivo JSONL e chave HMAC opcional."""
         self._path = Path(filename)
         self._hmac_key = hmac_key
         _log.info("AuditLogger → %s  hmac=%s", self._path.resolve(), "on" if hmac_key else "off")
 
     # ── HMAC ────────────────────────────────────────────────────────────
     def _hmac(self, data: dict) -> str:
+        """Gera HMAC-SHA256 do dict ordenado, ou string vazia se sem chave."""
         if not self._hmac_key:
             return ""
         raw = json.dumps(data, sort_keys=True, ensure_ascii=False)
@@ -124,6 +131,7 @@ class AuditLogger:
 
     @staticmethod
     def _verify_hmac(entry: dict, key: str) -> bool:
+        """Verifica HMAC de uma entrada (remove/add hmac internamente). Retorna True se valido."""
         if not key:
             return True
         expected = entry.pop("hmac", "")
@@ -136,6 +144,7 @@ class AuditLogger:
 
     # ── escrita thread-safe ───────────────────────────────────────────
     def _write(self, entry: AuditEntry) -> None:
+        """Serializa a entrada com HMAC e anexa ao arquivo JSONL (thread-safe)."""
         d = asdict(entry)
         d["hmac"] = self._hmac(d)
         line = json.dumps(d, ensure_ascii=False)

@@ -38,6 +38,7 @@ class NetmikoSession:
         override_password: str | None = None,
         override_ssh_key: str | None = None,
     ) -> None:
+        """Inicializa sessao com backend de secrets, audit e overrides opcionais de VNF."""
         self._backend = backend
         self._audit   = audit_logger
         self._conn: NetmikoConnection | None = None
@@ -51,26 +52,31 @@ class NetmikoSession:
     # ── credenciais dinamicas ─────────────────────────────────────────
     @property
     def _host(self) -> str:
+        """Retorna o host (override ou do backend)."""
         return self.override_host or self._backend.get("ROUTER_HOST")
 
     @property
     def _port(self) -> int:
+        """Retorna a porta (override ou do backend, padrao 2222)."""
         return self.override_port or int(self._backend.get("ROUTER_PORT", "2222"))
 
     @property
     def _user(self) -> str:
+        """Retorna o usuario (override ou do backend)."""
         if self.override_username:
             return self.override_username
         return self._backend.get("ROUTER_USERNAME")
 
     @property
     def _pass(self) -> str:
+        """Retorna a senha (override ou do backend)."""
         if self.override_password:
             return self.override_password
         return self._backend.get("ROUTER_PASSWORD")
 
     @property
     def _ssh_key(self) -> str | None:
+        """Retorna o caminho da chave SSH (override ou do backend), ou None."""
         if self.override_ssh_key:
             p = Path(os.path.expanduser(self.override_ssh_key)).resolve()
             return str(p) if p.is_file() else None
@@ -82,14 +88,17 @@ class NetmikoSession:
 
     @property
     def _hk_verify(self) -> bool:
+        """Retorna se a verificacao de hostkey esta habilitada."""
         return self._backend.get("ROUTER_HOSTKEY_VERIFY", "true").lower() == "true"
 
     @property
     def _session_id(self) -> str | None:
+        """Retorna 'host:port' da sessao ativa, ou None."""
         return f"{self._host}:{self._port}" if self._conn else None
 
     # ── validacao pre-conexao ─────────────────────────────────────────
     def _validate_credentials(self) -> None:
+        """Verifica se host/usuario/senha ou chave estao preenchidos; lanca ValueError se nao."""
         missing = []
         if not self._host:
             missing.append("ROUTER_HOST")
@@ -107,7 +116,7 @@ class NetmikoSession:
 
     # ── conexao ──────────────────────────────────────────────────────
     def connect(self) -> None:
-        self._validate_credentials()
+        """Abre sessao SSH via Netmiko com as credenciais configuradas."""
 
         kwargs = dict(
             device_type="huawei_vrp",
@@ -144,6 +153,7 @@ class NetmikoSession:
         )
 
     def disconnect(self) -> None:
+        """Fecha a sessao SSH se ativa."""
         if self._conn:
             try:
                 self._conn.disconnect()
@@ -154,10 +164,12 @@ class NetmikoSession:
 
     @property
     def is_connected(self) -> bool:
+        """Retorna True se a conexao SSH esta ativa."""
         return self._conn is not None and self._conn.is_alive()
 
     # ── executa comando CLI ──────────────────────────────────────────
     def _cmd(self, command: str) -> str:
+        """Executa comando CLI via Netmiko e retorna output limpo."""
         if not self._conn:
             return "Sem conexao"
         try:
@@ -168,6 +180,7 @@ class NetmikoSession:
             return f"ERRO: {e}"
 
     def run_cli_timing(self, cmd: str) -> str:
+        """Executa comando com send_command_timing e retorna output limpo."""
         if not self._conn:
             return "Sem conexao"
         sanitized = sanitize_command(cmd)
@@ -188,6 +201,7 @@ class NetmikoSession:
     # ── mapeia filtro (key) para comando CLI ──────────────────────────
     @staticmethod
     def _resolve_filter(filter_xml: str | None) -> str | None:
+        """Mapeia um filtro XML para o comando CLI correspondente."""
         if filter_xml is None:
             return None
         f = filter_xml.lower()
@@ -225,6 +239,7 @@ class NetmikoSession:
         filter_xml: str | None = None,
         source: str = "running",
     ) -> str:
+        """Obtem configuracao do dispositivo via CLI, com filtro opcional."""
         cmd = self._resolve_filter(filter_xml) or "display current-configuration"
         with self._lock:
             with self._audit.timed(
@@ -241,6 +256,7 @@ class NetmikoSession:
 
     # ── get estado operacional via CLI ────────────────────────────────
     def get(self, filter_xml: str | None = None) -> str:
+        """Obtem estado operacional do dispositivo via CLI (ex: routing-table)."""
         cmd = self._resolve_filter(filter_xml) or "display ip routing-table"
         with self._lock:
             with self._audit.timed(
@@ -261,6 +277,7 @@ class NetmikoSession:
         config: str,
         target: str = "running",
     ) -> tuple[bool, str]:
+        """Aplica configuracao via CLI (send_config_set) e salva. Retorna (sucesso, mensagem)."""
         if not self._conn:
             return False, "Sem conexao"
         with self._lock:
@@ -281,14 +298,17 @@ class NetmikoSession:
 
     # ── schemas (nao aplicavel via CLI) ───────────────────────────────
     def get_schemas(self) -> str:
+        """Retorna mensagem informando que schemas NAO estao disponiveis via CLI."""
         return "Schemas nao disponiveis via Netmiko/CLI."
 
     # ── capabilities ─────────────────────────────────────────────────
     def get_capabilities(self) -> str:
+        """Retorna a versao do dispositivo via CLI (display version)."""
         return self._cmd("display version")
 
     # ── comando CLI livre ─────────────────────────────────────────────
     def run_cli_rpc(self, cmd: str) -> str:
+        """Executa comando CLI livre e retorna output com auditoria."""
         sanitized = sanitize_command(cmd)
         with self._lock:
             with self._audit.timed(
