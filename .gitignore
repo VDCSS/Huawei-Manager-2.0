@@ -22,4 +22,3 @@ data/vnf_inventory.json
 .coverage
 *.cover
 *,cover
-src/huawei_manager_gui.py
