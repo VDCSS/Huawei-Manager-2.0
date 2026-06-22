@@ -17,3 +17,9 @@ dev/
 huawei_manager.egg-info/
 .ssh_rotation_ts
 data/vnf_inventory.json
+.opencode/
+.omo/
+.coverage
+*.cover
+*,cover
+src/huawei_manager_gui.py
