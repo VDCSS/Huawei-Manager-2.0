@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 # ─── PALETA NEON ─────────────────────────────────────────────────────
-BG_BASE    = "#0d0d1a"
-BG_CARD    = "#13132b"
-BG_SIDEBAR = "#0a0a18"
-BG_INPUT   = "#1a1a30"
+BG_BASE     = "#0d0d1a"
+BG_CARD     = "#13132b"
+BG_SIDEBAR  = "#0a0a18"
+BG_INPUT    = "#1a1a30"
 
 NEON_CYAN  = "#00e5ff"
 NEON_MAG   = "#e040fb"
@@ -17,7 +17,28 @@ FG_CODE    = "#c8c8ff"
 
 BORDER_NRM = "#2a2a4a"
 
-# ─── FONTES ──────────────────────────────────────────────────────────
+# ─── FONTES — UI (Proporcional) ──────────────────────────────────────
+# Inter é a primary; Segoe UI fallback no Windows; TkDefaultFont fallback final
+_UI = "Inter"
+_UI_FALLBACK = "Segoe UI"
+
+FONT_UI_XSMALL  = (_UI, 9)             # labels de categoria, badges
+FONT_UI_SMALL   = (_UI, 10)            # labels pequenos, footer
+FONT_UI_BODY    = (_UI, 11)            # corpo da UI, labels
+FONT_UI_MEDIUM  = (_UI, 12)            # sidebar, botões, inputs
+FONT_UI_LARGE   = (_UI, 13)            # destaque, seções
+FONT_UI_XLARGE  = (_UI, 14)            # admin dialog, títulos
+FONT_UI_H1      = (_UI, 16)            # status dot / subtítulos
+FONT_UI_HERO    = (_UI, 18)            # header "HUAWEI" "MANAGER"
+
+FONT_UI_SMALL_B  = (_UI, 10, "bold")
+FONT_UI_MEDIUM_B = (_UI, 12, "bold")
+FONT_UI_LARGE_B  = (_UI, 13, "bold")
+FONT_UI_XLARGE_B = (_UI, 14, "bold")
+FONT_UI_H2_B     = (_UI, 15, "bold")
+FONT_UI_HERO_B   = (_UI, 18, "bold")
+
+# ─── FONTES — Código (Monospace, mantidas) ──────────────────────────
 FONT_XSMALL = ("Consolas", 9)     # rodapés, endereços (era 7)
 FONT_SMALL  = ("Consolas", 10)    # labels pequenos, badges (era 8)
 FONT_BODY   = ("Consolas", 11)    # corpo da UI, labels (era 9)

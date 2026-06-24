@@ -6,7 +6,7 @@ import datetime
 import queue
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 import huawei_manager.constants as C
 from agents.watcher import Watcher
@@ -15,9 +15,11 @@ from huawei_manager.constants import (
     FONT_BODY,
     FONT_H1,
     FONT_H2_B,
-    FONT_HERO_B,
-    FONT_MEDIUM_B,
     FONT_SMALL,
+    FONT_UI_BODY,
+    FONT_UI_HERO_B,
+    FONT_UI_MEDIUM_B,
+    FONT_UI_XSMALL,
     FONT_XSMALL,
     set_theme,
 )
@@ -46,10 +48,17 @@ class AppCore:
         except Exception:
             pass
 
+        # Tema ttkbootstrap (só para widgets ttk, não afeta tk custom neon)
+        try:
+            import ttkbootstrap  # type: ignore[reportMissingImports]
+            self._ttk_style = ttkbootstrap.Style(theme="darkly")
+        except Exception:
+            self._ttk_style = ttk.Style()
+
         self.session = NetmikoSession(_secrets, audit)
         self._active_btn: tk.Frame | None = None
         self._access_level: str = "user"
-        self._mock_mode: bool = False
+        self._mock_mode: bool = True
         self._vnfs_busy: bool = False
         self._theme: str = "dark"
 
@@ -77,6 +86,7 @@ class AppCore:
         self._tick_vnfs()
         self._init_topology_backend()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._drag_data = {"x": 0, "y": 0}
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:
@@ -120,10 +130,20 @@ class AppCore:
         hdr.pack(fill="x", padx=18, pady=(10, 6))
         hdr.pack_propagate(False)
 
+        # Logo
+        try:
+            logo_path = PROJECT_ROOT / "share" / "icons" / "huawei-manager.png"
+            if logo_path.exists():
+                logo_img = tk.PhotoImage(file=str(logo_path))
+                self._logo_header = logo_img.subsample(7, 7)  # 439→63, 426→61
+                tk.Label(hdr, image=self._logo_header, bg=C.BG_BASE).pack(side="left", padx=(0, 10))
+        except Exception:
+            pass
+
         tk.Label(hdr, text="HUAWEI",  bg=C.BG_BASE, fg=C.NEON_CYAN,
-                 font=FONT_HERO_B).pack(side="left")
+                 font=FONT_UI_HERO_B).pack(side="left")
         tk.Label(hdr, text=" MANAGER", bg=C.BG_BASE, fg=C.FG_MAIN,
-                 font=FONT_HERO_B).pack(side="left")
+                 font=FONT_UI_HERO_B).pack(side="left")
 
 
         badge = tk.Frame(hdr, bg=C.BG_BASE)
@@ -141,42 +161,82 @@ class AppCore:
         self.theme_btn = action_button(badge, "\u263c", self._toggle_theme, C.NEON_PURP)
         self.theme_btn.pack(side="left", padx=(6, 0))
 
+        # Drag da janela pelo header (exceto botões, que consomem o evento)
+        def start_drag(event):
+            self._drag_data["x"] = event.x_root - self.root.winfo_x()
+            self._drag_data["y"] = event.y_root - self.root.winfo_y()
+
+        def do_drag(event):
+            x = event.x_root - self._drag_data["x"]
+            y = event.y_root - self._drag_data["y"]
+            self.root.geometry(f"+{x}+{y}")
+
+        hdr.bind("<Button-1>", start_drag)
+        hdr.bind("<B1-Motion>", do_drag)
+        # Labels dentro do header também arrastam, mas botões (tk.Button) não propagam o evento
+        for child in hdr.winfo_children():
+            if isinstance(child, (tk.Label, tk.Frame)):
+                child.bind("<Button-1>", start_drag)
+                child.bind("<B1-Motion>", do_drag)
+
     # ── Sidebar ──────────────────────────────────────────────────────
     def _build_sidebar(self) -> None:
         """Constrói a barra lateral com botões de navegação e label do VNF alvo."""
         logo = tk.Frame(self.sidebar, bg=C.BG_SIDEBAR)
-        logo.pack(fill="x", pady=(18, 8))
-        tk.Label(logo, text="[ MODULOS ]", bg=C.BG_SIDEBAR,
-                 fg=C.FG_DIM, font=FONT_SMALL).pack(padx=16, anchor="w")
-        tk.Frame(self.sidebar, bg=C.BORDER_NRM, height=1).pack(fill="x", padx=16, pady=6)
+        logo.pack(fill="x", pady=(14, 4))
+
+        # Logo pequeno no topo da sidebar
+        try:
+            logo_path = PROJECT_ROOT / "share" / "icons" / "huawei-manager.png"
+            if logo_path.exists() and hasattr(self, '_logo_header'):
+                sm = self._logo_header.subsample(2, 2)  # ~32x32
+                tk.Label(logo, image=sm, bg=C.BG_SIDEBAR).pack(pady=(4, 6))
+        except Exception:
+            pass
 
         self._nav_buttons: dict[str, tk.Frame] = {}
-        items = (
-            ("home",     "\U0001f3e0", "Dashboard",            C.NEON_CYAN),
-            ("topology", "\U0001f5fa", "Topologia / VNFs",     C.NEON_AMBER),
-            ("config",   "\U0001f4cb", "Config Atual",       C.NEON_CYAN),
-            ("route",    "\U0001f310", "Roteamento",          C.NEON_CYAN),
-            ("arp",      "\U0001f4e1", "Tabela ARP",           C.NEON_CYAN),
-            ("info",     "\U0001f4bb", "Info do Sistema",      C.NEON_MAG),
-            ("cmd",      "\u2328",  "Editor de Comandos",       C.NEON_MAG),
-            ("backup",   "\U0001f4be", "Backup",               C.NEON_PURP),
-            ("services",    "\u26a1",  "Servicos",       C.NEON_AMBER),
-            ("manutencao",  "\U0001f6e0", "Manutencao",   C.NEON_MAG),
+
+        # Grupos da sidebar: (label_categoria, [(key, icon, label, color), ...])
+        groups = (
+            ("DASHBOARD", (
+                ("home", "\U0001f3e0", "Dashboard", C.NEON_CYAN),
+            )),
+            ("DISPOSITIVOS", (
+                ("topology", "\U0001f5fa", "Topologia / VNFs", C.NEON_AMBER),
+                ("config",   "\U0001f4cb", "Config Atual", C.NEON_CYAN),
+                ("route",    "\U0001f310", "Roteamento", C.NEON_CYAN),
+                ("arp",      "\U0001f4e1", "Tabela ARP", C.NEON_CYAN),
+                ("info",     "\U0001f4bb", "Info do Sistema", C.NEON_MAG),
+            )),
+            ("FERRAMENTAS", (
+                ("cmd",      "\u2328",     "Editor de Comandos", C.NEON_MAG),
+                ("backup",   "\U0001f4be", "Backup", C.NEON_PURP),
+                ("services", "\u26a1",     "Servicos", C.NEON_AMBER),
+            )),
+            ("ADMINISTRACAO", (
+                ("manutencao", "\U0001f6e0", "Manutencao", C.NEON_MAG),
+            )),
         )
-        for key, icon, label, color in items:
-            btn = neon_button(self.sidebar, label,
-                              lambda k=key: self._show_page(k),
-                              color=color, icon=icon)
-            btn.pack(fill="x", pady=1)
-            self._nav_buttons[key] = btn
+
+        for cat_label, items in groups:
+            cat_frame = tk.Frame(self.sidebar, bg=C.BG_SIDEBAR)
+            cat_frame.pack(fill="x", pady=(6, 0))
+            tk.Label(cat_frame, text=cat_label, bg=C.BG_SIDEBAR,
+                     fg=C.FG_DIM, font=FONT_UI_XSMALL).pack(padx=16, anchor="w")
+            for key, icon, label, color in items:
+                btn = neon_button(self.sidebar, label,
+                                  lambda k=key: self._show_page(k),
+                                  color=color, icon=icon)
+                btn.pack(fill="x")
+                self._nav_buttons[key] = btn
 
         tk.Frame(self.sidebar, bg=C.BORDER_NRM, height=1).pack(
             fill="x", padx=16, pady=(16, 4))
         tk.Label(self.sidebar, text="ALVO VNF", bg=C.BG_SIDEBAR,
-                 fg=C.FG_DIM, font=FONT_BODY).pack(padx=16, anchor="w")
+                 fg=C.FG_DIM, font=FONT_UI_BODY).pack(padx=16, anchor="w")
         self._vnf_target_lbl = tk.Label(
             self.sidebar, text="(roteador padrao)", bg=C.BG_SIDEBAR,
-            fg=C.NEON_AMBER, font=FONT_MEDIUM_B, wraplength=180)
+            fg=C.NEON_AMBER, font=FONT_UI_MEDIUM_B, wraplength=180)
         self._vnf_target_lbl.pack(padx=16, anchor="w")
 
     # ── Footer ───────────────────────────────────────────────────────
@@ -236,8 +296,7 @@ class AppCore:
     def _rebuild_page(self, key: str) -> None:
         """Destrói e recria a página *key* do cache, mantendo a navegação atual."""
         if key in self.pages:
-            self.pages[key].master.destroy()
-            del self.pages[key]
+            self.pages.pop(key).destroy()
         if self._current_page == key:
             self._show_page(key)
 
@@ -274,6 +333,7 @@ class AppCore:
         """Alterna entre tema claro e escuro e reconstrói a interface."""
         self._theme = "light" if self._theme == "dark" else "dark"
         set_theme(self._theme)
+        self._ttk_style.theme_use("flatly" if self._theme == "light" else "darkly")
         self._rebuild_ui()
         icon = "\u263c" if self._theme == "dark" else "\u263e"
         self.theme_btn.configure(text=icon)

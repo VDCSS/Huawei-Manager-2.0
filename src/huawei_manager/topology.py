@@ -95,23 +95,58 @@ def simulate_status(vnfs: list[VNF]) -> list[VNF]:
 # ═══════════════════════════════════════════════════════════════════════
 #  PROBE TCP (REAL)
 # ═══════════════════════════════════════════════════════════════════════
-def _check_vnf(vnf: VNF, timeout: int = 3) -> str:
+# Cache de status: evita re-provar VNFs que estavam online recentemente.
+# Chave = "host:porta"  →  (status, timestamp)
+_probe_cache: dict[str, tuple[str, float]] = {}
+_PROBE_CACHE_TTL: float = 25.0  # segundos — ligeiramente abaixo do timer de 30s
+
+
+def _vnf_cache_key(vnf: VNF) -> str:
+    return f"{vnf.host}:{vnf.port or 22}"
+
+
+def _check_vnf(vnf: VNF, timeout: int = 2) -> str:
     """Tenta conexão TCP ao VNF; retorna 'online' ou lança exceção."""
     socket.create_connection((vnf.host, vnf.port or 22), timeout=timeout).close()
     return "online"
 
 
-def probe_vnfs(vnfs: list[VNF], timeout: int = 5) -> list[VNF]:
-    """Verifica status de múltiplos VNFs via TCP paralelo."""
-    with ThreadPoolExecutor(max_workers=min(10, len(vnfs) or 1)) as ex:
-        fut = {ex.submit(_check_vnf, v, timeout): v for v in vnfs if v.host}
-        for f in as_completed(fut):
-            v = fut[f]
-            try:
-                v.status = f.result()
-            except (OSError, TimeoutError):
-                v.status = "offline"
+def probe_vnfs(vnfs: list[VNF], timeout: int = 2) -> list[VNF]:
+    global _probe_cache
+    now = time.time()
+    to_probe: list[VNF] = []
+    cache_hits = 0
+
+    for v in vnfs:
+        if not v.host:
+            continue
+        key = _vnf_cache_key(v)
+        cached = _probe_cache.get(key)
+        if cached and cached[0] == "online" and now - cached[1] < _PROBE_CACHE_TTL:
+            v.status = cached[0]
+            cache_hits += 1
+        else:
+            to_probe.append(v)
+
+    if to_probe:
+        with ThreadPoolExecutor(max_workers=min(10, len(to_probe) or 1)) as ex:
+            fut = {ex.submit(_check_vnf, v, timeout): v for v in to_probe}
+            for f in as_completed(fut):
+                v = fut[f]
+                try:
+                    v.status = f.result()
+                except (OSError, TimeoutError):
+                    v.status = "offline"
+                # Atualiza cache (inclusive offline — evita reprovar imediatamente)
+                _probe_cache[_vnf_cache_key(v)] = (v.status, now)
+
     return vnfs
+
+
+def clear_probe_cache() -> None:
+    """Limpa o cache de probe (útil ao recarregar inventário)."""
+    global _probe_cache
+    _probe_cache.clear()
 
 
 def _normalize_status(raw: str) -> str:

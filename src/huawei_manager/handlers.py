@@ -164,16 +164,6 @@ class EventHandlers:
     # ══════════════════════════════════════════════════════════════════
     #  EDITOR
     # ══════════════════════════════════════════════════════════════════
-    def _on_tpl_select(self, _event=None) -> None:
-        """Insere o template selecionado no editor de comandos."""
-        sel = self._tpl_listbox.curselection()
-        if not sel:
-            return
-        name = self._tpl_listbox.get(sel[0])
-        cmd  = self._tpl_cmd_map.get(name, name) or ""
-        self._cmd_editor.delete("1.0", "end")
-        self._cmd_editor.insert("end", cmd)
-
     def _get_editor_cmd(self) -> str:
         """Retorna o texto atual do editor de comandos."""
         return self._cmd_editor.get("1.0", "end").strip()

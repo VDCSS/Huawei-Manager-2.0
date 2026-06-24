@@ -11,14 +11,14 @@ from tkinter import filedialog, ttk
 import huawei_manager.constants as C
 from huawei_manager.constants import (
     CMD_TEMPLATES,
-    FONT_BODY,
-    FONT_LARGE,
-    FONT_LARGE_B,
-    FONT_MEDIUM,
-    FONT_MEDIUM_B,
-    FONT_SMALL,
-    FONT_SMALL_B,
-    FONT_XLARGE_B,
+    FONT_UI_BODY,
+    FONT_UI_LARGE,
+    FONT_UI_LARGE_B,
+    FONT_UI_MEDIUM,
+    FONT_UI_MEDIUM_B,
+    FONT_UI_SMALL,
+    FONT_UI_SMALL_B,
+    FONT_UI_XLARGE_B,
     ROUTE_FILTER_LABELS,
     SERVICE_CAT_LABELS,
     THEME,
@@ -62,11 +62,11 @@ class PageBuilder:
         row = tk.Frame(p, bg=C.BG_CARD)
         row.pack(fill="x", pady=(0, 8))
         tk.Label(row, text="Filtro:", bg=C.BG_CARD, fg=C.FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(0, 8))
+                 font=FONT_UI_BODY).pack(side="left", padx=(0, 8))
         self.route_filter_var = tk.StringVar(value="Tabela de Rotas do Roteador")
         ttk.Combobox(row, textvariable=self.route_filter_var,
              values=list(ROUTE_FILTER_LABELS.values()),
-             state="readonly", width=48, font=FONT_BODY).pack(side="left")
+             state="readonly", width=48, font=FONT_UI_BODY).pack(side="left")
         self.out_route = output_text(p)
         self.out_route.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\u21bb  Carregar",
@@ -114,12 +114,31 @@ class PageBuilder:
         left.pack_propagate(False)
 
         tk.Label(left, text="COMANDOS DISPONIVEIS", bg=C.BG_INPUT, fg=C.FG_DIM,
-                 font=FONT_SMALL_B).pack(anchor="w")
-        self._tpl_listbox = tk.Listbox(left, bg=C.BG_INPUT, fg=C.NEON_CYAN,
-            selectbackground=C.NEON_PURP, selectforeground="white",
-            relief="flat", borderwidth=0,
-            font=FONT_MEDIUM, highlightthickness=0)
-        self._tpl_listbox.pack(fill="both", expand=True, pady=(4, 0))
+                 font=FONT_UI_SMALL_B).pack(anchor="w")
+        tpl_canvas = tk.Canvas(left, bg=C.BG_INPUT, highlightthickness=0, width=240)
+        tpl_scroll = tk.Scrollbar(left, orient="vertical", command=tpl_canvas.yview)
+        tpl_canvas.configure(yscrollcommand=tpl_scroll.set)
+        tpl_inner = tk.Frame(tpl_canvas, bg=C.BG_INPUT)
+        tpl_inner.bind("<Configure>",
+                       lambda _: tpl_canvas.configure(scrollregion=tpl_canvas.bbox("all")))
+        tpl_canvas.create_window((0, 0), window=tpl_inner, anchor="nw")
+        tpl_canvas.pack(side="left", fill="both", expand=True, pady=(4, 0))
+        tpl_scroll.pack(side="right", fill="y", pady=(4, 0))
+
+        self._tpl_selected: tk.Label | None = None
+
+        def _on_tpl_click(name: str, cmd: str) -> None:
+            if self._tpl_selected is not None:
+                self._tpl_selected.configure(bg=C.BG_INPUT, fg=C.NEON_CYAN,
+                                             font=FONT_UI_MEDIUM)
+            for child in tpl_inner.winfo_children():
+                if isinstance(child, tk.Label) and child.cget("text") == name:
+                    self._tpl_selected = child
+                    child.configure(bg=C.NEON_PURP, fg="white",
+                                    font=FONT_UI_MEDIUM_B)
+                    break
+            self._cmd_editor.delete("1.0", "end")
+            self._cmd_editor.insert("end", cmd)
 
         _EXCLUDED_CMDS: set[str] = {
             "display current-configuration",
@@ -147,8 +166,13 @@ class PageBuilder:
                 self._tpl_cmd_map[svc_name] = cmd
 
         for name in self._tpl_cmd_map:
-            self._tpl_listbox.insert("end", name)
-        self._tpl_listbox.bind("<<ListboxSelect>>", self._on_tpl_select)
+            lbl = tk.Label(tpl_inner, text=name, bg=C.BG_INPUT, fg=C.NEON_CYAN,
+                           font=FONT_UI_MEDIUM, anchor="w", cursor="hand2",
+                           padx=8, pady=2)
+            lbl.pack(fill="x")
+            cmd = self._tpl_cmd_map[name]
+            lbl.bind("<Button-1>",
+                     lambda _e, _n=name, _c=cmd: _on_tpl_click(_n, _c))
 
         right = tk.Frame(split, bg=C.BG_INPUT)
         right.pack(side="left", fill="both", expand=True)
@@ -179,13 +203,13 @@ class PageBuilder:
             abar, text="system-view", variable=self._sysview_var,
             bg=C.BG_INPUT, fg=C.FG_DIM, selectcolor=C.BG_INPUT,
             activebackground=C.BG_INPUT, activeforeground=C.NEON_CYAN,
-            font=FONT_BODY, relief="flat",
+            font=FONT_UI_BODY, relief="flat",
         )
         sysview_cb.pack(side="left", padx=(12, 0))
 
         tk.Label(right,
                  text="\u26a0  Todas as operacoes sao registradas em huawei_audit_structured.jsonl",
-                 bg=C.BG_INPUT, fg=C.NEON_AMBER, font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
+                 bg=C.BG_INPUT, fg=C.NEON_AMBER, font=FONT_UI_SMALL).pack(anchor="w", pady=(0, 4))
 
         self.out_cmd = output_text(right)
         self.out_cmd.pack(fill="both", expand=True)
@@ -199,7 +223,7 @@ class PageBuilder:
         ctrl = tk.Frame(p, bg=C.BG_CARD)
         ctrl.pack(fill="x", pady=(0, 12))
         tk.Label(ctrl, text="Destino:", bg=C.BG_CARD, fg=C.FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(0, 8))
+                 font=FONT_UI_BODY).pack(side="left", padx=(0, 8))
         self.backup_path = tk.StringVar(value=os.path.expanduser("~"))
         neon_entry(ctrl, textvariable=self.backup_path,
                    width=44, state="normal").pack(side="left", ipady=5)
@@ -208,12 +232,12 @@ class PageBuilder:
         fmt_frame = tk.Frame(p, bg=C.BG_CARD)
         fmt_frame.pack(fill="x", pady=(0, 8))
         tk.Label(fmt_frame, text="Formato:", bg=C.BG_CARD, fg=C.FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(0, 8))
+                 font=FONT_UI_BODY).pack(side="left", padx=(0, 8))
         self.backup_fmt = tk.StringVar(value="Texto (CLI)")
         ttk.Combobox(fmt_frame, textvariable=self.backup_fmt,
                      values=["Texto (CLI)"],
                      state="readonly", width=16,
-                     font=FONT_BODY).pack(side="left")
+                     font=FONT_UI_BODY).pack(side="left")
         self.out_backup = output_text(p)
         self.out_backup.pack(fill="both", expand=True, pady=(0, 10))
         action_button(p, "\U0001f4be  Fazer Backup",
@@ -247,7 +271,7 @@ class PageBuilder:
 
         self._vnf_info_lbl = tk.Label(
             ctrl, text="  Nenhum VNF selecionado", bg=C.BG_CARD,
-            fg=C.FG_DIM, font=FONT_BODY)
+            fg=C.FG_DIM, font=FONT_UI_BODY)
         self._vnf_info_lbl.pack(side="right", padx=8)
 
         canvas_frame = tk.Frame(p, bg=C.BG_BASE,
@@ -264,7 +288,7 @@ class PageBuilder:
         self._vnf_status_lbl = tk.Label(
             p, text="Inventario: vnf_inventory.json",
             bg=C.BG_CARD, fg=C.NEON_AMBER,
-            font=FONT_SMALL)
+            font=FONT_UI_SMALL)
         self._vnf_status_lbl.pack(anchor="w", pady=(4, 0))
 
         self._spawn(self._refresh_vnfs)
@@ -277,15 +301,15 @@ class PageBuilder:
 
         self._svc_vnf_lbl = tk.Label(info_row,
             text="VNF: (selecione um VNF na aba Topologia)",
-            bg=C.BG_CARD, fg=C.NEON_AMBER, font=FONT_MEDIUM_B)
+            bg=C.BG_CARD, fg=C.NEON_AMBER, font=FONT_UI_MEDIUM_B)
         self._svc_vnf_lbl.pack(side="left", padx=(0, 16))
 
         self._svc_type_lbl = tk.Label(info_row,
-            text="Tipo: \u2014", bg=C.BG_CARD, fg=C.FG_DIM, font=FONT_BODY)
+            text="Tipo: \u2014", bg=C.BG_CARD, fg=C.FG_DIM, font=FONT_UI_BODY)
         self._svc_type_lbl.pack(side="left", padx=(0, 16))
 
         self._svc_status_lbl = tk.Label(info_row,
-            text="", bg=C.BG_CARD, fg=C.FG_DIM, font=FONT_BODY)
+            text="", bg=C.BG_CARD, fg=C.FG_DIM, font=FONT_UI_BODY)
         self._svc_status_lbl.pack(side="left")
 
     def _build_services_filter_row(self, parent: tk.Frame) -> None:
@@ -294,11 +318,11 @@ class PageBuilder:
         filt_row.pack(fill="x", pady=(0, 8))
 
         tk.Label(filt_row, text="Categoria:", bg=C.BG_CARD, fg=C.FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(0, 8))
+                 font=FONT_UI_BODY).pack(side="left", padx=(0, 8))
         self._svc_cat_var = tk.StringVar(value="Todas as Categorias")
         self._svc_cat_cb = ttk.Combobox(filt_row,
             textvariable=self._svc_cat_var, state="readonly",
-            width=20, font=FONT_BODY)
+            width=20, font=FONT_UI_BODY)
         self._svc_cat_cb.pack(side="left", padx=(0, 12))
         self._svc_cat_cb.bind("<<ComboboxSelected>>",
                               lambda _: self._refresh_service_list())
@@ -311,10 +335,10 @@ class PageBuilder:
         self._svc_mode_var = tk.StringVar(value="mock")
         mode_cb = ttk.Combobox(filt_row, textvariable=self._svc_mode_var,
             values=["mock", "cli"], state="readonly",
-            width=10, font=FONT_BODY)
+            width=10, font=FONT_UI_BODY)
         mode_cb.pack(side="left", padx=(8, 0))
         tk.Label(filt_row, text="Modo:", bg=C.BG_CARD, fg=C.FG_DIM,
-                 font=FONT_BODY).pack(side="left", padx=(4, 0))
+                 font=FONT_UI_BODY).pack(side="left", padx=(4, 0))
 
     def _build_services_split(self, parent: tk.Frame) -> None:
         """Constrói o split horizontal com listbox de serviços e painel de detalhe."""
@@ -333,7 +357,7 @@ class PageBuilder:
         left.pack_propagate(False)
 
         tk.Label(left, text="SERVIÇOS", bg=C.BG_INPUT, fg=C.FG_DIM,
-                 font=FONT_SMALL_B).pack(anchor="w")
+                 font=FONT_UI_SMALL_B).pack(anchor="w")
 
         lbf = tk.Frame(left, bg=C.BG_INPUT)
         lbf.pack(fill="both", expand=True, pady=(4, 0))
@@ -341,7 +365,7 @@ class PageBuilder:
         self._svc_listbox = tk.Listbox(lbf, bg=C.BG_INPUT, fg=C.NEON_CYAN,
             selectbackground=C.NEON_PURP, selectforeground="white",
             relief="flat", borderwidth=0,
-            font=FONT_MEDIUM, highlightthickness=0)
+            font=FONT_UI_MEDIUM, highlightthickness=0)
         self._svc_listbox.pack(side="left", fill="both", expand=True)
 
         svc_scroll = tk.Scrollbar(lbf, orient="vertical",
@@ -457,16 +481,16 @@ class PageBuilder:
         mode_label = "Configurando" if svc.config_mode else "Executando"
         tk.Label(p, text=f"{mode_label}: {svc.name}", bg=C.BG_INPUT,
                  fg=C.NEON_AMBER if svc.config_mode else C.NEON_CYAN,
-                 font=FONT_LARGE_B).pack(anchor="w", pady=(0, 4))
+                 font=FONT_UI_LARGE_B).pack(anchor="w", pady=(0, 4))
 
         tk.Label(p, text=f"Categoria: {svc.category}", bg=C.BG_INPUT,
-                 fg=C.NEON_PURP, font=FONT_SMALL).pack(anchor="w", pady=(0, 2))
+                 fg=C.NEON_PURP, font=FONT_UI_SMALL).pack(anchor="w", pady=(0, 2))
 
         cmd_frame = tk.Frame(p, bg=C.BG_INPUT,
                              highlightthickness=1, highlightbackground=C.BORDER_NRM)
         cmd_frame.pack(fill="x", pady=(0, 8))
         tk.Label(cmd_frame, text=svc.description, bg=C.BG_INPUT,
-                 fg=C.FG_CODE, font=FONT_BODY, anchor="w",
+                 fg=C.FG_CODE, font=FONT_UI_BODY, anchor="w",
                  wraplength=500).pack(fill="x", padx=8, pady=6)
 
         if svc.config_mode:
@@ -492,17 +516,17 @@ class PageBuilder:
         pf.pack(fill="x", pady=(0, 8))
 
         tk.Label(pf, text="PARÂMETROS", bg=C.BG_INPUT, fg=C.FG_DIM,
-                 font=FONT_SMALL_B).pack(anchor="w", padx=8, pady=(4, 2))
+                 font=FONT_UI_SMALL_B).pack(anchor="w", padx=8, pady=(4, 2))
 
         self._svc_param_entries.clear()
         for label, default in params:
             row = tk.Frame(pf, bg=C.BG_INPUT)
             row.pack(fill="x", padx=8, pady=2)
             tk.Label(row, text=f"{label}:", bg=C.BG_INPUT, fg=C.FG_DIM,
-                     font=FONT_BODY, width=10, anchor="w").pack(side="left")
+                     font=FONT_UI_BODY, width=10, anchor="w").pack(side="left")
             var = tk.StringVar(value=default)
             entry = tk.Entry(row, textvariable=var, bg=C.BG_BASE, fg=C.NEON_CYAN,
-                             font=FONT_MEDIUM, relief="flat", bd=0,
+                             font=FONT_UI_MEDIUM, relief="flat", bd=0,
                              highlightthickness=1, highlightbackground=C.BORDER_NRM)
             entry.pack(side="left", fill="x", expand=True, ipady=3)
             self._svc_param_entries[label] = entry
@@ -525,15 +549,15 @@ class PageBuilder:
         card.pack(side="left", fill="both", expand=True, padx=(0, 5))
 
         tk.Label(card, text="\U0001f50c CONEXAO", bg=C.BG_INPUT, fg=C.NEON_CYAN,
-                 font=FONT_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
+                 font=FONT_UI_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
 
         self._dash_conn_status = tk.Label(card, text="Desconectado",
                                           bg=C.BG_INPUT, fg="#ff4d4d",
-                                          font=FONT_XLARGE_B)
+                                          font=FONT_UI_XLARGE_B)
         self._dash_conn_status.pack(anchor="w", padx=12, pady=(0, 2))
 
         self._dash_conn_host = tk.Label(card, text="Host: ---",
-                                        bg=C.BG_INPUT, fg=C.FG_DIM, font=FONT_BODY)
+                                        bg=C.BG_INPUT, fg=C.FG_DIM, font=FONT_UI_BODY)
         self._dash_conn_host.pack(anchor="w", padx=12, pady=(0, 10))
 
         # ── Card: VNFs ──
@@ -542,18 +566,18 @@ class PageBuilder:
         card.pack(side="left", fill="both", expand=True, padx=5)
 
         tk.Label(card, text="\U0001f4e1 VNFs", bg=C.BG_INPUT, fg=C.NEON_MAG,
-                 font=FONT_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
+                 font=FONT_UI_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
 
         self._dash_vnf_online = tk.Label(card, text="Online: 0",
-                                         bg=C.BG_INPUT, fg=C.NEON_CYAN, font=FONT_BODY)
+                                         bg=C.BG_INPUT, fg=C.NEON_CYAN, font=FONT_UI_BODY)
         self._dash_vnf_online.pack(anchor="w", padx=12, pady=1)
 
         self._dash_vnf_offline = tk.Label(card, text="Offline: 0",
-                                          bg=C.BG_INPUT, fg="#ff4d4d", font=FONT_BODY)
+                                          bg=C.BG_INPUT, fg="#ff4d4d", font=FONT_UI_BODY)
         self._dash_vnf_offline.pack(anchor="w", padx=12, pady=1)
 
         self._dash_vnf_unknown = tk.Label(card, text="Desconhecido: 0",
-                                          bg=C.BG_INPUT, fg=C.NEON_AMBER, font=FONT_BODY)
+                                          bg=C.BG_INPUT, fg=C.NEON_AMBER, font=FONT_UI_BODY)
         self._dash_vnf_unknown.pack(anchor="w", padx=12, pady=(1, 10))
 
         # ── Card: Últimas Operações ──
@@ -562,10 +586,10 @@ class PageBuilder:
         card.pack(side="left", fill="both", expand=True, padx=(5, 0))
 
         tk.Label(card, text="\U0001f4cb ULTIMAS OPERACOES", bg=C.BG_INPUT, fg=C.NEON_AMBER,
-                 font=FONT_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
+                 font=FONT_UI_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
 
         self._dash_audit_text = tk.Text(card, height=5, bg=C.BG_BASE, fg=C.FG_CODE,
-                                        font=FONT_SMALL, relief="flat", bd=0,
+                                        font=FONT_UI_SMALL, relief="flat", bd=0,
                                         highlightthickness=1,
                                         highlightbackground=C.BORDER_NRM)
         self._dash_audit_text.pack(fill="both", expand=True, padx=8, pady=(0, 8))
@@ -577,7 +601,7 @@ class PageBuilder:
         card.pack(fill="x")
 
         tk.Label(card, text="\u2328 ATALHOS RAPIDOS", bg=C.BG_INPUT, fg=C.NEON_PURP,
-                 font=FONT_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
+                 font=FONT_UI_MEDIUM_B).pack(anchor="w", padx=12, pady=(10, 6))
 
         bar = tk.Frame(card, bg=C.BG_INPUT)
         bar.pack(padx=12, pady=(0, 10))
@@ -601,7 +625,7 @@ class PageBuilder:
             p = self._make_page("manutencao")
             self._page_title(p, "Acesso Restrito", C.NEON_AMBER)
             tk.Label(p, text="\U0001f512  Esta pagina e exclusiva para usuarios Tecnico ou Admin.",
-                     bg=C.BG_CARD, fg=C.FG_DIM, font=FONT_LARGE).pack(pady=(40, 10))
+                     bg=C.BG_CARD, fg=C.FG_DIM, font=FONT_UI_LARGE).pack(pady=(40, 10))
             action_button(p, "\U0001f511  Autenticar como Tecnico / Admin",
                           self._show_auth_dialog, C.NEON_PURP).pack()
             return
@@ -614,7 +638,7 @@ class PageBuilder:
         top.pack(fill="x", pady=(0, 12))
 
         grp_dev = tk.LabelFrame(top, text="  DEV  ", bg=C.BG_CARD,
-                                fg=C.NEON_CYAN, font=FONT_SMALL_B,
+                                fg=C.NEON_CYAN, font=FONT_UI_SMALL_B,
                                 highlightbackground=C.BORDER_NRM, highlightthickness=1)
         grp_dev.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
@@ -628,7 +652,7 @@ class PageBuilder:
                       lambda: self._run_dev_cmd("all"), C.NEON_AMBER).pack(side="left", padx=2, pady=4)
 
         grp_agents = tk.LabelFrame(top, text="  AGENTES  ", bg=C.BG_CARD,
-                                   fg=C.NEON_PURP, font=FONT_SMALL_B,
+                                   fg=C.NEON_PURP, font=FONT_UI_SMALL_B,
                                    highlightbackground=C.BORDER_NRM, highlightthickness=1)
         grp_agents.pack(side="left", fill="x", expand=True, padx=(6, 0))
 
@@ -639,7 +663,7 @@ class PageBuilder:
         self._watcher_btn.pack(side="left", padx=2, pady=4)
 
         grp_setup = tk.LabelFrame(top, text="  SETUP  ", bg=C.BG_CARD,
-                                  fg=C.NEON_AMBER, font=FONT_SMALL_B,
+                                  fg=C.NEON_AMBER, font=FONT_UI_SMALL_B,
                                   highlightbackground=C.BORDER_NRM, highlightthickness=1)
         grp_setup.pack(side="left", fill="x", expand=True, padx=(6, 0))
 
@@ -654,7 +678,7 @@ class PageBuilder:
                            highlightbackground=C.BORDER_NRM)
         summary.pack(fill="x", pady=(0, 10))
         self._manut_summary = tk.Text(summary, bg=C.BG_INPUT, fg=C.FG_CODE,
-                                       font=FONT_BODY, height=5,
+                                       font=FONT_UI_BODY, height=5,
                                        relief="flat", bd=0, padx=10, pady=8)
         self._manut_summary.pack(fill="x")
         self._manut_summary.configure(state="disabled")
@@ -664,7 +688,7 @@ class PageBuilder:
                                 highlightbackground=C.BORDER_NRM)
         filter_frame.pack(fill="x", pady=(0, 4))
         tk.Label(filter_frame, text="  Filtro:", bg=C.BG_CARD, fg=C.FG_DIM,
-                 font=FONT_SMALL_B).pack(side="left", padx=(4, 2))
+                 font=FONT_UI_SMALL_B).pack(side="left", padx=(4, 2))
         self._manut_filter = tk.StringVar(value="all")
         for fval, flbl, fcol in [
             ("all",    "Todas",    C.FG_MAIN),
@@ -674,7 +698,7 @@ class PageBuilder:
         ]:
             tk.Radiobutton(filter_frame, text=flbl, variable=self._manut_filter,
                            value=fval, bg=C.BG_CARD, fg=fcol, selectcolor=C.BG_CARD,
-                           font=FONT_SMALL, activebackground=C.BG_INPUT,
+                           font=FONT_UI_SMALL, activebackground=C.BG_INPUT,
                            activeforeground=fcol,
                            command=self._apply_manut_filter
                            ).pack(side="left", padx=4, pady=2)
