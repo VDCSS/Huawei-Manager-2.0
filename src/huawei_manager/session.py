@@ -148,7 +148,7 @@ class NetmikoSession:
             )
 
     # ── conexao ──────────────────────────────────────────────────────
-    def connect(self) -> None:
+    def connect(self, timeout: int = 30) -> None:
         """Abre sessao SSH via Netmiko com as credenciais configuradas.
 
         O modo de verificacao de hostkey e definido por ``_hk_verify``:
@@ -161,6 +161,9 @@ class NetmikoSession:
           chave mudar. Ideal para lab (Trust on First Use).
         * ``"off"`` — ignora verificacao de host key (ssh_strict=False).
           Apenas para laboratorio isolado.
+
+        Args:
+            timeout: Timeout de conexao em segundos (padrao 30).
         """
         mode = self._hk_verify
         ssh_strict = mode == "strict"
@@ -171,7 +174,7 @@ class NetmikoSession:
             port=self._port,
             username=self._user,
             password=self._pass,
-            timeout=30,
+            timeout=timeout,
             ssh_strict=ssh_strict,
         )
 
