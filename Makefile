@@ -70,6 +70,13 @@ uninstall:
 	update-desktop-database $(APPS_DIR) 2>/dev/null || true
 	@echo "✔ Huawei Manager removido do sistema."
 
+# ── Criptografia ────────────────────────────────────────────────
+encrypt-env:
+	SECRETS_KEY=$${SECRETS_KEY} scripts/encrypt-env.sh
+
+decrypt-env:
+	SECRETS_KEY=$${SECRETS_KEY} scripts/decrypt-env.sh
+
 # ── Testes / CI ─────────────────────────────────────────────────
 test:
 	$(PY) -m pytest
