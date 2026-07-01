@@ -1,0 +1,15 @@
+Route Flags: R - relay, D - download to fib
+------------------------------------------------------------------------------
+Routing Tables: Public
+         Destinations : 8       Routes : 8
+
+Destination/Mask    Proto   Pre  Cost      Flags NextHop         Interface
+
+      0.0.0.0/0     Static  60   0          RD   192.168.1.1     GigabitEthernet0/0/0
+     10.0.0.0/24    Direct  0    0          D    10.0.0.1        LoopBack0
+     10.0.1.0/24    OSPF    10   2          D    10.0.0.2        40GE0/0/0
+     10.0.2.0/24    OSPF    10   3          D    10.0.0.3        40GE0/0/0
+   172.16.0.0/16    OSPF    10   20         D    10.0.0.2        40GE0/0/0
+   192.168.1.0/24   Direct  0    0          D    192.168.1.2     GigabitEthernet0/0/0
+   192.168.10.0/24  Static  60   0          RD   192.168.1.254   GigabitEthernet0/0/0
+   192.168.20.0/24  Static  60   0          RD   192.168.1.254   GigabitEthernet0/0/0

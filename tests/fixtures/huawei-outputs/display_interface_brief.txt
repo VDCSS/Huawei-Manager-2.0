@@ -1,0 +1,9 @@
+Interface                   PHY      Protocol  InUti  OutUti    inErrors  outErrors
+GigabitEthernet0/0/0        up       up        0.01%  0.05%     0         0
+GigabitEthernet0/0/1        up       up        12.5%  8.3%      0         0
+GigabitEthernet0/0/2        up       down      0.00%  0.00%     0         0
+GigabitEthernet0/0/3        down     down      0.00%  0.00%     3         12
+GigabitEthernet0/0/4        up       up        2.10%  1.30%     0         0
+40GE0/0/0                   up       up        45.2%  52.1%     0         0
+40GE0/0/1                   up       down      0.00%  0.00%     0         0
+LoopBack0                   up       up(s)     0.00%  0.00%     0         0
