@@ -10,6 +10,7 @@ from huawei_manager.vault import EnvBackend
 @pytest.fixture
 def session():
     backend = EnvBackend()
+    backend.put("ROUTER_HOSTKEY_VERIFY", "off")
     audit = AuditLogger()
     return NetmikoSession(backend, audit)
 
@@ -185,3 +186,160 @@ class TestGet:
         session._conn = mock_conn
         result = session.get("full_config")
         assert "output" in result or "ERRO" not in result
+
+
+# ── Host Key Verification ─────────────────────────────────────────
+
+
+class TestHostKeyVerify:
+    """Tests for 3 host key verification modes: strict, tofu, off."""
+
+    def _make_backend(self, mode: str = "strict") -> EnvBackend:
+        backend = EnvBackend()
+        backend.put("ROUTER_HOSTKEY_VERIFY", mode)
+        return backend
+
+    # ── hk_verify property ───────────────────────────────────────
+
+    def test_hk_verify_off(self):
+        backend = self._make_backend("off")
+        audit = AuditLogger()
+        s = NetmikoSession(backend, audit)
+        assert s._hk_verify == "off"
+
+    def test_hk_verify_strict(self):
+        backend = self._make_backend("strict")
+        audit = AuditLogger()
+        s = NetmikoSession(backend, audit)
+        assert s._hk_verify == "strict"
+
+    def test_hk_verify_tofu(self):
+        backend = self._make_backend("tofu")
+        audit = AuditLogger()
+        s = NetmikoSession(backend, audit)
+        assert s._hk_verify == "tofu"
+
+    def test_hk_verify_unknown_mode_defaults_to_strict(self):
+        backend = EnvBackend()
+        backend.put("ROUTER_HOSTKEY_VERIFY", "garbage")
+        audit = AuditLogger()
+        s = NetmikoSession(backend, audit)
+        assert s._hk_verify == "strict"
+
+    # ── ssh_strict param in connect ─────────────────────────────
+
+    @patch("huawei_manager.session.ConnectHandler")
+    def test_connect_strict_passes_ssh_strict_true(self, mock_connect):
+        backend = self._make_backend("strict")
+        audit = AuditLogger()
+        s = NetmikoSession(backend, audit)
+        with (
+            patch.object(type(s), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(s), "_user", new_callable=PropertyMock, return_value="admin"),
+            patch.object(type(s), "_pass", new_callable=PropertyMock, return_value="secret"),
+            patch.object(type(s), "_ssh_key", new_callable=PropertyMock, return_value=None),
+        ):
+            s.connect()
+            _args, kwargs = mock_connect.call_args
+            assert kwargs.get("ssh_strict") is True
+
+    @patch("huawei_manager.session.ConnectHandler")
+    def test_connect_off_passes_ssh_strict_false(self, mock_connect):
+        backend = self._make_backend("off")
+        audit = AuditLogger()
+        s = NetmikoSession(backend, audit)
+        with (
+            patch.object(type(s), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(s), "_user", new_callable=PropertyMock, return_value="admin"),
+            patch.object(type(s), "_pass", new_callable=PropertyMock, return_value="secret"),
+            patch.object(type(s), "_ssh_key", new_callable=PropertyMock, return_value=None),
+        ):
+            s.connect()
+            _args, kwargs = mock_connect.call_args
+            assert kwargs.get("ssh_strict") is False
+
+    @patch("huawei_manager.session.ConnectHandler")
+    def test_connect_tofu_passes_ssh_strict_false(self, mock_connect):
+        """TOFU uses ssh_strict=False (manual host key management)."""
+        backend = self._make_backend("tofu")
+        audit = AuditLogger()
+        s = NetmikoSession(backend, audit)
+        mock_conn = MagicMock()
+        mock_connect.return_value = mock_conn
+        with (
+            patch.object(type(s), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(s), "_user", new_callable=PropertyMock, return_value="admin"),
+            patch.object(type(s), "_pass", new_callable=PropertyMock, return_value="secret"),
+            patch.object(type(s), "_ssh_key", new_callable=PropertyMock, return_value=None),
+            patch.object(type(s), "_hk_verify", new_callable=PropertyMock, return_value="tofu"),
+            patch.object(s, "_load_host_key", return_value=None),
+            patch.object(s, "_save_host_key"),
+        ):
+            s.connect()
+            _args, kwargs = mock_connect.call_args
+            assert kwargs.get("ssh_strict") is False
+
+    # ── known_hosts path ────────────────────────────────────────
+
+    def test_known_hosts_path_default(self, session):
+        """Default known_hosts path is under ~/.ssh/huawei_known_hosts."""
+        p = session._known_hosts_path
+        assert "huawei_known_hosts" in str(p)
+
+    # ── TOFU cache lifecycle ─────────────────────────────────────
+
+    @patch("huawei_manager.session.Path")
+    def test_tofu_key_not_cached_returns_none(self, mock_path_cls, session):
+        mock_path = MagicMock()
+        mock_path.expanduser.return_value = mock_path
+        mock_path.exists.return_value = False
+        mock_path_cls.return_value = mock_path
+        with patch.object(type(session), "_hk_verify", new_callable=PropertyMock, return_value="tofu"):
+            result = session._load_host_key("10.0.0.1")
+            assert result is None
+
+    @patch("huawei_manager.session.Path")
+    def test_tofu_key_cached_returns_key(self, mock_path_cls, session):
+        content = "10.0.0.1 ssh-rsa AAAAB3NzaC1yc2E...\n"
+        mock_path = MagicMock()
+        mock_path.expanduser.return_value = mock_path
+        mock_path.exists.return_value = True
+        mock_path.read_text.return_value = content
+        mock_path_cls.return_value = mock_path
+        with patch.object(type(session), "_hk_verify", new_callable=PropertyMock, return_value="tofu"):
+            result = session._load_host_key("10.0.0.1")
+            assert result == "ssh-rsa AAAAB3NzaC1yc2E..."
+
+    @patch("huawei_manager.session.Path")
+    def test_tofu_save_host_key(self, mock_path_cls, session):
+        mock_path = MagicMock()
+        mock_path.expanduser.return_value = mock_path
+        mock_path_cls.return_value = mock_path
+        with patch.object(type(session), "_hk_verify", new_callable=PropertyMock, return_value="tofu"):
+            session._save_host_key("10.0.0.1", "ssh-rsa KEYAAA=")
+            mock_path.parent.mkdir.assert_called_once_with(exist_ok=True, parents=True)
+            mock_path.open.assert_called_once_with("a")
+            handle = mock_path.open.return_value.__enter__.return_value
+            handle.write.assert_called_once_with("10.0.0.1 ssh-rsa KEYAAA=\n")
+
+    # ── host key mismatch raises ────────────────────────────────
+
+    @patch("huawei_manager.session.ConnectHandler")
+    def test_tofu_key_mismatch_raises(self, mock_connect, session):
+        """TOFU mode raises ValueError when cached key differs."""
+        mock_conn = MagicMock()
+        mock_conn.remote_server_key.get_name.return_value = "ssh-rsa"
+        # Return a different base64 key from remote
+        mock_conn.remote_server_key.get_base64.return_value = "DIFFERENTKEYBASE64"
+        mock_connect.return_value = mock_conn
+
+        with (
+            patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
+            patch.object(type(session), "_pass", new_callable=PropertyMock, return_value="secret"),
+            patch.object(type(session), "_ssh_key", new_callable=PropertyMock, return_value=None),
+            patch.object(type(session), "_hk_verify", new_callable=PropertyMock, return_value="tofu"),
+            patch.object(session, "_load_host_key", return_value="ssh-rsa CACHEDKEYBASE64"),
+        ):
+            with pytest.raises(ValueError, match="Host key mismatch"):
+                session.connect()

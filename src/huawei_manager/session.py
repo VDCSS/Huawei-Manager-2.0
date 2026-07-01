@@ -87,14 +87,47 @@ class NetmikoSession:
         return str(p) if p.is_file() else None
 
     @property
-    def _hk_verify(self) -> bool:
-        """Retorna se a verificacao de hostkey esta habilitada."""
-        return self._backend.get("ROUTER_HOSTKEY_VERIFY", "true").lower() == "true"
+    def _hk_verify(self) -> str:
+        """Modo de verificacao de hostkey: 'strict', 'tofu' ou 'off'."""
+        raw = self._backend.get("ROUTER_HOSTKEY_VERIFY", "strict").lower().strip()
+        if raw in ("strict", "tofu", "off"):
+            return raw
+        return "strict"
 
     @property
     def _session_id(self) -> str | None:
         """Retorna 'host:port' da sessao ativa, ou None."""
         return f"{self._host}:{self._port}" if self._conn else None
+
+    # ── TOFU host key cache ────────────────────────────────────────
+    @property
+    def _known_hosts_path(self) -> Path:
+        """Path do arquivo known_hosts do Huawei Manager."""
+        return Path("~/.ssh/huawei_known_hosts").expanduser()
+
+    def _load_host_key(self, host: str) -> str | None:
+        """Carrega a chave publica do host do arquivo known_hosts.
+
+        Returns:
+            A string ``\"<tipo> <base64>\"`` da chave, ou None se nao
+            encontrada.
+        """
+        kh = self._known_hosts_path
+        if not kh.exists():
+            return None
+        for line in kh.read_text().splitlines():
+            line = line.strip()
+            if line.startswith(host) and " " in line:
+                _, _, rest = line.partition(" ")
+                return rest.strip()
+        return None
+
+    def _save_host_key(self, host: str, key: str) -> None:
+        """Salva a chave publica do host no arquivo known_hosts (append)."""
+        kh = self._known_hosts_path
+        kh.parent.mkdir(exist_ok=True, parents=True)
+        with kh.open("a") as f:
+            f.write(f"{host} {key}\n")
 
     # ── validacao pre-conexao ─────────────────────────────────────────
     def _validate_credentials(self) -> None:
@@ -116,7 +149,21 @@ class NetmikoSession:
 
     # ── conexao ──────────────────────────────────────────────────────
     def connect(self) -> None:
-        """Abre sessao SSH via Netmiko com as credenciais configuradas."""
+        """Abre sessao SSH via Netmiko com as credenciais configuradas.
+
+        O modo de verificacao de hostkey e definido por ``_hk_verify``:
+
+        * ``"strict"`` — rejeita qualquer host desconhecido ou com chave
+          diferente (ssh_strict=True). Seguro, mas exige known_hosts
+          previamente populado.
+        * ``"tofu"`` — na primeira conexao aceita e salva a chave em
+          ``~/.ssh/huawei_known_hosts``; nas seguintes rejeita se a
+          chave mudar. Ideal para lab (Trust on First Use).
+        * ``"off"`` — ignora verificacao de host key (ssh_strict=False).
+          Apenas para laboratorio isolado.
+        """
+        mode = self._hk_verify
+        ssh_strict = mode == "strict"
 
         kwargs = dict(
             device_type="huawei_vrp",
@@ -125,7 +172,7 @@ class NetmikoSession:
             username=self._user,
             password=self._pass,
             timeout=30,
-            ssh_strict=self._hk_verify,
+            ssh_strict=ssh_strict,
         )
 
         key = self._ssh_key
@@ -144,6 +191,21 @@ class NetmikoSession:
         with self._audit.timed("connect", user=self._user, host=self._host) as ctx:
             self._conn = ConnectHandler(**kwargs)
             ctx.set_status("ok")
+
+        # TOFU: verificar e/ou salvar host key apos conexao
+        if mode == "tofu" and self._conn:
+            remote = self._conn.remote_server_key
+            remote_key = f"{remote.get_name()} {remote.get_base64()}"
+            cached = self._load_host_key(self._host)
+            if cached and cached != remote_key:
+                self.disconnect()
+                raise ValueError(
+                    f"Host key mismatch for {self._host} — "
+                    "possible MITM attack"
+                )
+            if not cached:
+                self._save_host_key(self._host, remote_key)
+                log.debug("Host key cached for %s", self._host)
 
         log.info("Sessao SSH aberta")
         log.debug("Sessao SSH aberta — %s", self._host)
