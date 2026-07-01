@@ -1,202 +1,294 @@
 #!/usr/bin/env python3
-# pyright: reportAttributeAccessIssue=false
+# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 from __future__ import annotations
 
+import atexit
 import datetime
+import logging
+import os
 import queue
-import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
-from tkinter import messagebox, ttk
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
+from PySide6.QtWidgets import (
+    QBoxLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QStackedWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 import huawei_manager.constants as C
-from agents.watcher import Watcher
+from huawei_manager._app import apply_theme
 from huawei_manager._config import PROJECT_ROOT, _secrets, audit
-from huawei_manager.constants import (
-    FONT_BODY,
-    FONT_H1,
-    FONT_H2_B,
-    FONT_SMALL,
-    FONT_UI_BODY,
-    FONT_UI_HERO_B,
-    FONT_UI_MEDIUM_B,
-    FONT_UI_XSMALL,
-    FONT_XSMALL,
-    set_theme,
-)
+from huawei_manager.agents.watcher import Watcher
+from huawei_manager.constants import set_theme
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.pages import PageBuilder
+from huawei_manager.sdn_controller.authz import Role, SessionTracker
 from huawei_manager.session import NetmikoSession
-from huawei_manager.topology import VNF, TopologyCanvas
-from huawei_manager.widgets import action_button, neon_button
+from huawei_manager.vnf_models import VNF
+from huawei_manager.widgets import ActionButton, NeonButton, action_button, neon_button
+
+log = logging.getLogger("huawei_manager")
+_app_log = logging.getLogger("huawei.app")
 
 
-class AppCore:
-    """Mixin principal — inicializa janela, layout, navegação e helpers de threading."""
+class AppCore(QMainWindow):
+    """Mixin principal Qt — inicializa janela, layout, navegação e helpers de threading."""
 
-    def __init__(self, root: tk.Tk) -> None:
-        """Inicializa a janela Tkinter, sessão SSH, fila de UI, watcher e constrói o layout."""
-        self.root = root
-        self.root.title("HUAWEI MANAGER")
-        self.root.geometry("1220x740")
-        self.root.configure(bg=C.BG_BASE)
-        self.root.resizable(True, True)
+    def __init__(self) -> None:
+        super().__init__()
+        self._init_common_attrs()
+        self.setWindowTitle("HUAWEI MANAGER")
+        self.resize(1220, 740)
+        self.setMinimumSize(800, 500)
+
         try:
             icon_path = PROJECT_ROOT / "share" / "icons" / "huawei-manager.png"
             if icon_path.exists():
-                img = tk.PhotoImage(file=str(icon_path))
-                self.root.iconphoto(True, img)
+                self.setWindowIcon(QIcon(str(icon_path)))
         except Exception:
             pass
 
-        # Tema ttkbootstrap (só para widgets ttk, não afeta tk custom neon)
-        try:
-            import ttkbootstrap  # type: ignore[reportMissingImports]
-            self._ttk_style = ttkbootstrap.Style(theme="darkly")
-        except Exception:
-            self._ttk_style = ttk.Style()
+        apply_theme("dark")
 
+        assert _secrets is not None, "_config.init() must be called first"
+        assert audit is not None, "_config.init() must be called first"
         self.session = NetmikoSession(_secrets, audit)
-        self._active_btn: tk.Frame | None = None
+        self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
         self._mock_mode: bool = True
         self._vnfs_busy: bool = False
         self._theme: str = "dark"
+        self._theme_toggling: bool = False
 
         self._admin_attempts = 0
         self._admin_locked_until: float = 0
+        self._session_tracker = SessionTracker(timeout_secs=900)  # 15 min
 
         self._target_vnf: VNF | None = None
         self._vnfs: list[VNF] = []
-        self._topo_canvas: TopologyCanvas | None = None
-        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="hw")
+        self._topo_canvas: object = None
+        io_w = int(os.environ.get("HW_IO_WORKERS", "6"))
+        cpu_w = int(os.environ.get("HW_CPU_WORKERS", "2"))
+        self._io_executor = ThreadPoolExecutor(max_workers=io_w, thread_name_prefix="hw-io")
+        self._cpu_executor = ThreadPoolExecutor(max_workers=cpu_w, thread_name_prefix="hw-cpu")
+        atexit.register(self._cleanup_executors)
         self._ui_queue: queue.SimpleQueue = queue.SimpleQueue()
-        self._watcher = Watcher(self.root, self._on_watcher_update)
+        self._watcher = Watcher(self, self._on_watcher_update)
         self._watcher_results: list | None = None
 
         self._current_page: str | None = None
-        self._PAGE_KEYS = ["home", "topology", "config", "route", "arp",
-                           "info", "cmd", "backup", "manutencao", "services"]
+        self._PAGE_KEYS = [
+            "home", "topology", "config", "route", "arp",
+            "info", "cmd", "backup", "manutencao", "services",
+        ]
 
-        self._poll_queue()
+        self._clock_timer = QTimer(self)
+        self._clock_timer.timeout.connect(self._tick_clock)
+        self._clock_timer.start(1000)
+
+        self._dash_timer = QTimer(self)
+        self._dash_timer.timeout.connect(self._tick_dashboard)
+        self._dash_timer.start(5000)
+
+        self._vnf_timer = QTimer(self)
+        self._vnf_timer.timeout.connect(self._tick_vnfs)
+        self._vnf_timer.start(30000)
+
+        self._poll_timer = QTimer(self)
+        self._poll_timer.timeout.connect(self._poll_queue)
+        self._poll_timer.start(50)
+
+        self._session_timer = QTimer(self)
+        self._session_timer.timeout.connect(self._check_session_timeout)
+        self._session_timer.start(30000)  # check every 30s
+
         self._build_layout()
         self._setup_bindings()
         self._show_page("home")
-        self._tick_clock()
-        self._tick_dashboard()
-        self._tick_vnfs()
         self._init_topology_backend()
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-        self._drag_data = {"x": 0, "y": 0}
+
+    def _init_common_attrs(self) -> None:
+        """Garante que todos os atributos dos mixins existem antes do uso."""
+        self._logo_pixmap: QPixmap | None = None
+        self.theme_btn: ActionButton | None = None
+        self.out_config: QTextEdit | None = None
+        self.out_route: QTextEdit | None = None
+        self.out_arp: QTextEdit | None = None
+        self.out_info: QTextEdit | None = None
+        self.out_cmd: QTextEdit | None = None
+        self.out_backup: QTextEdit | None = None
+        self._svc_output: QTextEdit | None = None
+        self._page_container: QStackedWidget | None = None
+        self._vnf_info_lbl: QLabel | None = None
+        self._vnf_status_lbl: QLabel | None = None
+        self._auth_overlay: QWidget | None = None
+        self._last_manut_results: list = []
+        self._manut_filter: str = "all"
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:
-        """Constrói sidebar, header, content area e footer da janela principal."""
-        self.sidebar = tk.Frame(self.root, bg=C.BG_SIDEBAR, width=228)
-        self.sidebar.pack(side="left", fill="y")
-        self.sidebar.pack_propagate(False)
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QHBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        right = tk.Frame(self.root, bg=C.BG_BASE)
-        right.pack(side="left", fill="both", expand=True)
+        self.sidebar = QWidget()
+        self.sidebar.setFixedWidth(228)
+        self.sidebar.setStyleSheet(f"background: {C.BG_SIDEBAR};")
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
+        main_layout.addWidget(self.sidebar)
+
+        right = QWidget()
+        right.setStyleSheet(f"background: {C.BG_BASE};")
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+        main_layout.addWidget(right, stretch=1)
 
         self._build_header(right)
-        tk.Frame(right, bg=C.BORDER_NRM, height=1).pack(fill="x")
 
-        self.content = tk.Frame(right, bg=C.BG_BASE)
-        self.content.pack(fill="both", expand=True, padx=18, pady=18)
-        self.content.rowconfigure(0, weight=1)
-        self.content.columnconfigure(0, weight=1)
+        sep = QFrame(right)
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"background: {C.BORDER_NRM}; max-height: 1px; border: none;")
+        right_layout.addWidget(sep)
+
+        self.content = QWidget(right)
+        self.content.setStyleSheet(f"background: {C.BG_BASE};")
+        self.content_layout = QVBoxLayout(self.content)
+        self.content_layout.setContentsMargins(18, 18, 18, 18)
+        self.content_layout.setSpacing(0)
+        right_layout.addWidget(self.content, stretch=1)
+
+        self._page_container = QStackedWidget(self.content)
+        self._page_container.setStyleSheet(
+            f"background: {C.BG_CARD}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
+        self.content_layout.addWidget(self._page_container, stretch=1)
 
         self._build_sidebar()
-        self._build_footer()
+        self._build_footer(right_layout)
 
-        self.pages: dict[str, tk.Frame] = {}
+        self.pages: dict[str, QWidget] = {}
         self._page_builders = {
-            "home":     self._build_home_page,
-            "config":   self._build_config_page,
-            "route":    self._build_route_page,
-            "arp":      self._build_arp_page,
-            "info":     self._build_info_page,
-            "cmd":      self._build_cmd_page,
-            "backup":   self._build_backup_page,
-            "topology":    self._build_topology_page,
-            "services":    self._build_services_page,
-            "manutencao":  self._build_manutencao_page,
+            "home":       self._build_home_page,
+            "config":     self._build_config_page,
+            "route":      self._build_route_page,
+            "arp":        self._build_arp_page,
+            "info":       self._build_info_page,
+            "cmd":        self._build_cmd_page,
+            "backup":     self._build_backup_page,
+            "topology":   self._build_topology_page,
+            "services":   self._build_services_page,
+            "manutencao": self._build_manutencao_page,
         }
 
     # ── Header ───────────────────────────────────────────────────────
-    def _build_header(self, parent) -> None:
-        """Constrói o cabeçalho com logo, indicador de status e botão de tema."""
-        hdr = tk.Frame(parent, bg=C.BG_BASE, height=56)
-        hdr.pack(fill="x", padx=18, pady=(10, 6))
-        hdr.pack_propagate(False)
+    def _build_header(self, parent: QWidget) -> None:
+        hdr = QWidget(parent)
+        hdr.setFixedHeight(56)
+        hdr.setStyleSheet(f"background: {C.BG_BASE};")
+        hdr_layout = QHBoxLayout(hdr)
+        hdr_layout.setContentsMargins(18, 10, 18, 6)
+        hdr_layout.setSpacing(0)
 
-        # Logo
         try:
             logo_path = PROJECT_ROOT / "share" / "icons" / "huawei-manager.png"
             if logo_path.exists():
-                logo_img = tk.PhotoImage(file=str(logo_path))
-                self._logo_header = logo_img.subsample(7, 7)  # 439→63, 426→61
-                tk.Label(hdr, image=self._logo_header, bg=C.BG_BASE).pack(side="left", padx=(0, 10))
+                pixmap = QPixmap(str(logo_path))
+                self._logo_pixmap = pixmap
+                scaled = pixmap.scaled(63, 61, Qt.AspectRatioMode.KeepAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
+                logo_lbl = QLabel(hdr)
+                logo_lbl.setPixmap(scaled)
+                logo_lbl.setStyleSheet(f"background: {C.BG_BASE};")
+                hdr_layout.addWidget(logo_lbl)
+                hdr_layout.addSpacing(10)
         except Exception:
             pass
 
-        tk.Label(hdr, text="HUAWEI",  bg=C.BG_BASE, fg=C.NEON_CYAN,
-                 font=FONT_UI_HERO_B).pack(side="left")
-        tk.Label(hdr, text=" MANAGER", bg=C.BG_BASE, fg=C.FG_MAIN,
-                 font=FONT_UI_HERO_B).pack(side="left")
+        lbl_huawei = QLabel("HUAWEI", hdr)
+        lbl_huawei.setStyleSheet(f"color: {C.NEON_CYAN}; background: {C.BG_BASE}; "
+                                 f"font: bold 18px 'Inter';")
+        hdr_layout.addWidget(lbl_huawei)
 
+        lbl_manager = QLabel(" MANAGER", hdr)
+        lbl_manager.setStyleSheet(f"color: {C.FG_MAIN}; background: {C.BG_BASE}; "
+                                  f"font: bold 18px 'Inter';")
+        hdr_layout.addWidget(lbl_manager)
 
-        badge = tk.Frame(hdr, bg=C.BG_BASE)
-        badge.pack(side="right")
+        hdr_layout.addStretch()
 
-        self.status_dot = tk.Label(badge, text="\u25cf", bg=C.BG_BASE, fg=C.NEON_PURP,
-                                   font=FONT_H1)
-        self.status_dot.pack(side="left", padx=(0, 4))
-        self.status_lbl = tk.Label(badge, text="Desconectado", bg=C.BG_BASE, fg=C.FG_DIM,
-                                   font=FONT_BODY)
-        self.status_lbl.pack(side="left", padx=(0, 12))
+        badge = QWidget(hdr)
+        badge.setStyleSheet(f"background: {C.BG_BASE};")
+        badge_layout = QHBoxLayout(badge)
+        badge_layout.setContentsMargins(0, 0, 0, 0)
+        badge_layout.setSpacing(0)
+
+        self.status_dot = QLabel("\u25cf", badge)
+        self.status_dot.setStyleSheet(f"color: {C.NEON_PURP}; background: {C.BG_BASE}; "
+                                      f"font: 16px 'Inter';")
+        badge_layout.addWidget(self.status_dot)
+        badge_layout.addSpacing(4)
+
+        self.status_lbl = QLabel("Desconectado", badge)
+        self.status_lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_BASE}; "
+                                      f"font: 11px 'Inter';")
+        badge_layout.addWidget(self.status_lbl)
+        badge_layout.addSpacing(12)
+
         self.conn_btn = action_button(badge, "  CONECTAR  ",
-                                       self._toggle_connect, C.NEON_CYAN)
-        self.conn_btn.pack(side="left")
+                                      self._toggle_connect, C.NEON_CYAN)
+        badge_layout.addWidget(self.conn_btn)
+
         self.theme_btn = action_button(badge, "\u263c", self._toggle_theme, C.NEON_PURP)
-        self.theme_btn.pack(side="left", padx=(6, 0))
+        badge_layout.addSpacing(6)
+        badge_layout.addWidget(self.theme_btn)
 
-        # Drag da janela pelo header (exceto botões, que consomem o evento)
-        def start_drag(event):
-            self._drag_data["x"] = event.x_root - self.root.winfo_x()
-            self._drag_data["y"] = event.y_root - self.root.winfo_y()
+        hdr_layout.addWidget(badge)
 
-        def do_drag(event):
-            x = event.x_root - self._drag_data["x"]
-            y = event.y_root - self._drag_data["y"]
-            self.root.geometry(f"+{x}+{y}")
-
-        hdr.bind("<Button-1>", start_drag)
-        hdr.bind("<B1-Motion>", do_drag)
-        # Labels dentro do header também arrastam, mas botões (tk.Button) não propagam o evento
-        for child in hdr.winfo_children():
-            if isinstance(child, (tk.Label, tk.Frame)):
-                child.bind("<Button-1>", start_drag)
-                child.bind("<B1-Motion>", do_drag)
+        # ── Garantir que hdr seja adicionado ao layout do parent ──
+        pl = parent.layout()
+        if pl is not None:
+            pl.addWidget(hdr)
 
     # ── Sidebar ──────────────────────────────────────────────────────
     def _build_sidebar(self) -> None:
-        """Constrói a barra lateral com botões de navegação e label do VNF alvo."""
-        logo = tk.Frame(self.sidebar, bg=C.BG_SIDEBAR)
-        logo.pack(fill="x", pady=(14, 4))
+        sb = self.sidebar
+        sb_layout = sb.layout()
+        sb_layout.setSpacing(0)
 
-        # Logo pequeno no topo da sidebar
+        logo = QWidget(sb)
+        logo.setStyleSheet(f"background: {C.BG_SIDEBAR};")
+        logo_layout = QVBoxLayout(logo)
+        logo_layout.setContentsMargins(0, 14, 0, 4)
+
         try:
-            logo_path = PROJECT_ROOT / "share" / "icons" / "huawei-manager.png"
-            if logo_path.exists() and hasattr(self, '_logo_header'):
-                sm = self._logo_header.subsample(2, 2)  # ~32x32
-                tk.Label(logo, image=sm, bg=C.BG_SIDEBAR).pack(pady=(4, 6))
+            if self._logo_pixmap is not None:
+                sm = self._logo_pixmap.scaled(
+                    32, 32, Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation)
+                logo_lbl = QLabel(logo)
+                logo_lbl.setPixmap(sm)
+                logo_lbl.setStyleSheet(f"background: {C.BG_SIDEBAR};")
+                logo_layout.addWidget(logo_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+                logo_layout.addSpacing(6)
         except Exception:
             pass
+        sb_layout.addWidget(logo)
 
-        self._nav_buttons: dict[str, tk.Frame] = {}
+        self._nav_buttons: dict[str, NeonButton] = {}
 
-        # Grupos da sidebar: (label_categoria, [(key, icon, label, color), ...])
         groups = (
             ("DASHBOARD", (
                 ("home", "\U0001f3e0", "Dashboard", C.NEON_CYAN),
@@ -219,155 +311,214 @@ class AppCore:
         )
 
         for cat_label, items in groups:
-            cat_frame = tk.Frame(self.sidebar, bg=C.BG_SIDEBAR)
-            cat_frame.pack(fill="x", pady=(6, 0))
-            tk.Label(cat_frame, text=cat_label, bg=C.BG_SIDEBAR,
-                     fg=C.FG_DIM, font=FONT_UI_XSMALL).pack(padx=16, anchor="w")
-            for key, icon, label, color in items:
-                btn = neon_button(self.sidebar, label,
-                                  lambda k=key: self._show_page(k),
-                                  color=color, icon=icon)
-                btn.pack(fill="x")
-                self._nav_buttons[key] = btn
+            cat_w = QWidget(sb)
+            cat_w.setStyleSheet(f"background: {C.BG_SIDEBAR};")
+            cat_layout = QVBoxLayout(cat_w)
+            cat_layout.setContentsMargins(16, 6, 16, 0)
+            cat_layout.setSpacing(0)
 
-        tk.Frame(self.sidebar, bg=C.BORDER_NRM, height=1).pack(
-            fill="x", padx=16, pady=(16, 4))
-        tk.Label(self.sidebar, text="ALVO VNF", bg=C.BG_SIDEBAR,
-                 fg=C.FG_DIM, font=FONT_UI_BODY).pack(padx=16, anchor="w")
-        self._vnf_target_lbl = tk.Label(
-            self.sidebar, text="(roteador padrao)", bg=C.BG_SIDEBAR,
-            fg=C.NEON_AMBER, font=FONT_UI_MEDIUM_B, wraplength=180)
-        self._vnf_target_lbl.pack(padx=16, anchor="w")
+            lbl = QLabel(cat_label, cat_w)
+            lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
+                              f"font: 9px 'Inter';")
+            cat_layout.addWidget(lbl)
+
+            for key, icon_char, label, color in items:
+                btn = neon_button(cat_w, label,
+                                  lambda _chk, k=key: self._show_page(k),
+                                  color=color, icon=icon_char)
+                self._nav_buttons[key] = btn
+                cat_layout.addWidget(btn)
+            sb_layout.addWidget(cat_w)
+
+        sep_line = QFrame(sb)
+        sep_line.setFrameShape(QFrame.Shape.HLine)
+        sep_line.setStyleSheet(f"background: {C.BORDER_NRM}; max-height: 1px; "
+                               f"border: none;")
+        sb_layout.addSpacing(8)
+        sb_layout.addWidget(sep_line)
+        sb_layout.addSpacing(8)
+
+        vnf_section = QWidget(sb)
+        vnf_section.setStyleSheet(f"background: {C.BG_SIDEBAR};")
+        vnf_layout = QVBoxLayout(vnf_section)
+        vnf_layout.setContentsMargins(16, 4, 16, 0)
+        vnf_layout.setSpacing(2)
+
+        lbl_alvo = QLabel("ALVO VNF", vnf_section)
+        lbl_alvo.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
+                               f"font: 11px 'Inter';")
+        vnf_layout.addWidget(lbl_alvo)
+
+        self._vnf_target_lbl = QLabel("(roteador padrao)", vnf_section)
+        self._vnf_target_lbl.setStyleSheet(
+            f"color: {C.NEON_AMBER}; background: {C.BG_SIDEBAR}; "
+            f"font: bold 12px 'Inter';")
+        self._vnf_target_lbl.setWordWrap(True)
+        vnf_layout.addWidget(self._vnf_target_lbl)
+        sb_layout.addWidget(vnf_section)
+
+        sb_layout.addStretch()
 
     # ── Footer ───────────────────────────────────────────────────────
-    def _build_footer(self) -> None:
-        """Constrói o rodapé com créditos e relógio."""
-        foot = tk.Frame(self.root, bg=C.BG_SIDEBAR, height=22)
-        foot.pack(fill="x", side="bottom")
-        tk.Label(foot,
-                 text="Huawei Manager  \u2022  v2.0.0",
-                 bg=C.BG_SIDEBAR, fg=C.FG_DIM, font=FONT_XSMALL).pack(side="left", padx=12)
-        self.clock_lbl = tk.Label(foot, bg=C.BG_SIDEBAR, fg=C.NEON_PURP,
-                                  font=FONT_XSMALL)
-        self.clock_lbl.pack(side="right", padx=12)
+    def _build_footer(self, parent_layout: QBoxLayout) -> None:
+        foot = QWidget()
+        foot.setFixedHeight(22)
+        foot.setStyleSheet(f"background: {C.BG_SIDEBAR};")
+        foot_layout = QHBoxLayout(foot)
+        foot_layout.setContentsMargins(12, 0, 12, 0)
+        foot_layout.setSpacing(0)
+
+        lbl = QLabel("Huawei Manager  \u2022  v2.0.0", foot)
+        lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
+                          f"font: 9px 'Inter';")
+        foot_layout.addWidget(lbl)
+
+        foot_layout.addStretch()
+
+        self.clock_lbl = QLabel(foot)
+        self.clock_lbl.setStyleSheet(f"color: {C.NEON_PURP}; background: {C.BG_SIDEBAR}; "
+                                     f"font: 9px 'Inter';")
+        foot_layout.addWidget(self.clock_lbl, alignment=Qt.AlignmentFlag.AlignRight)
+
+        parent_layout.addWidget(foot)
 
     # ── Helpers de pagina ─────────────────────────────────────────────
-    def _make_page(self, key: str) -> tk.Frame:
-        """Cria um novo frame de página dentro do content grid."""
-        f = tk.Frame(self.content, bg=C.BG_CARD,
-                     highlightthickness=1, highlightbackground=C.BORDER_NRM)
-        f.grid(row=0, column=0, sticky="nsew")
-        inner = tk.Frame(f, bg=C.BG_CARD)
-        inner.pack(fill="both", expand=True, padx=18, pady=18)
-        self.pages[key] = inner
-        return inner
-
-    def _page_title(self, parent, text, color, subtitle="") -> None:
-        """Cria um título estilizado com barra colorida e subtítulo opcional."""
-        row = tk.Frame(parent, bg=C.BG_CARD)
-        row.pack(fill="x", pady=(0, 14))
-        tk.Frame(row, bg=color, width=4).pack(side="left", fill="y", padx=(0, 10))
-        col = tk.Frame(row, bg=C.BG_CARD)
-        col.pack(side="left")
-        tk.Label(col, text=text.upper(), bg=C.BG_CARD, fg=color,
-                 font=FONT_H2_B).pack(anchor="w")
-        if subtitle:
-            tk.Label(col, text=subtitle, bg=C.BG_CARD, fg=C.FG_DIM,
-                     font=FONT_SMALL).pack(anchor="w")
+    def _make_page(self, key: str) -> QWidget:
+        p = super()._make_page(key)
+        self.pages[key] = p
+        return p
 
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
-        """Alterna para a página identificada por *key*, reconstruindo se necessário."""
         if self._active_btn:
-            self._active_btn._deactivate()  # type: ignore[attr-defined]
+            self._active_btn._deactivate()
         if key not in self.pages:
             fn = self._page_builders.get(key)
             if fn:
                 fn()
         target = self.pages.get(key)
         if target:
-            target.master.lift()
+            self._page_container.setCurrentWidget(target)
         btn = self._nav_buttons.get(key)
         if btn:
-            btn._activate()  # type: ignore[attr-defined]
+            btn._activate()
             self._active_btn = btn
         self._current_page = key
 
     def _rebuild_page(self, key: str) -> None:
-        """Destrói e recria a página *key* do cache, mantendo a navegação atual."""
         if key in self.pages:
-            self.pages.pop(key).destroy()
+            old = self.pages.pop(key)
+            self._page_container.removeWidget(old)
+            old.deleteLater()
         if self._current_page == key:
             self._show_page(key)
 
     def _tick_clock(self) -> None:
-        """Atualiza o relógio no rodapé a cada 1 segundo."""
-        self.clock_lbl.configure(
-            text=datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
-        self.root.after(1000, self._tick_clock)
+        self.clock_lbl.setText(
+            datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
 
     def _tick_dashboard(self) -> None:
-        """Atualiza o dashboard a cada 5 segundos se a página inicial estiver ativa."""
         if self._current_page == "home":
             self._refresh_dashboard()
-        self.root.after(5000, self._tick_dashboard)
 
     def _tick_vnfs(self) -> None:
-        """Atualiza o status das VNFs a cada 30 segundos nas páginas de topologia/home."""
         if self._current_page in ("home", "topology"):
-            self._spawn(self._refresh_vnfs)
-        self.root.after(30000, self._tick_vnfs)
+            self._spawn_io(self._refresh_vnfs)
+
+    def _check_session_timeout(self) -> None:
+        """Verifica timeout da sessao e faz downgrade se inativo."""
+        if self._access_level == "user":
+            return
+        new_role = self._session_tracker.current_role
+        if new_role.value != self._access_level:
+            self._access_level = new_role.value
+            self._mock_mode = False
+            self._watcher.stop()
+            self._rebuild_page("topology")
+            log.info("Acesso: timeout de sessao — resetado para user")
 
     def _set_status(self, text: str, color: str) -> None:
-        """Atualiza o indicador de status (bolinha + texto) no header."""
-        self.status_dot.configure(fg=color)
-        self.status_lbl.configure(text=text)
+        self.status_dot.setStyleSheet(
+            f"color: {color}; background: {C.BG_BASE}; font: 16px 'Inter';")
+        self.status_lbl.setText(text)
 
     def _set_conn_btn(self, text: str = "  CONECTAR  ", disabled: bool = False) -> None:
-        """Altera o texto/estado do botão de conexão de forma thread-safe."""
-        state = "disabled" if disabled else "normal"
-        self._dispatch(lambda: self.conn_btn.configure(text=text, state=state))
+        btn = self.conn_btn
+        self._dispatch(lambda: (
+            btn.setText(text),
+            btn.setEnabled(not disabled),
+        ))
 
     # ── Tema ──────────────────────────────────────────────────────────
     def _toggle_theme(self) -> None:
-        """Alterna entre tema claro e escuro e reconstrói a interface."""
+        if self._theme_toggling:
+            return
+        self._theme_toggling = True
         self._theme = "light" if self._theme == "dark" else "dark"
         set_theme(self._theme)
-        self._ttk_style.theme_use("flatly" if self._theme == "light" else "darkly")
+        apply_theme(self._theme)
         self._rebuild_ui()
         icon = "\u263c" if self._theme == "dark" else "\u263e"
-        self.theme_btn.configure(text=icon)
+        self.theme_btn.setText(icon)
+        self.theme_btn.setEnabled(False)
+        QTimer.singleShot(1500, self._unlock_theme)
+
+    def _unlock_theme(self) -> None:
+        self._theme_toggling = False
+        if self.theme_btn is not None:
+            self.theme_btn.setEnabled(True)
 
     def _rebuild_ui(self) -> None:
-        """Destrói toda a UI e reconstrói do zero, preservando a página atual."""
+        # 1. Parar todos os timers antes de destruir widgets
+        self._dash_timer.stop()
+        self._vnf_timer.stop()
+        self._poll_timer.stop()
+
+        # 2. Salvar estado
         current_page = self._current_page
-        self._active_btn = None          # botão antigo foi destruído
-        self._topo_canvas = None          # canvas antigo foi destruído
-        for child in list(self.root.winfo_children()):
-            child.destroy()
+        self._active_btn = None
+        self._topo_canvas = None
+        self.pages.clear()
+
+        # 3. Destruir UI antiga
+        old = self.centralWidget()
+        if old:
+            old.setParent(None)
+            old.deleteLater()
+        from PySide6.QtCore import QCoreApplication
+        QCoreApplication.processEvents()
+
+        # 4. Reconstruir
         self._build_layout()
         self._rebuild_page(current_page or "home")
 
+        # 5. Reiniciar timers
+        self._dash_timer.start()
+        self._vnf_timer.start()
+        self._poll_timer.start()
+
     # ── Atalhos de teclado ─────────────────────────────────────────────
     def _setup_bindings(self) -> None:
-        """Registra todos os atalhos de teclado (Enter, Ctrl+*, F5, Escape)."""
-        self.root.bind("<Return>", self._on_enter)
-        self.root.bind("<Control-Shift-Return>", self._on_ctrl_shift_enter)
-        self.root.bind("<Control-d>", self._on_ctrl_d)
-        self.root.bind("<Control-l>", self._on_ctrl_l)
-        self.root.bind("<Control-q>", self._on_ctrl_q)
-        self.root.bind("<Control-Shift-A>", self._on_ctrl_shift_a)
-        self.root.bind("<F5>", self._on_f5)
-        self.root.bind("<Control-Tab>", self._on_ctrl_tab)
-        self.root.bind("<Control-Shift-Tab>", self._on_ctrl_shift_tab)
-        self.root.bind("<Escape>", self._on_escape)
+        QShortcut(QKeySequence("Return"), self).activated.connect(self._on_enter)
+        QShortcut(QKeySequence("Ctrl+Shift+Return"), self).activated.connect(
+            self._on_ctrl_shift_enter)
+        QShortcut(QKeySequence("Ctrl+D"), self).activated.connect(self._on_ctrl_d)
+        QShortcut(QKeySequence("Ctrl+L"), self).activated.connect(self._on_ctrl_l)
+        QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self._on_ctrl_q)
+        QShortcut(QKeySequence("Ctrl+Shift+A"), self).activated.connect(
+            self._on_ctrl_shift_a)
+        QShortcut(QKeySequence("F5"), self).activated.connect(self._on_f5)
+        QShortcut(QKeySequence("Ctrl+Tab"), self).activated.connect(self._on_ctrl_tab)
+        QShortcut(QKeySequence("Ctrl+Shift+Tab"), self).activated.connect(
+            self._on_ctrl_shift_tab)
+        QShortcut(QKeySequence("Escape"), self).activated.connect(self._on_escape)
         for i, key in enumerate(self._PAGE_KEYS[:9], 1):
-            self.root.bind(f"<Control-Key-{i}>", lambda e, k=key: self._show_page(k))
+            QShortcut(QKeySequence(f"Ctrl+{i}"), self).activated.connect(
+                lambda _chk, k=key: self._show_page(k))
 
-    def _on_enter(self, event=None) -> None:
-        """Executa a ação principal da página atual (Enter)."""
-        focus = self.root.focus_get()
-        if isinstance(focus, tk.Text):
+    def _on_enter(self) -> None:
+        focus = self.focusWidget()
+        if isinstance(focus, QTextEdit):
             return
         page = self._current_page
         if page == "config":
@@ -385,53 +536,46 @@ class AppCore:
         elif page == "backup":
             self._run(self._do_backup)
 
-    def _on_ctrl_shift_enter(self, event=None) -> None:
-        """Envia comando como configuracao (Ctrl+Shift+Enter) na pagina Cmd."""
+    def _on_ctrl_shift_enter(self) -> None:
         if self._current_page == "cmd":
             self._run(self._exec_config)
 
-    def _on_ctrl_d(self, event=None) -> None:
-        """Alterna conexao SSH (Ctrl+D)."""
+    def _on_ctrl_d(self) -> None:
         self._toggle_connect()
 
-    def _on_ctrl_l(self, event=None) -> None:
-        """Limpa o widget de output da página atual (Ctrl+L)."""
+    def _on_ctrl_l(self) -> None:
         page = self._current_page
-        if page == "config" and hasattr(self, "out_config"):
+        if page == "config" and self.out_config is not None:
             self._write(self.out_config, "")
-        elif page == "route" and hasattr(self, "out_route"):
+        elif page == "route" and self.out_route is not None:
             self._write(self.out_route, "")
-        elif page == "arp" and hasattr(self, "out_arp"):
+        elif page == "arp" and self.out_arp is not None:
             self._write(self.out_arp, "")
-        elif page == "info" and hasattr(self, "out_info"):
+        elif page == "info" and self.out_info is not None:
             self._write(self.out_info, "")
-        elif page == "cmd" and hasattr(self, "out_cmd"):
+        elif page == "cmd" and self.out_cmd is not None:
             self._write(self.out_cmd, "")
-        elif page == "backup" and hasattr(self, "out_backup"):
+        elif page == "backup" and self.out_backup is not None:
             self._write(self.out_backup, "")
-        elif page == "services" and hasattr(self, "_svc_output"):
+        elif page == "services" and self._svc_output is not None:
             self._write(self._svc_output, "")
 
-    def _on_ctrl_q(self, event=None) -> None:
-        """Fecha a aplicacao (Ctrl+Q)."""
+    def _on_ctrl_q(self) -> None:
         self._on_close()
 
-    def _on_ctrl_shift_a(self, event=None) -> None:
-        """Abre/fecha o dialogo de autenticacao (Ctrl+Shift+A)."""
+    def _on_ctrl_shift_a(self) -> None:
         self._show_auth_dialog()
 
-    def _on_f5(self, event=None) -> None:
-        """Atualiza a página atual (F5): VNFs, serviços ou executa ação padrão."""
+    def _on_f5(self) -> None:
         page = self._current_page
         if page == "topology":
-            self._spawn(self._refresh_vnfs)
+            self._spawn_io(self._refresh_vnfs)
         elif page == "services":
             self._refresh_service_list()
         else:
             self._on_enter()
 
-    def _on_ctrl_tab(self, event=None) -> None:
-        """Navega para a próxima página (Ctrl+Tab)."""
+    def _on_ctrl_tab(self) -> None:
         if not self._current_page:
             return
         try:
@@ -440,8 +584,7 @@ class AppCore:
         except ValueError:
             self._show_page(self._PAGE_KEYS[0])
 
-    def _on_ctrl_shift_tab(self, event=None) -> None:
-        """Navega para a página anterior (Ctrl+Shift+Tab)."""
+    def _on_ctrl_shift_tab(self) -> None:
         if not self._current_page:
             return
         try:
@@ -450,70 +593,67 @@ class AppCore:
         except ValueError:
             self._show_page(self._PAGE_KEYS[0])
 
-    def _on_escape(self, event=None) -> None:
-        """Fecha diálogo aberto ou limpa output da página (Escape)."""
-        for child in self.root.winfo_children():
-            if isinstance(child, tk.Toplevel) and child.winfo_exists():
-                child.destroy()
-                return
+    def _on_escape(self) -> None:
         self._on_ctrl_l()
 
     # ── Helpers de threading ──────────────────────────────────────────
     def _dispatch(self, fn) -> None:
-        """Enfileira uma chamada para execução thread-safe na main thread."""
         self._ui_queue.put(fn)
 
     def _poll_queue(self) -> None:
-        """Polling periódico da fila de UI para execução thread-safe (50ms)."""
         while True:
             try:
                 fn = self._ui_queue.get_nowait()
-                fn()
             except queue.Empty:
                 break
-        self.root.after(50, self._poll_queue)
+            try:
+                fn()
+            except Exception:
+                _app_log.exception("_poll_queue: callback %r falhou", fn)
 
-    def _spawn(self, fn, *args) -> None:
-        """Executa *fn(*args)* em thread paralela via ThreadPoolExecutor."""
-        self._executor.submit(fn, *args)
+    def _spawn_io(self, fn, *args) -> None:
+        self._io_executor.submit(fn, *args)
+
+    def _spawn_cpu(self, fn, *args) -> None:
+        self._cpu_executor.submit(fn, *args)
 
     def _run(self, func) -> None:
-        """Verifica conexão e dispara *func* em background."""
         if not self.session.is_connected:
-            messagebox.showwarning("Aviso", "Conecte ao roteador primeiro.")
+            QMessageBox.warning(self, "Aviso", "Conecte ao roteador primeiro.")
             return
-        self._spawn(func)
+        self._spawn_io(func)
 
     def _write(self, widget, text: str) -> None:
-        """Substitui o conteúdo de um widget Text de forma thread-safe."""
-        self._dispatch(lambda: (
-            widget.configure(state="normal"),
-            widget.delete("1.0", "end"),
-            widget.insert("end", text),
-            widget.configure(state="disabled")))
+        self._dispatch(lambda w=widget, t=text: (w.clear(), w.setPlainText(t)))
 
     def _loading(self, widget, msg: str) -> None:
-        """Exibe mensagem de carregamento no widget Text de forma thread-safe."""
-        self._dispatch(lambda: (
-            widget.configure(state="normal"),
-            widget.delete("1.0", "end"),
-            widget.insert("end", f"\u23f3  {msg}\n"),
-            widget.configure(state="disabled")))
+        self._dispatch(lambda w=widget, m=msg: (w.clear(), w.setPlainText(f"\u23f3  {m}\n")))
 
     def _on_watcher_update(self, results) -> None:
-        """Callback recebido do Watcher; armazena resultados e recria página de manutenção."""
         self._watcher_results = results
+        self._dispatch(self._rebuild_manutencao_if_active)
+
+    def _rebuild_manutencao_if_active(self) -> None:
         if self._current_page == "manutencao":
             self._rebuild_page("manutencao")
 
     # ── Cleanup ───────────────────────────────────────────────────────
+    def _cleanup_executors(self) -> None:
+        """Desliga ambos os pools com timeout de 5s cada."""
+        for pool in (getattr(self, "_io_executor", None),
+                     getattr(self, "_cpu_executor", None)):
+            if pool is not None:
+                pool.shutdown(wait=True, timeout=5)
+
     def _on_close(self) -> None:
-        """Finaliza watcher, desconecta sessão e encerra o executor ao fechar."""
         self._watcher.stop()
         self.session.disconnect()
-        self._executor.shutdown(wait=False)
-        self.root.destroy()
+        self._cleanup_executors()
+
+    def closeEvent(self, event) -> None:
+        self._on_close()
+        super().closeEvent(event)
 
 
 class HuaweiRouterApp(AppCore, PageBuilder, EventHandlers):
-    """Classe final que combina os mixins AppCore, PageBuilder e EventHandlers via herança múltipla."""
+    """Classe final que combina os mixins AppCore, PageBuilder e EventHandlers."""
