@@ -70,8 +70,9 @@ class SSHSouthbound(SouthboundProtocol):
         audit_logger: AuditLogger,
         timeout: int = 30,
         max_retries: int = 2,
+        session: NetmikoSession | None = None,
     ) -> None:
-        self._session = NetmikoSession(backend, audit_logger)
+        self._session = session if session is not None else NetmikoSession(backend, audit_logger)
         self._timeout = timeout
         self._max_retries = max_retries
         self._connected = False

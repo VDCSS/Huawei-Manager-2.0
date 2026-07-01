@@ -27,6 +27,7 @@ import huawei_manager.constants as C
 from huawei_manager._config import ADMIN_PASSWORD, PROJECT_ROOT, TECNICO_PASSWORD, audit, log
 from huawei_manager.constants import CLI_FILTERS, ROUTE_FILTER_LABELS
 from huawei_manager.sdn_controller.authz import Role
+from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.services import VNF_TYPES, ServiceDef, execute_service
 from huawei_manager.vnf_models import (
     VNF,
@@ -56,10 +57,12 @@ class EventHandlers:
 
     def _toggle_connect(self) -> None:
         """Alterna entre conectar (VNF alvo ou default) e desconectar."""
-        if self.session.is_connected:
-            self.session.disconnect()
+        if self._sb.is_alive():
+            self._sb.disconnect()
             self._set_status("Desconectado", C.NEON_PURP)
             self._set_conn_btn()
+            self._event_queue.put(Event(EventType.DEVICE_DISCONNECTED,
+                                        source="user", data={"reason": "manual"}))
             return
 
         vnf = self._get_selected_vnf()
@@ -73,11 +76,13 @@ class EventHandlers:
         def _do():
             """Executa a conexao SSH em background."""
             try:
-                self.session.connect()
+                self._sb.connect()
                 sid = self.session._session_id or "?"
                 self._dispatch(lambda: self._set_status(
                     on_success_fmt.format(sid=sid), C.NEON_CYAN))
                 self._set_conn_btn("  DESCONECTAR  ")
+                self._event_queue.put(Event(EventType.DEVICE_CONNECTED,
+                                            source="user", data={"session_id": sid}))
             except NetmikoAuthenticationException:
                 self._dispatch(lambda: self._set_status(
                     "Falha de autenticacao", C.NEON_AMBER))
@@ -106,8 +111,8 @@ class EventHandlers:
 
     def _connect_with_vnf(self, vnf: VNF) -> None:
         """Sobrescreve parametros SSH com os dados do VNF e conecta."""
-        if self.session.is_connected:
-            self.session.disconnect()
+        if self._sb.is_alive():
+            self._sb.disconnect()
         self.session.override_host = vnf.host
         self.session.override_port = vnf.port
         self.session.override_username = vnf.username or None
@@ -123,20 +128,45 @@ class EventHandlers:
     def _fetch_config(self) -> None:
         """Busca a configuracao atual do roteador (display current-configuration)."""
         self._loading(self.out_config, "Carregando configuracao atual\u2026")
-        self._write(self.out_config, self.session.run_cli_rpc("display current-configuration"))
+        output = self._sb.send_command("display current-configuration")
+        self._write(self.out_config, output)
+        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                    source="fetch", data={"command": "display current-configuration"}))
 
     def _fetch_route(self) -> None:
         """Busca a tabela de roteamento com o filtro selecionado."""
         label_to_key = {v: k for k, v in ROUTE_FILTER_LABELS.items()}
         fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
-        cmd = CLI_FILTERS.get(fkey, "display ip routing-table")
-        self._loading(self.out_route, f"Executando: {cmd}\u2026")
-        self._write(self.out_route, self.session.run_cli_rpc(cmd or ""))
+        if fkey == "routing":
+            entries = self._drv.get_routing_table()
+            buf = io.StringIO()
+            buf.write(f"{'Destino/Mask':<22} {'Proto':<10} {'Pre':>4} {'Custo':>6}  {'NextHop':<16} {'Interface'}\n")
+            buf.write(f"{'-' * 72}\n")
+            for e in entries:
+                route = f"{e.destination}/{e.mask}"
+                buf.write(f"{route:<22} {e.protocol:<10} {e.preference:>4} {e.cost:>6}"
+                          f"  {e.next_hop:<16} {e.interface}\n")
+            self._write(self.out_route, buf.getvalue())
+            self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                        source="fetch", data={"command": "display ip routing-table"}))
+        else:
+            cmd = CLI_FILTERS.get(fkey, "display ip routing-table")
+            self._loading(self.out_route, f"Executando: {cmd}\u2026")
+            self._write(self.out_route, self._sb.send_command(cmd or ""))
+            self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                        source="fetch", data={"command": cmd or ""}))
 
     def _fetch_arp(self) -> None:
         """Busca a tabela ARP do roteador."""
-        self._loading(self.out_arp, "Executando: display arp\u2026")
-        self._write(self.out_arp, self.session.run_cli_rpc("display arp"))
+        entries = self._drv.get_arp_table()
+        buf = io.StringIO()
+        buf.write(f"{'IP Address':<18} {'MAC Address':<20} {'Tipo':<6} {'Interface'}\n")
+        buf.write(f"{'-' * 60}\n")
+        for e in entries:
+            buf.write(f"{e.ip_address:<18} {e.mac_address:<20} {e.status:<6} {e.interface}\n")
+        self._write(self.out_arp, buf.getvalue())
+        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                    source="fetch", data={"command": "display arp"}))
 
     def _fetch_info(self) -> None:
         """Coleta multiplas informacoes do sistema (versao, CPU, memoria, interfaces, LLDP)."""
@@ -148,14 +178,25 @@ class EventHandlers:
             ("Licenca", "display license"),
             ("CPU", "display cpu-usage"),
             ("Memoria", "display memory-usage"),
-            ("Interfaces", "display interface brief"),
             ("LLDP", "display lldp neighbor brief"),
         ]
         for title, cmd in commands:
             buf.write(f"{'=' * 70}\n\u25b6  {title}\n{'-' * 70}\n")
-            buf.write(self.session.run_cli_rpc(cmd or ""))
+            buf.write(self._sb.send_command(cmd or ""))
             buf.write("\n\n")
+        buf.write(f"{'=' * 70}\n\u25b6  Interfaces\n{'-' * 70}\n")
+        intf_entries = self._drv.get_interfaces()
+        if intf_entries:
+            buf.write(f"{'Interface':<30} {'Status':<8} {'Protocolo'}\n")
+            buf.write(f"{'-' * 50}\n")
+            for e in intf_entries:
+                buf.write(f"{e.name:<30} {e.status:<8} {e.protocol_status}\n")
+        else:
+            buf.write("(nenhuma interface encontrada)\n")
+        buf.write("\n\n")
         self._write(self.out_info, buf.getvalue())
+        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                    source="fetch", data={"command": "display version, interfaces, lldp, etc."}))
 
     # ══════════════════════════════════════════════════════════════════
     #  EDITOR
@@ -178,19 +219,23 @@ class EventHandlers:
             self.session.run_cli_timing("quit")
         else:
             self._loading(self.out_cmd, f"Executando: {cmd}\u2026")
-            result = self.session.run_cli_rpc(cmd or "")
+            result = self._sb.send_command(cmd or "")
         self._write(self.out_cmd, result)
+        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                    source="editor", data={"command": cmd.splitlines()[0], "mode": "exec"}))
 
     def _exec_config(self) -> None:
-        """Envia comandos de configuracao do editor via edit_config."""
+        """Envia comandos de configuracao do editor via send_config."""
         cmd = self._get_editor_cmd()
         if not cmd:
             self._write(self.out_cmd,
                          "\u2718  Editor vazio \u2014 digite os comandos de configuracao")
             return
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
-        ok, msg = self.session.edit_config(cmd)
+        ok, msg = self._sb.send_config(cmd.strip().splitlines())
         self._write(self.out_cmd, msg)
+        self._event_queue.put(Event(EventType.CONFIG_CHANGED,
+                                    source="editor", data={"status": "ok" if ok else "error"}))
 
     # ══════════════════════════════════════════════════════════════════
     #  BACKUP
@@ -199,7 +244,7 @@ class EventHandlers:
         """Salva a running-config em arquivo TXT e registra na auditoria."""
         fmt = self._backup_fmt_cb.currentText()
         self._loading(self.out_backup, "Coletando configuracao para backup\u2026")
-        conteudo = self.session.run_cli_rpc("display current-configuration")
+        conteudo = self._sb.send_command("display current-configuration")
         ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         ext  = "txt"
         host = self.session._host
@@ -232,6 +277,8 @@ class EventHandlers:
             audit.log_operation("backup", user=self.session._user,
                                 host=host, status="ok", file=path)
             log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
+            self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                        source="backup", data={"file": path, "host": host}))
         except OSError as ex:
             log.error("Backup falhou: %s", ex)
             self._write(self.out_backup, f"\u2718  Erro ao salvar:\n  {ex}")
@@ -275,9 +322,11 @@ class EventHandlers:
             if mode == "mock":
                 result = execute_service(final_svc, session_type="mock")
                 self._write(self._svc_output, result)
+                self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                            source="service", data={"name": svc.name, "mode": "mock"}))
                 return
 
-            if not self.session.is_connected:
+            if not self._sb.is_alive():
                 self._write(self._svc_output,
                     "\u2718  Sem sessao SSH ativa. Conecte-se primeiro.")
                 return
@@ -286,6 +335,8 @@ class EventHandlers:
                 result = execute_service(final_svc, session_type="cli",
                                          session=self.session._conn)
                 self._write(self._svc_output, result)
+                self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                            source="service", data={"name": svc.name, "mode": "cli"}))
                 return
 
             self._write(self._svc_output, f"Modo desconhecido: {mode}")
@@ -596,16 +647,18 @@ class EventHandlers:
             self._vnf_info_lbl.setText("  Nenhum VNF selecionado")
             self._vnf_info_lbl.setStyleSheet(
                 f"color: {C.FG_DIM}; background: {C.BG_CARD}; font: 11px 'Inter';")
-        if self.session.is_connected:
-            self.session.disconnect()
+        if self._sb.is_alive():
+            self._sb.disconnect()
             self._set_status("Desconectado", C.NEON_PURP)
             self._set_conn_btn()
+            self._event_queue.put(Event(EventType.DEVICE_DISCONNECTED,
+                                        source="vnf", data={"reason": "target_cleared"}))
         self._refresh_service_list()
 
     def _refresh_dashboard(self) -> None:
         """Atualiza os indicadores do dashboard (conexao, VNFs, auditoria)."""
         try:
-            conn = self.session.is_connected
+            conn = self._sb.is_alive()
         except Exception:
             conn = False
         if conn:

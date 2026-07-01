@@ -32,6 +32,9 @@ from huawei_manager.constants import set_theme
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.pages import PageBuilder
 from huawei_manager.sdn_controller.authz import SessionTracker
+from huawei_manager.sdn_controller.drivers.router import RouterDriver
+from huawei_manager.sdn_controller.event_queue import EventQueue
+from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vnf_models import VNF
 from huawei_manager.widgets import ActionButton, NeonButton, action_button, neon_button
@@ -62,6 +65,9 @@ class AppCore(QMainWindow):
         assert _secrets is not None, "_config.init() must be called first"
         assert audit is not None, "_config.init() must be called first"
         self.session = NetmikoSession(_secrets, audit)
+        self._event_queue = EventQueue()
+        self._sb = SSHSouthbound(_secrets, audit, session=self.session)
+        self._drv = RouterDriver(self._sb, self._event_queue)
         self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
         self._mock_mode: bool = True
@@ -618,7 +624,7 @@ class AppCore(QMainWindow):
         self._cpu_executor.submit(fn, *args)
 
     def _run(self, func) -> None:
-        if not self.session.is_connected:
+        if not self._sb.is_alive():
             QMessageBox.warning(self, "Aviso", "Conecte ao roteador primeiro.")
             return
         self._spawn_io(func)
@@ -647,7 +653,7 @@ class AppCore(QMainWindow):
 
     def _on_close(self) -> None:
         self._watcher.stop()
-        self.session.disconnect()
+        self._sb.disconnect()
         self._cleanup_executors()
 
     def closeEvent(self, event) -> None:
