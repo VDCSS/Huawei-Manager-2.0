@@ -45,20 +45,41 @@ _log  = logging.getLogger("huawei.audit")
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  SECURITY CATEGORIES
+# ═══════════════════════════════════════════════════════════════════════
+# Categorias de eventos de segurança para o hash chain
+AUTH_SUCCESS        = "AUTH_SUCCESS"
+AUTH_FAILURE        = "AUTH_FAILURE"
+CMD_EXECUTED        = "CMD_EXECUTED"
+CMD_BLOCKED         = "CMD_BLOCKED"
+CONFIG_CHANGE       = "CONFIG_CHANGE"
+DEVICE_ADD          = "DEVICE_ADD"
+DEVICE_DELETE       = "DEVICE_DELETE"
+DRIFT_DETECTED      = "DRIFT_DETECTED"
+AN_ACTION           = "AN_ACTION"
+
+# ═══════════════════════════════════════════════════════════════════════
 #  ENTRY DATACLASS
 # ═══════════════════════════════════════════════════════════════════════
 @dataclass
 class AuditEntry:
-    """Entrada individual de auditoria — uma operacao CLI com metadados."""
-    timestamp:   str
-    op:          str
-    user:        str
-    host:        str
-    datastore:   str | None
-    status:      str
-    duration_ms: float
-    session_id:  str | None
-    extra:       dict[str, Any] = field(default_factory=dict)
+    """Entrada individual de auditoria — uma operacao CLI com metadados.
+
+    Cada entrada pode conter um ``previous_hash`` SHA-256 que aponta
+    para o registro anterior, formando uma cadeia inviolavel.
+    O campo ``category`` classifica o tipo de evento de seguranca.
+    """
+    timestamp:      str
+    op:             str
+    user:           str
+    host:           str
+    datastore:      str | None
+    status:         str
+    duration_ms:    float
+    session_id:     str | None
+    extra:          dict[str, Any] = field(default_factory=dict)
+    previous_hash:  str = ""
+    category:       str = "general"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -71,7 +92,8 @@ class _TimedCtx:
                  user: str, host: str,
                  datastore: str | None,
                  session_id: str | None,
-                 extra: dict) -> None:
+                 extra: dict,
+                 category: str = "general") -> None:
         """Inicializa o contexto com parametros da operacao a auditar."""
         self._logger     = logger
         self._op         = op
@@ -80,6 +102,7 @@ class _TimedCtx:
         self._datastore  = datastore
         self._session_id = session_id
         self._extra      = extra
+        self._category   = category
         self._status     = "ok"
         self._t0         = 0.0
 
@@ -104,6 +127,7 @@ class _TimedCtx:
             duration_ms = round(ms, 2),
             session_id  = self._session_id,
             extra       = self._extra,
+            category    = self._category,
         ))
 
 
@@ -142,9 +166,30 @@ class AuditLogger:
         entry["hmac"] = expected
         return hmac_mod.compare_digest(computed, expected)
 
-    # ── escrita thread-safe ───────────────────────────────────────────
+    @staticmethod
+    def _entry_hash(entry_dict: dict) -> str:
+        """SHA-256 do dict excluindo campo ``hmac``."""
+        d = {k: v for k, v in entry_dict.items() if k != "hmac"}
+        raw = json.dumps(d, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    # ── escrita thread-safe com hash chain ───────────────────────────
     def _write(self, entry: AuditEntry) -> None:
-        """Serializa a entrada com HMAC e anexa ao arquivo JSONL (thread-safe)."""
+        """Serializa a entrada com HMAC + hash chain e anexa ao JSONL."""
+        # Computa previous_hash a partir do ultimo registro no arquivo
+        last_hash = ""
+        if self._path.exists():
+            try:
+                raw = self._path.read_text(encoding="utf-8").strip()
+                if raw:
+                    last_line = raw.splitlines()[-1].strip()
+                    if last_line:
+                        last_dict = json.loads(last_line)
+                        last_hash = self._entry_hash(last_dict)
+            except (OSError, json.JSONDecodeError):
+                pass
+        entry.previous_hash = last_hash
+
         d = asdict(entry)
         d["hmac"] = self._hmac(d)
         line = json.dumps(d, ensure_ascii=False)
@@ -155,6 +200,54 @@ class AuditLogger:
                   entry.op, entry.user, entry.status, entry.duration_ms)
         _log.debug("AUDIT host=%s", entry.host)
 
+    @classmethod
+    def verify_chain(cls, path: str) -> bool:
+        """Verifica a integridade da cadeia de hashes no arquivo JSONL.
+
+        Percorre todas as entradas e confirma que o ``previous_hash``
+        de cada registro corresponde ao SHA-256 do anterior.
+        Entradas com ``previous_hash`` vazio sao consideradas a raiz
+        da cadeia (primeiro registro ou inicio de nova cadeia).
+
+        Args:
+            path: Caminho para o arquivo JSONL.
+
+        Returns:
+            True se a cadeia estiver intacta, False se houver adulteracao.
+        """
+        log = _log  # local ref to avoid closure issues
+        try:
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return False
+        previous_entry_dict: dict | None = None
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry_dict = json.loads(line)
+            except json.JSONDecodeError:
+                log.warning("verify_chain: linha invalida ignorada")
+                continue
+            prev_hash = entry_dict.get("previous_hash", "")
+            if previous_entry_dict is not None:
+                expected_hash = cls._entry_hash(previous_entry_dict)
+                if prev_hash != expected_hash:
+                    log.warning(
+                        "verify_chain: hash mismatch. "
+                        "expected=%s got=%s",
+                        expected_hash, prev_hash,
+                    )
+                    return False
+            elif prev_hash:
+                # Primeira entrada com previous_hash nao vazio — so
+                # se o log foi truncado/adulterado
+                log.warning("verify_chain: first entry has non-empty previous_hash")
+                return False
+            previous_entry_dict = entry_dict
+        return True
+
     # ── API direta ────────────────────────────────────────────────────
     def log_operation(
         self, op: str, user: str, host: str,
@@ -162,6 +255,7 @@ class AuditLogger:
         status: str = "ok",
         duration_ms: float = 0.0,
         session_id: str | None = None,
+        category: str = "general",
         **extra: Any,
     ) -> None:
         """Registra uma operação diretamente (sem medir tempo)."""
@@ -174,6 +268,7 @@ class AuditLogger:
             status      = status,
             duration_ms = duration_ms,
             session_id  = session_id,
+            category    = category,
             extra       = extra,
         ))
 
@@ -183,6 +278,7 @@ class AuditLogger:
         self, op: str, user: str, host: str,
         datastore: str | None = None,
         session_id: str | None = None,
+        category: str = "general",
         **extra: Any,
     ) -> Generator[_TimedCtx, None, None]:
         """
@@ -194,7 +290,7 @@ class AuditLogger:
                              datastore="running") as ctx:
                 data = session.get_config()
         """
-        ctx = _TimedCtx(self, op, user, host, datastore, session_id, extra)
+        ctx = _TimedCtx(self, op, user, host, datastore, session_id, extra, category)
         ctx._start()
         try:
             yield ctx

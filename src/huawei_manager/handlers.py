@@ -25,8 +25,8 @@ from PySide6.QtWidgets import (
 
 import huawei_manager.constants as C
 from huawei_manager._config import ADMIN_PASSWORD, PROJECT_ROOT, TECNICO_PASSWORD, audit, log
-from huawei_manager.sdn_controller.authz import Role
 from huawei_manager.constants import CLI_FILTERS, ROUTE_FILTER_LABELS
+from huawei_manager.sdn_controller.authz import Role
 from huawei_manager.services import VNF_TYPES, ServiceDef, execute_service
 from huawei_manager.vnf_models import (
     VNF,

@@ -1,8 +1,21 @@
+import hashlib
 import json
 
 import pytest
 
-from huawei_manager.audit_log import AUDIT_FILE, AuditLogger
+from huawei_manager.audit_log import (
+    AN_ACTION,
+    AUDIT_FILE,
+    AUTH_FAILURE,
+    AUTH_SUCCESS,
+    CMD_BLOCKED,
+    CMD_EXECUTED,
+    CONFIG_CHANGE,
+    DEVICE_ADD,
+    DEVICE_DELETE,
+    DRIFT_DETECTED,
+    AuditLogger,
+)
 
 
 class TestInit:
@@ -126,3 +139,111 @@ class TestFormatTail:
         result = audit_logger.format_tail()
         assert "get-config" in result
         assert "ms" in result
+
+
+class TestHashChain:
+    """M09 — Hash chain SHA-256 para auditoria inviolavel."""
+
+    def test_verify_chain_no_file(self, tmp_audit_path):
+        """verify_chain retorna False se arquivo nao existe."""
+        assert AuditLogger.verify_chain(str(tmp_audit_path)) is False
+
+    def test_verify_chain_single_entry(self, audit_logger):
+        """Cadeia com 1 entrada — sem hash anterior, valida."""
+        audit_logger.log_operation("test", "u", "h")
+        assert AuditLogger.verify_chain(str(audit_logger._path)) is True
+
+    def test_verify_chain_multiple_ok(self, audit_logger):
+        """3 entradas consecutivas formam cadeia valida."""
+        for i in range(3):
+            audit_logger.log_operation(f"op{i}", "u", "h")
+        assert AuditLogger.verify_chain(str(audit_logger._path)) is True
+
+    def test_verify_chain_tampered(self, audit_logger):
+        """Modificar campo de uma entrada quebra a cadeia."""
+        audit_logger.log_operation("op1", "u", "h")
+        audit_logger.log_operation("op2", "u", "h")
+        audit_logger.log_operation("op3", "u", "h")
+
+        # Adultera o usuario da segunda entrada
+        lines = audit_logger._path.read_text(encoding="utf-8").splitlines()
+        entry2 = json.loads(lines[1])
+        entry2["user"] = "attacker"
+        lines[1] = json.dumps(entry2, ensure_ascii=False)
+        audit_logger._path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        assert AuditLogger.verify_chain(str(audit_logger._path)) is False
+
+    def test_verify_chain_tampered_hmac_ignored(self, audit_logger):
+        """HMAC field nao participa do hash chain — alterar hmac nao quebra."""
+        audit_logger.log_operation("op1", "u", "h")
+        audit_logger.log_operation("op2", "u", "h")
+
+        lines = audit_logger._path.read_text(encoding="utf-8").splitlines()
+        entry1 = json.loads(lines[0])
+        entry1["hmac"] = "0000deadbeef"
+        lines[0] = json.dumps(entry1, ensure_ascii=False)
+        audit_logger._path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        # Alterar HMAC nao deve quebrar a cadeia (hmac é excluido do hash)
+        assert AuditLogger.verify_chain(str(audit_logger._path)) is True
+
+    def test_first_entry_empty_previous_hash(self, audit_logger):
+        """Primeira entrada tem previous_hash vazio (raiz da cadeia)."""
+        audit_logger.log_operation("first", "u", "h")
+        data = audit_logger.tail(1)[0]
+        assert data["previous_hash"] == ""
+
+    def test_entries_chain_correctly(self, audit_logger):
+        """Cada entrada apos a primeira tem previous_hash = SHA-256 da anterior."""
+        audit_logger.log_operation("a", "u", "h")
+        audit_logger.log_operation("b", "u", "h")
+        audit_logger.log_operation("c", "u", "h")
+
+        lines = audit_logger._path.read_text(encoding="utf-8").splitlines()
+        entries = [json.loads(line) for line in lines if line.strip()]
+
+        # previous_hash da entrada 2 deve ser SHA-256 da entrada 1 (sem hmac)
+        for i in range(1, len(entries)):
+            prev = {k: v for k, v in entries[i - 1].items() if k != "hmac"}
+            raw = json.dumps(prev, sort_keys=True, ensure_ascii=False)
+            expected = hashlib.sha256(raw.encode()).hexdigest()
+            assert entries[i]["previous_hash"] == expected
+
+    def test_reopen_and_verify_chain(self, tmp_audit_path):
+        """Escreve entradas, fecha logger, re-abre, verify_chain OK."""
+        logger = AuditLogger(str(tmp_audit_path))
+        logger.log_operation("op1", "u", "h")
+        logger.log_operation("op2", "u", "h")
+        del logger  # Fecha (descarta referência)
+
+        logger2 = AuditLogger(str(tmp_audit_path))
+        logger2.log_operation("op3", "u", "h")
+        assert AuditLogger.verify_chain(str(tmp_audit_path)) is True
+
+
+class TestCategories:
+    """M09 — Categorias de eventos de segurança."""
+
+    @pytest.mark.parametrize("cat", [
+        AUTH_SUCCESS, AUTH_FAILURE, CMD_EXECUTED, CMD_BLOCKED,
+        CONFIG_CHANGE, DEVICE_ADD, DEVICE_DELETE, DRIFT_DETECTED, AN_ACTION,
+    ])
+    def test_log_with_category(self, audit_logger, cat):
+        """Cada categoria e armazenada corretamente."""
+        audit_logger.log_operation("test", "u", "h", category=cat)
+        data = audit_logger.tail(1)[0]
+        assert data["category"] == cat
+
+    def test_default_category(self, audit_logger):
+        """Sem categoria explicita, usa 'general'."""
+        audit_logger.log_operation("test", "u", "h")
+        data = audit_logger.tail(1)[0]
+        assert data["category"] == "general"
+
+    def test_timed_with_category(self, audit_logger):
+        """Context manager timed aceita e armazena category."""
+        with audit_logger.timed("get", user="u", host="h", category=CONFIG_CHANGE):
+            pass
+        data = audit_logger.tail(1)[0]
+        assert data["category"] == CONFIG_CHANGE

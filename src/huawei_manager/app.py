@@ -31,7 +31,7 @@ from huawei_manager.agents.watcher import Watcher
 from huawei_manager.constants import set_theme
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.pages import PageBuilder
-from huawei_manager.sdn_controller.authz import Role, SessionTracker
+from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vnf_models import VNF
 from huawei_manager.widgets import ActionButton, NeonButton, action_button, neon_button
