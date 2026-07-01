@@ -7,7 +7,7 @@ import logging
 import re
 from pathlib import Path
 
-from agents import AgentItem, AgentResult
+from huawei_manager.agents import AgentItem, AgentResult
 
 log = logging.getLogger("huawei.agents.deps")
 
@@ -72,12 +72,13 @@ def _parse_pyproject_deps(root: Path) -> tuple[set[str], set[str]]:
 
     text = pyproject.read_text(encoding="utf-8")
     section: str | None = None
+    lines = iter(text.splitlines())
 
-    for line in text.splitlines():
+    for line in lines:
         stripped = line.strip()
 
         # Deteta secção
-        m = re.match(r'^\[(project\.dependencies|project\.optional-dependencies)\]', stripped)
+        m = re.match(r'^\[(project|project\.optional-dependencies)\]', stripped)
         if m:
             section = m.group(1)
             continue
@@ -85,7 +86,35 @@ def _parse_pyproject_deps(root: Path) -> tuple[set[str], set[str]]:
             section = None
             continue
 
-        if section and "=" in stripped:
+        if not section:
+            continue
+
+        # [project] usa dependencies = [...] inline
+        if section == "project":
+            if stripped.startswith("dependencies"):
+                # Extrai todos os strings do array [...]
+                array_content = stripped.split("=", 1)[1].strip()
+                # Se o array continua em múltiplas linhas, acumula
+                if array_content.startswith("["):
+                    _buf = array_content
+                    _in_array = "]" not in _buf
+                    while _in_array:
+                        line = next(lines, None)
+                        if line is None:
+                            break
+                        _buf += " " + line.strip()
+                        _in_array = "]" not in _buf
+                    array_content = _buf
+                for raw in array_content.strip("[]").split(","):
+                    raw = raw.strip().strip('"').strip("'")
+                    if raw:
+                        pkg = re.split(r'[\[>=<!~]', raw)[0].strip()
+                        if pkg:
+                            runtime.add(pkg)
+            continue
+
+        # [project.optional-dependencies] usa [toML.table]header = ["val", ...]
+        if "=" in stripped:
             pkg = stripped.split("=", 1)[0].strip().strip('"').strip("'")
             # Limpa extras tipo [security] e version specifiers
             pkg = re.split(r'[\[>=<!~]', pkg)[0].strip()

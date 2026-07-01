@@ -17,6 +17,13 @@ dev/
 huawei_manager.egg-info/
 .ssh_rotation_ts
 data/vnf_inventory.json
+data.old/
+.playwright-mcp/
+.env.enc
+Captura_de_tela_*.png
+scripts/diag_screenshots/
+scripts/app_diag.py
+scripts/wayland_diag.py
 .opencode/
 .omo/
 .coverage

@@ -9,7 +9,7 @@ import logging
 import re
 from pathlib import Path
 
-from agents import AgentItem, AgentResult
+from huawei_manager.agents import AgentItem, AgentResult
 
 log = logging.getLogger("huawei.agents.security")
 

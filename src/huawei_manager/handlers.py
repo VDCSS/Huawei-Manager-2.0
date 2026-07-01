@@ -38,7 +38,7 @@ from huawei_manager.vnf_models import (
 )
 from huawei_manager.widgets import AuthOverlay, action_button
 
-_INVENTORY_PATH = str(PROJECT_ROOT / "data" / "vnf_inventory.json")
+_INVENTORY_PATH = str(PROJECT_ROOT / "src" / "huawei_manager" / "data" / "vnf_inventory.json")
 
 
 class EventHandlers:

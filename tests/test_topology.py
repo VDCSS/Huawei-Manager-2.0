@@ -1,6 +1,6 @@
 import json
 
-from huawei_manager.topology import (
+from huawei_manager.vnf_models import (
     VNF,
     _normalize_status,
     load_vnf_inventory,

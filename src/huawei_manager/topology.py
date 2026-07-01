@@ -1,313 +1,226 @@
 #!/usr/bin/env python3
 """
-topology.py — VNF Topology + Canvas
-=======================================
+topology.py — VNF Topology + Canvas (PySide6)
+==============================================
 Gerenciamento de VNFs via inventário local (vnf_inventory.json),
 probe TCP real e simulação de status (modo mock).
+Canvas baseado em QGraphicsView / QGraphicsScene.
 
 O VNF selecionado no canvas é usado como alvo para conexão SSH via Netmiko.
 """
 from __future__ import annotations
 
-import json
 import logging
-import random
-import socket
-import time
-import tkinter as tk
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from threading import Lock
 
-from huawei_manager.constants import (
-    FONT_BODY,
-    FONT_H1,
-    FONT_LARGE,
-    FONT_LARGE_B,
-    FONT_MEDIUM,
-    FONT_MEDIUM_B,
-    FONT_XSMALL,
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsEllipseItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsSimpleTextItem,
+    QGraphicsView,
+    QMenu,
+    QVBoxLayout,
+    QWidget,
 )
+
+import huawei_manager.constants as C
+from huawei_manager.vnf_models import VNF
 
 log = logging.getLogger("huawei.topology")
 
-VNF_INVENTORY_FILE = "vnf_inventory.json"
-_INV_LOCK = Lock()
+ITEM_DATA_KEY = 0  # item.setData(ITEM_DATA_KEY, vnf_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  VNF DATACLASS
+#  HELPERS
 # ═══════════════════════════════════════════════════════════════════════
-@dataclass
-class VNF:
-    """Representa um dispositivo VNF com dados de conexão e status."""
-    id:       str
-    name:     str
-    host:     str
-    port:     int     = 22
-    type:     str     = "ROUTER"
-    status:   str     = "unknown"
-    version:  str     = ""
-    location: str     = ""
-    username: str     = ""
-    password: str     = ""
-    ssh_key:  str     = ""
-    extra:    dict    = field(default_factory=dict)
 
-    def label(self) -> str:
-        """Retorna o nome legível do VNF (name ou id)."""
-        return self.name or self.id
-
-    def address(self) -> str:
-        """Retorna host:porta como string."""
-        return f"{self.host}:{self.port}"
-
-    @classmethod
-    def from_dict(cls, d: dict) -> VNF:
-        """Cria VNF a partir de um dicionário, ignorando chaves extras."""
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+def _to_qfont(tk_font: tuple) -> QFont:
+    """Converte tupla de fonte (family, size, [bold]) → QFont."""
+    family = tk_font[0] if len(tk_font) > 0 else "Consolas"
+    size   = tk_font[1] if len(tk_font) > 1 else 11
+    bold   = len(tk_font) > 2 and tk_font[2] == "bold"
+    qf = QFont(family, size)
+    qf.setBold(bold)
+    return qf
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  SIMULAÇÃO DE STATUS (MOCK)
-# ═══════════════════════════════════════════════════════════════════════
-_mock_last_update: float = 0.0
-
-def simulate_status(vnfs: list[VNF]) -> list[VNF]:
-    """Simula variação aleatória de status dos VNFs (modo mock)."""
-    global _mock_last_update
-    now = time.time()
-    if now - _mock_last_update < 15:
-        return vnfs
-    _mock_last_update = now
-    for v in vnfs:
-        if v.status == "offline":
-            if random.random() < 0.2:
-                v.status = "online"
-        elif v.status == "online":
-            if random.random() < 0.05:
-                v.status = random.choice(["offline", "unknown"])
-    return vnfs
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  PROBE TCP (REAL)
-# ═══════════════════════════════════════════════════════════════════════
-# Cache de status: evita re-provar VNFs que estavam online recentemente.
-# Chave = "host:porta"  →  (status, timestamp)
-_probe_cache: dict[str, tuple[str, float]] = {}
-_PROBE_CACHE_TTL: float = 25.0  # segundos — ligeiramente abaixo do timer de 30s
-
-
-def _vnf_cache_key(vnf: VNF) -> str:
-    return f"{vnf.host}:{vnf.port or 22}"
-
-
-def _check_vnf(vnf: VNF, timeout: int = 2) -> str:
-    """Tenta conexão TCP ao VNF; retorna 'online' ou lança exceção."""
-    socket.create_connection((vnf.host, vnf.port or 22), timeout=timeout).close()
-    return "online"
-
-
-def probe_vnfs(vnfs: list[VNF], timeout: int = 2) -> list[VNF]:
-    global _probe_cache
-    now = time.time()
-    to_probe: list[VNF] = []
-    cache_hits = 0
-
-    for v in vnfs:
-        if not v.host:
-            continue
-        key = _vnf_cache_key(v)
-        cached = _probe_cache.get(key)
-        if cached and cached[0] == "online" and now - cached[1] < _PROBE_CACHE_TTL:
-            v.status = cached[0]
-            cache_hits += 1
-        else:
-            to_probe.append(v)
-
-    if to_probe:
-        with ThreadPoolExecutor(max_workers=min(10, len(to_probe) or 1)) as ex:
-            fut = {ex.submit(_check_vnf, v, timeout): v for v in to_probe}
-            for f in as_completed(fut):
-                v = fut[f]
-                try:
-                    v.status = f.result()
-                except (OSError, TimeoutError):
-                    v.status = "offline"
-                # Atualiza cache (inclusive offline — evita reprovar imediatamente)
-                _probe_cache[_vnf_cache_key(v)] = (v.status, now)
-
-    return vnfs
-
-
-def clear_probe_cache() -> None:
-    """Limpa o cache de probe (útil ao recarregar inventário)."""
-    global _probe_cache
-    _probe_cache.clear()
-
-
-def _normalize_status(raw: str) -> str:
-    """Normaliza string de status para online/offline/unknown."""
-    raw = raw.lower()
-    if raw in ("online", "reachable", "active", "managed"):
-        return "online"
-    if raw in ("offline", "unreachable", "inactive", "unmanaged"):
-        return "offline"
-    return "unknown"
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  INVENTÁRIO LOCAL
-# ═══════════════════════════════════════════════════════════════════════
-def load_vnf_inventory(filename: str = VNF_INVENTORY_FILE) -> list[VNF]:
-    """Carrega inventário de VNFs do arquivo JSON."""
-    path = Path(filename)
-    if not path.exists():
-        return []
-    with _INV_LOCK:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return [VNF.from_dict(d) for d in data.get("vnfs", [])]
-        except Exception as e:
-            log.warning("Erro ao ler %s: %s", filename, e)
-            return []
-
-
-def save_vnf_inventory(vnfs: list[VNF], filename: str = VNF_INVENTORY_FILE) -> None:
-    """Salva inventário de VNFs no arquivo JSON."""
-    data = {"vnfs": [asdict(v) for v in vnfs]}
-    with _INV_LOCK:
-        Path(filename).write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-
-
-
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  TOOLTIP
-# ═══════════════════════════════════════════════════════════════════════
-class ToolTip:
-    """Tooltip flutuante que mostra informações do VNF ao passar o mouse."""
-
-    def __init__(self, canvas, theme: dict) -> None:
-        """Inicializa o tooltip com referência ao canvas e tema."""
-        self._canvas = canvas
-        self._theme  = theme
-        self._win: tk.Toplevel | None = None
-        self._label: tk.Label | None  = None
-        self._after_id: str | None    = None
-
-    def show(self, vnf: VNF, x: int, y: int, admin: bool = False) -> None:
-        """Exibe tooltip com informações do VNF na posição (x, y)."""
-        self.hide()
-        self._win = tk.Toplevel(self._canvas)
-        self._win.wm_overrideredirect(True)
-        self._win.wm_geometry(f"+{x + 12}+{y + 12}")
-        self._win.attributes("-topmost", True)
-        self._win.configure(bg=self._theme["BORDER_NRM"])
-
-        lines = [
-            f"  {vnf.name}",
-            f"  IP: {vnf.host}",
-            f"  Tipo: {vnf.type}",
-            f"  Status: {vnf.status}",
+def _build_tooltip_text(vnf: VNF, admin: bool = False) -> str:
+    """Constrói o texto do tooltip com informações do VNF."""
+    lines = [
+        f"  {vnf.name}",
+        f"  IP: {vnf.host}",
+        f"  Tipo: {vnf.type}",
+        f"  Status: {vnf.status}",
+    ]
+    if admin:
+        lines += [
+            f"  Porta: {vnf.port}",
+            f"  Usuário: {vnf.username or '(padrão .env)'}",
+            f"  Senha: {'****' if vnf.password else '(padrão .env)'}",
+            f"  Chave SSH: {vnf.ssh_key or '(padrão .env)'}",
         ]
-        if admin:
-            lines += [
-                f"  Porta: {vnf.port}",
-                f"  Usuário: {vnf.username or '(padrão .env)'}",
-                f"  Senha: {'****' if vnf.password else '(padrão .env)'}",
-                f"  Chave SSH: {vnf.ssh_key or '(padrão .env)'}",
-            ]
-            if vnf.location:
-                lines.append(f"  Local: {vnf.location}")
-            if vnf.version:
-                lines.append(f"  Versão: {vnf.version}")
+        if vnf.location:
+            lines.append(f"  Local: {vnf.location}")
+        if vnf.version:
+            lines.append(f"  Versão: {vnf.version}")
+    return "\n".join(lines)
 
-        inner = tk.Frame(self._win, bg=self._theme["BG_INPUT"],
-                         highlightthickness=1, highlightbackground=self._theme["BORDER_NRM"])
-        inner.pack(padx=1, pady=1)
-        for line in lines:
-            tk.Label(inner, text=line, bg=self._theme["BG_INPUT"],
-                     fg=self._theme["FG_MAIN"], font=FONT_BODY,
-                     anchor="w", justify="left").pack(fill="x", padx=8, pady=1)
 
-    def hide(self) -> None:
-        """Esconde o tooltip."""
-        if self._win:
-            self._win.destroy()
-            self._win = None
+_TYPE_COLORS: dict[str, str] = {
+    "ROUTER":        C.NEON_CYAN,
+    "SWITCH":        C.NEON_MAG,
+    "FIREWALL":      "#ff4d4d",
+    "LOAD-BALANCER": C.NEON_AMBER,
+    "WAN-ACCEL":     "#00e676",
+    "SDN-CONTROLLER": C.NEON_PURP,
+    "AP":            "#ff9100",
+    "unknown":       C.FG_DIM,
+}
+
+
+def _color_for(vnf: VNF) -> str:
+    return _TYPE_COLORS.get(vnf.type, _TYPE_COLORS["unknown"])
+
+
+def _status_color(vnf: VNF, type_color: str) -> str:
+    return {
+        "online":  type_color,
+        "offline": "#ff4d4d",
+        "unknown": C.NEON_AMBER,
+    }.get(vnf.status, C.NEON_AMBER)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  TOPOLOGY CANVAS (Tkinter)
+#  CUSTOM GRAPHICS ITEM — NÓ VNF
 # ═══════════════════════════════════════════════════════════════════════
-class TopologyCanvas:
+
+class _VNFNodeRect(QGraphicsRectItem):
+    """Rectângulo principal do nó VNF — trata clique e hover visual."""
+
+    def __init__(
+        self,
+        x: float, y: float, w: float, h: float,
+        vnf: VNF,
+        canvas: TopologyCanvas,
+        normal_brush: QBrush,
+        hover_brush: QBrush,
+    ) -> None:
+        super().__init__(x, y, w, h)
+        self._vnf = vnf
+        self._canvas = canvas
+        self._normal_brush = normal_brush
+        self._hover_brush = hover_brush
+        self.setAcceptHoverEvents(True)
+        self.setBrush(normal_brush)
+        self.setData(ITEM_DATA_KEY, vnf.id)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._canvas._on_click(self._vnf)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def hoverEnterEvent(self, event) -> None:  # noqa: N802
+        self.setBrush(self._hover_brush)
+        self._canvas._on_hover_enter(self._vnf)
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event) -> None:  # noqa: N802
+        self.setBrush(self._normal_brush)
+        self._canvas._on_hover_leave()
+        super().hoverLeaveEvent(event)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  CUSTOM GRAPHICS VIEW — trata menu de contexto + resize
+# ═══════════════════════════════════════════════════════════════════════
+
+class _TopoView(QGraphicsView):
+    """QGraphicsView que delega context menu e resize ao canvas."""
+
+    def __init__(self, scene: QGraphicsScene, canvas: TopologyCanvas) -> None:
+        super().__init__(scene)
+        self._canvas = canvas
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802
+        item = self.itemAt(event.pos())
+        if item:
+            vnf_id = item.data(ITEM_DATA_KEY)
+            if vnf_id is not None and vnf_id in self._canvas._vnf_map:
+                self._canvas._on_context_menu(event, self._canvas._vnf_map[vnf_id])
+                return
+        super().contextMenuEvent(event)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._canvas._draw()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  TOPOLOGY CANVAS (Qt)
+# ═══════════════════════════════════════════════════════════════════════
+
+class TopologyCanvas(QWidget):
     """
-    Canvas Tkinter que renderiza nós VNF e permite selecionar um alvo SSH.
-    Suporta tooltip com infos filtradas por admin e menu de contexto.
+    Canvas de topologia baseado em QGraphicsView / QGraphicsScene.
+
+    Renderiza VNFs num grid de 4 colunas com barra SDN no topo.
+    Suporta seleção, tooltip, menu de contexto e destaque hover.
     """
 
     NODE_W, NODE_H = 180, 70
 
     def __init__(
         self,
-        parent,
-        theme: dict,
+        parent: QWidget | None = None,
         on_select: Callable[[VNF], None] | None = None,
         on_edit:   Callable[[VNF], None] | None = None,
         on_delete: Callable[[VNF], None] | None = None,
     ) -> None:
-        """Inicializa o canvas com tema, callbacks e mapa de cores por tipo."""
-        self._theme    = theme
+        super().__init__(parent)
         self._on_select = on_select
-        self._edit_cb:   Callable[[VNF], None] | None = on_edit
-        self._delete_cb: Callable[[VNF], None] | None = on_delete
-        self._vnfs: list[VNF]     = []
+        self._edit_cb = on_edit
+        self._delete_cb = on_delete
+        self._vnfs: list[VNF] = []
         self._selected: VNF | None = None
-        self._positions: dict[str, tuple[float, float]] = {}
         self._access_level: str = "user"
-        self._tooltip = ToolTip(parent, theme)
-        self._type_colors: dict[str, str] = {
-            "ROUTER":        theme.get("NEON_CYAN",  "#00e5ff"),
-            "SWITCH":        theme.get("NEON_MAG",   "#e040fb"),
-            "FIREWALL":      "#ff4d4d",
-            "LOAD-BALANCER": theme.get("NEON_AMBER", "#ffab00"),
-            "WAN-ACCEL":     "#00e676",
-            "SDN-CONTROLLER": theme.get("NEON_PURP", "#7c4dff"),
-            "AP":            "#ff9100",
-            "unknown":       theme.get("FG_DIM",    "#6a6a9a"),
-        }
+        self._vnf_map: dict[str, VNF] = {}
+        self._last_hover_vnf_id: str | None = None
 
-        self._frame  = tk.Frame(parent, bg=theme["BG_BASE"])
-        self._canvas = tk.Canvas(
-            self._frame,
-            bg=theme["BG_BASE"],
-            highlightthickness=0,
-        )
-        self._canvas.pack(fill="both", expand=True)
-        self._canvas.bind("<Configure>", lambda _: self._draw())
+        self.setStyleSheet(f"background: {C.BG_BASE};")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._scene = QGraphicsScene(self)
+        self._scene.setBackgroundBrush(QBrush(QColor(C.BG_BASE)))
+
+        self._view = _TopoView(self._scene, self)
+        self._view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._view.setFrameShape(QFrame.Shape.NoFrame)
+        self._view.setStyleSheet(f"background: {C.BG_BASE}; border: none;")
+        self._view.setMouseTracking(True)
+        layout.addWidget(self._view)
+
+    # ── Interface pública ───────────────────────────────────────────
 
     def set_access(self, level: str) -> None:
-        """Define o nível de acesso (user/admin/tecnico) para controle visual."""
+        """Define o nível de acesso (user / admin / tecnico)."""
         self._access_level = level
-
-    def pack(self, **kw):
-        """Delega pack ao frame interno do canvas."""
-        self._frame.pack(**kw)
-
-    def grid(self, **kw):
-        """Delega grid ao frame interno do canvas."""
-        self._frame.grid(**kw)
+        # tooltip text depende do nível → redesenha
+        self._draw()
 
     def update_vnfs(self, vnfs: list[VNF]) -> None:
-        """Atualiza a lista de VNFs e redesenha o canvas."""
+        """Atualiza a lista de VNFs e redesenha."""
         self._vnfs = vnfs
+        self._vnf_map = {v.id: v for v in vnfs}
         self._draw()
 
     def get_selected(self) -> VNF | None:
@@ -315,13 +228,30 @@ class TopologyCanvas:
         return self._selected
 
     def deselect(self) -> None:
-        """Limpa a seleção atual e redesenha."""
+        """Limpa a seleção e redesenha."""
         self._selected = None
         self._draw()
 
-    def _color_for(self, vnf: VNF) -> str:
-        """Retorna a cor associada ao tipo do VNF."""
-        return self._type_colors.get(vnf.type, self._type_colors.get("unknown") or "")
+    # ── Drawing ─────────────────────────────────────────────────────
+
+    def _draw(self) -> None:
+        """Redesenha todo o canvas: barra SDN + nós VNF."""
+        self._scene.clear()
+        self._vnf_map = {v.id: v for v in self._vnfs}
+
+        # Atualiza cor de fundo (pode ter mudado com o tema)
+        self._scene.setBackgroundBrush(QBrush(QColor(C.BG_BASE)))
+
+        if not self._vnfs:
+            self._draw_empty_state()
+            return
+
+        positions = self._layout()
+
+        self._draw_sdn_bar()
+        for vnf in self._vnfs:
+            x, y = positions.get(vnf.id, (0, 0))
+            self._draw_vnf_node(vnf, x, y)
 
     def _layout(self) -> dict[str, tuple[float, float]]:
         """Calcula posições dos nós VNF em grid de 4 colunas."""
@@ -330,13 +260,12 @@ class TopologyCanvas:
         if n == 0:
             return positions
 
-        w = self._canvas.winfo_width() or 800
-
+        w = self._view.viewport().width() or 800
         cols = 4
         pad_x, pad_y = 24, 24
         grid_w = cols * self.NODE_W + (cols - 1) * pad_x
         start_x = (w - grid_w) / 2 + self.NODE_W / 2
-        start_y = 100
+        start_y = 100  # abaixo da SDN bar
 
         for i, vnf in enumerate(self._vnfs):
             col = i % cols
@@ -345,175 +274,199 @@ class TopologyCanvas:
             y = start_y + row * (self.NODE_H + pad_y)
             positions[vnf.id] = (x, y)
 
+        # Define scene rect para cobrir todos os itens
+        max_y = start_y + (n // cols) * (self.NODE_H + pad_y) + self.NODE_H + 40
+        self._scene.setSceneRect(0, 0, max(w, 800), max(float(max_y), 400.0))
+
         return positions
 
     def _draw_empty_state(self) -> None:
-        """Desenha mensagem de estado vazio no canvas."""
-        c = self._canvas
-        w = c.winfo_width() or 800
-        h = c.winfo_height() or 400
-        c.create_text(w // 2, h // 2,
-                      text="Nenhum dispositivo cadastrado.\n"
-                           "Clique em 'Cadastrar Dispositivo' para adicionar.",
-                      fill=self._theme["FG_DIM"], font=FONT_LARGE,
-                      justify="center")
+        """Desenha mensagem de estado vazio."""
+        w = self._view.viewport().width() or 800
+        h = self._view.viewport().height() or 400
+        self._scene.setSceneRect(0, 0, w, h)
+
+        txt = QGraphicsSimpleTextItem(
+            "Nenhum dispositivo cadastrado.\n"
+            "Clique em 'Cadastrar Dispositivo' para adicionar."
+        )
+        txt.setBrush(QBrush(QColor(C.FG_DIM)))
+        txt.setFont(_to_qfont(C.FONT_LARGE))
+        br = txt.boundingRect()
+        txt.setPos(w / 2 - br.width() / 2, h / 2 - br.height() / 2)
+        self._scene.addItem(txt)
 
     def _draw_sdn_bar(self) -> None:
-        """Desenha a barra SDN roxa com contador de dispositivos."""
-        c = self._canvas
-        t = self._theme
-        cw = c.winfo_width() or 800
-
+        """Desenha a barra SDN com contador de dispositivos."""
+        cw = self._view.viewport().width() or 800
         bar_w = max(cw - 40, 200)
         bar_h = 40
         bar_x = (cw - bar_w) / 2
         bar_y = 16
 
-        c.create_rectangle(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h,
-                           fill=t["BG_INPUT"], outline=t["NEON_PURP"], width=2)
-        c.create_text(bar_x + 20, bar_y + bar_h // 2,
-                      text="⬡", fill=t["NEON_PURP"],
-                      font=FONT_H1, anchor="w")
-        c.create_text(bar_x + 44, bar_y + bar_h // 2,
-                      text="SDN CONTROLLER", fill=t["NEON_PURP"],
-                      font=FONT_LARGE_B, anchor="w")
-        c.create_text(bar_x + bar_w - 20, bar_y + bar_h // 2,
-                      text=f"{len(self._vnfs)} dispositivo(s) gerenciado(s)",
-                      fill=t["FG_DIM"], font=FONT_BODY, anchor="e")
+        # Fundo
+        bg_rect = QGraphicsRectItem(bar_x, bar_y, bar_w, bar_h)
+        bg_rect.setBrush(QBrush(QColor(C.BG_INPUT)))
+        bg_rect.setPen(QPen(QColor(C.NEON_PURP), 2))
+        self._scene.addItem(bg_rect)
 
-    def _draw_vnf_node(self, vnf: VNF, x: float, y: float, admin: bool = False) -> None:
-        """Desenha um nó VNF no canvas com cor, status e bindings de evento."""
-        c = self._canvas
-        t = self._theme
+        # Símbolo
+        sym = QGraphicsSimpleTextItem("\u2b61")  # ⬡
+        sym.setBrush(QBrush(QColor(C.NEON_PURP)))
+        sym.setFont(_to_qfont(C.FONT_H1))
+        sr = sym.boundingRect()
+        sym.setPos(bar_x + 20, bar_y + bar_h / 2 - sr.height() / 2)
+        self._scene.addItem(sym)
+
+        # Label
+        lbl = QGraphicsSimpleTextItem("SDN CONTROLLER")
+        lbl.setBrush(QBrush(QColor(C.NEON_PURP)))
+        lbl.setFont(_to_qfont(C.FONT_LARGE_B))
+        lr = lbl.boundingRect()
+        lbl.setPos(bar_x + 44, bar_y + bar_h / 2 - lr.height() / 2)
+        self._scene.addItem(lbl)
+
+        # Contador
+        cnt = QGraphicsSimpleTextItem(
+            f"{len(self._vnfs)} dispositivo(s) gerenciado(s)")
+        cnt.setBrush(QBrush(QColor(C.FG_DIM)))
+        cnt.setFont(_to_qfont(C.FONT_BODY))
+        cr = cnt.boundingRect()
+        cnt.setPos(bar_x + bar_w - 20 - cr.width(),
+                   bar_y + bar_h / 2 - cr.height() / 2)
+        self._scene.addItem(cnt)
+
+    def _draw_vnf_node(self, vnf: VNF, x: float, y: float) -> None:
+        """Desenha um nó VNF no scene com cor, status e tooltip."""
         nw, nh = self.NODE_W, self.NODE_H
-        is_selected = self._selected and self._selected.id == vnf.id
+        is_selected = (self._selected is not None
+                       and self._selected.id == vnf.id)
+        admin = self._access_level in ("admin", "tecnico")
 
-        type_color = self._color_for(vnf)
-        status_color = {
-            "online":  type_color,
-            "offline": "#ff4d4d",
-            "unknown": t["NEON_AMBER"],
-        }.get(vnf.status, t["NEON_AMBER"])
+        type_color_str = _color_for(vnf)
+        st_color_str = _status_color(vnf, type_color_str)
+        st_color_q = QColor(st_color_str)
 
         border_w = 2
-        fill_col = t["BG_CARD"]
+        fill_col = QColor(C.BG_CARD)
+        hover_fill = QColor(C.BG_INPUT)
 
         if is_selected:
-            c.create_rectangle(
-                x - nw // 2 - 6, y - nh // 2 - 6,
-                x + nw // 2 + 6, y + nh // 2 + 6,
-                fill="", outline=status_color, width=1, dash=(3, 3),
-                tags=("node", vnf.id),
+            # Anel de seleção (tracejado)
+            sel = QGraphicsRectItem(
+                x - nw / 2 - 6, y - nh / 2 - 6,
+                nw + 12, nh + 12,
             )
-            fill_col = t["BG_INPUT"]
+            sel.setPen(QPen(st_color_q, 1, Qt.PenStyle.DashLine))
+            sel.setBrush(Qt.BrushStyle.NoBrush)
+            sel.setData(ITEM_DATA_KEY, vnf.id)
+            self._scene.addItem(sel)
+            fill_col = QColor(C.BG_INPUT)
             border_w = 3
 
-        rect = c.create_rectangle(
-            x - nw // 2, y - nh // 2,
-            x + nw // 2, y + nh // 2,
-            fill=fill_col, outline=status_color, width=border_w,
-            tags=("node", vnf.id),
+        # Rect principal (com hover)
+        rect = _VNFNodeRect(
+            x - nw / 2, y - nh / 2, nw, nh,
+            vnf, self,
+            QBrush(fill_col), QBrush(hover_fill),
         )
+        rect.setPen(QPen(st_color_q, border_w))
+        self._scene.addItem(rect)
 
-        c.create_oval(x - nw // 2 + 4, y - nh // 2 + 4,
-                      x - nw // 2 + 14, y - nh // 2 + 14,
-                      fill=status_color, outline="", tags=("node", vnf.id))
+        # Tooltip
+        rect.setToolTip(_build_tooltip_text(vnf, admin=admin))
 
-        c.create_text(
-            x, y - 18, text=vnf.label(),
-            fill=status_color, font=FONT_MEDIUM_B, anchor="center",
-            tags=("node", vnf.id),
-        )
+        # Status dot (canto superior esquerdo)
+        dot = QGraphicsEllipseItem(x - nw / 2 + 4, y - nh / 2 + 4, 10, 10)
+        dot.setBrush(QBrush(st_color_q))
+        dot.setPen(Qt.PenStyle.NoPen)
+        dot.setData(ITEM_DATA_KEY, vnf.id)
+        self._scene.addItem(dot)
 
+        # Nome (centro, acima do meio)
+        name_item = QGraphicsSimpleTextItem(vnf.label())
+        name_item.setBrush(QBrush(st_color_q))
+        name_item.setFont(_to_qfont(C.FONT_MEDIUM_B))
+        nr = name_item.boundingRect()
+        name_item.setPos(x - nr.width() / 2, y - 18 - nr.height() / 2)
+        name_item.setData(ITEM_DATA_KEY, vnf.id)
+        self._scene.addItem(name_item)
+
+        # Endereço (centro, abaixo do meio)
         addr = vnf.host if not admin else vnf.address()
-        c.create_text(
-            x, y + 2, text=addr,
-            fill=t["FG_DIM"], font=FONT_BODY, anchor="center",
-            tags=("node", vnf.id),
-        )
+        addr_item = QGraphicsSimpleTextItem(addr)
+        addr_item.setBrush(QBrush(QColor(C.FG_DIM)))
+        addr_item.setFont(_to_qfont(C.FONT_BODY))
+        ar = addr_item.boundingRect()
+        addr_item.setPos(x - ar.width() / 2, y + 2 - ar.height() / 2)
+        addr_item.setData(ITEM_DATA_KEY, vnf.id)
+        self._scene.addItem(addr_item)
 
+        # Label de tipo (canto inferior direito)
         type_label = vnf.type.replace("-", "\n")
-        c.create_text(
-            x + nw // 2 - 8, y + nh // 2 - 8,
-            text=type_label, fill=type_color,
-            font=FONT_XSMALL, anchor="se",
-            tags=("node", vnf.id),
+        type_item = QGraphicsSimpleTextItem(type_label)
+        type_item.setBrush(QBrush(QColor(type_color_str)))
+        type_item.setFont(_to_qfont(C.FONT_XSMALL))
+        tr = type_item.boundingRect()
+        type_item.setPos(
+            x + nw / 2 - 8 - tr.width(),
+            y + nh / 2 - 8 - tr.height(),
         )
+        type_item.setData(ITEM_DATA_KEY, vnf.id)
+        self._scene.addItem(type_item)
 
-        for item in (rect,):
-            c.tag_bind(item, "<Button-1>",
-                       lambda e, v=vnf: self._on_click(v))
-            c.tag_bind(item, "<Enter>",
-                       lambda e, v=vnf, it=rect, col=status_color:
-                           self._on_enter(e, v, it, col))
-            c.tag_bind(item, "<Leave>",
-                       lambda e, it=rect, fil=fill_col:
-                           self._on_leave(e, it, fil))
-            c.tag_bind(item, "<Button-3>",
-                       lambda e, v=vnf: self._on_context_menu(e, v))
-
-    def _draw(self) -> None:
-        """Redesenha todo o canvas: barra SDN e nós VNF."""
-        self._canvas.delete("all")
-
-        if not self._vnfs:
-            self._draw_empty_state()
-            return
-
-        self._positions = self._layout()
-
-        self._draw_sdn_bar()
-
-        for vnf in self._vnfs:
-            x, y = self._positions[vnf.id]
-            self._draw_vnf_node(vnf, x, y, admin=self._access_level in ("admin", "tecnico"))
-
-        if self._tooltip:
-            self._tooltip.hide()
+    # ── Event handlers ───────────────────────────────────────────────
 
     def _on_click(self, vnf: VNF) -> None:
-        """Seleciona o VNF clicado e dispara callback on_select."""
+        """Seleciona o VNF e chama o callback on_select."""
         self._selected = vnf
         self._draw()
         if self._on_select:
             self._on_select(vnf)
 
-    def _on_enter(self, event, vnf: VNF, item_id: int, color: str) -> None:
-        """Destaca o nó e exibe tooltip ao passar o mouse."""
-        self._canvas.itemconfig(item_id, fill=self._theme["BG_INPUT"])
-        if self._tooltip:
-            x = self._canvas.winfo_pointerx()
-            y = self._canvas.winfo_pointery()
-            self._tooltip.show(vnf, x, y, admin=self._access_level in ("admin", "tecnico"))
+    def _on_hover_enter(self, vnf: VNF) -> None:
+        """Registra o VNF sob o mouse (tooltip é nativo do Qt)."""
+        self._last_hover_vnf_id = vnf.id
 
-    def _on_leave(self, event, item_id: int, fill: str) -> None:
-        """Restaura a cor do nó e esconde tooltip ao sair com o mouse."""
-        self._canvas.itemconfig(item_id, fill=fill)
-        if self._tooltip:
-            self._tooltip.hide()
+    def _on_hover_leave(self) -> None:
+        """Limpa o registro de hover."""
+        self._last_hover_vnf_id = None
 
     def _on_context_menu(self, event, vnf: VNF) -> None:
         """Exibe menu de contexto com editar/excluir (admin/tecnico)."""
-        menu = tk.Menu(self._canvas, tearoff=0, bg=self._theme["BG_INPUT"],
-                       fg=self._theme["FG_MAIN"], font=FONT_MEDIUM,
-                       activebackground=self._theme["NEON_PURP"],
-                       activeforeground=self._theme["BG_BASE"])
         can_edit = self._access_level in ("admin", "tecnico")
-        if can_edit:
-            menu.add_command(label="✏️  Editar Dispositivo",
-                             command=lambda: self._on_edit(vnf))
-            menu.add_command(label="🗑  Excluir Dispositivo",
-                             command=lambda: self._on_delete(vnf))
-            menu.post(event.x_root, event.y_root)
+        if not can_edit:
+            return
 
-    def _on_edit(self, vnf: VNF) -> None:
-        """Dispara callback de edição para o VNF."""
-        if self._edit_cb:
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background: {C.BG_INPUT}; color: {C.FG_MAIN};
+                border: 1px solid {C.BORDER_NRM};
+                font: 11px 'Inter';
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 6px 20px;
+            }}
+            QMenu::item:selected {{
+                background: {C.NEON_PURP}; color: {C.BG_BASE};
+            }}
+        """)
+        edit_action = menu.addAction("\u270f\ufe0f  Editar Dispositivo")
+        delete_action = menu.addAction("\ud83d\uddd1  Excluir Dispositivo")
+
+        # Converte coordenadas do evento para global
+        if hasattr(event, "globalPos"):
+            gpos = event.globalPos()
+        elif hasattr(event, "screenPos"):
+            gpos = event.screenPos().toPoint()
+        else:
+            gpos = self.mapToGlobal(self._view.mapFromScene(
+                event.scenePos() if hasattr(event, "scenePos") else QPoint(0, 0)))
+
+        action = menu.exec(gpos)
+        if action == edit_action and self._edit_cb:
             self._edit_cb(vnf)
-
-    def _on_delete(self, vnf: VNF) -> None:
-        """Dispara callback de exclusão para o VNF."""
-        if self._delete_cb:
+        elif action == delete_action and self._delete_cb:
             self._delete_cb(vnf)
-
-

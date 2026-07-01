@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agents import AgentItem, AgentResult
+from huawei_manager.agents import AgentItem, AgentResult
 
 # ─── Agent dataclasses ────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ class TestAgentResult:
 
 class TestDeadCodeScan:
     def test_scan_empty_project(self, tmp_path: Path) -> None:
-        from agents.scans.dead_code import scan
+        from huawei_manager.agents.scans.dead_code import scan
         result = scan(tmp_path)
         assert isinstance(result, AgentResult)
         assert result.name == "dead_code"
@@ -53,7 +53,7 @@ class TestDeadCodeScan:
         (src / "clean.py").write_text(
             "def used() -> int:\n    return 1\n\nx = used()\n"
         )
-        from agents.scans.dead_code import scan
+        from huawei_manager.agents.scans.dead_code import scan
         result = scan(tmp_path)
         assert len(result.items) == 0
 
@@ -65,7 +65,7 @@ class TestDeadCodeScan:
             "def _truly_unused() -> int:\n    return 1\n\ndef _used_only() -> int:\n    return 42\n"
             "result = _used_only()\n"
         )
-        from agents.scans.dead_code import scan
+        from huawei_manager.agents.scans.dead_code import scan
         result = scan(tmp_path)
         names = {i.message.split("'")[1] for i in result.items}
         assert "_truly_unused" in names
@@ -81,7 +81,7 @@ class TestDeadCodeScan:
         (src / "app.py").write_text(
             "from mixin_a import MixinA\nclass App(MixinA):\n    def run(self) -> None:\n        self._helper()\n"
         )
-        from agents.scans.dead_code import scan
+        from huawei_manager.agents.scans.dead_code import scan
         result = scan(tmp_path)
         names = {i.message.split("'")[1] for i in result.items}
         assert "_helper" not in names, "_helper usado via self. noutro ficheiro"
@@ -94,7 +94,7 @@ class TestDeadCodeScan:
             "class TestFoo:\n    def setup_method(self) -> None: pass\n"
             "    def teardown_method(self) -> None: pass\n"
         )
-        from agents.scans.dead_code import scan
+        from huawei_manager.agents.scans.dead_code import scan
         result = scan(tmp_path)
         names = {i.message.split("'")[1] for i in result.items}
         assert "setup_method" not in names
@@ -105,7 +105,7 @@ class TestDeadCodeScan:
 
 class TestCrossRefScan:
     def test_no_constants_file(self, tmp_path: Path) -> None:
-        from agents.scans.cross_ref import scan
+        from huawei_manager.agents.scans.cross_ref import scan
         result = scan(tmp_path)
         assert result.status == "error"
 
@@ -118,7 +118,7 @@ class TestCrossRefScan:
         (src / "app.py").write_text(
             "from constants import NEON_CYAN\nx = NEON_CYAN\n"
         )
-        from agents.scans.cross_ref import scan
+        from huawei_manager.agents.scans.cross_ref import scan
         result = scan(tmp_path)
         used_names = {i.message.split("'")[1] for i in result.items}
         assert "NEON_CYAN" not in used_names
@@ -132,7 +132,7 @@ class TestCrossRefScan:
         (src / "app.py").write_text(
             "from constants import USED\nx = USED\n"
         )
-        from agents.scans.cross_ref import scan
+        from huawei_manager.agents.scans.cross_ref import scan
         result = scan(tmp_path)
         used_names = {i.message.split("'")[1] for i in result.items}
         assert "UNUSED" in used_names
@@ -143,7 +143,7 @@ class TestCrossRefScan:
 
 class TestDepsScan:
     def test_no_pyproject(self, tmp_path: Path) -> None:
-        from agents.scans.deps import scan
+        from huawei_manager.agents.scans.deps import scan
         result = scan(tmp_path)
         assert isinstance(result, AgentResult)
 
@@ -155,7 +155,7 @@ class TestDepsScan:
         (tmp_path / "pyproject.toml").write_text(
             '[project]\ndependencies = []\n'
         )
-        from agents.scans.deps import scan
+        from huawei_manager.agents.scans.deps import scan
         result = scan(tmp_path)
         assert result.status == "ok"
 
@@ -166,7 +166,7 @@ class TestDepsScan:
         (tmp_path / "pyproject.toml").write_text(
             '[project]\ndependencies = []\n'
         )
-        from agents.scans.deps import scan
+        from huawei_manager.agents.scans.deps import scan
         result = scan(tmp_path)
         assert len(result.items) > 0
         assert "requests" in result.items[0].message
@@ -178,7 +178,7 @@ class TestSecurityScan:
     def test_clean_project(self, tmp_path: Path) -> None:
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "main.py").write_text("x = 1\n")
-        from agents.scans.security import scan
+        from huawei_manager.agents.scans.security import scan
         result = scan(tmp_path)
         assert result.status == "ok"
 
@@ -186,7 +186,7 @@ class TestSecurityScan:
         (tmp_path / "secret.py").write_text(
             'password = "supersecret123"\n'
         )
-        from agents.scans.security import scan
+        from huawei_manager.agents.scans.security import scan
         result = scan(tmp_path)
         assert len(result.items) > 0
         assert result.items[0].severity == "error"
@@ -196,7 +196,7 @@ class TestSecurityScan:
         (tmp_path / ".env").write_text(
             'ADMIN_PASSWORD="lab123"\n'
         )
-        from agents.scans.security import scan
+        from huawei_manager.agents.scans.security import scan
         result = scan(tmp_path)
         assert len(result.items) == 0
 
@@ -206,7 +206,7 @@ class TestSecurityScan:
 class TestRunner:
     def test_run_all_returns_results(self) -> None:
 
-        from agents.runner import run_all
+        from huawei_manager.agents.runner import run_all
         results = run_all()
         assert len(results) >= 4
         names = {r.name for r in results}
@@ -214,7 +214,7 @@ class TestRunner:
             assert expected in names
 
     def test_run_all_items_are_agent_results(self) -> None:
-        from agents.runner import run_all
+        from huawei_manager.agents.runner import run_all
         results = run_all()
         for r in results:
             assert isinstance(r, AgentResult)

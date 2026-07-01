@@ -10,7 +10,7 @@ import ast
 import logging
 from pathlib import Path
 
-from agents import AgentItem, AgentResult
+from huawei_manager.agents import AgentItem, AgentResult
 
 log = logging.getLogger("huawei.agents.dead_code")
 

@@ -3,8 +3,6 @@ from huawei_manager.constants import (
     CMD_TEMPLATES,
     FONT_BODY,
     FONT_H1,
-    FONT_HERO_B,
-    FONT_SMALL,
     THEME,
 )
 from huawei_manager.services import VNF_CATEGORIES, VNF_TYPES
@@ -25,7 +23,7 @@ class TestFonts:
         assert len(FONT_BODY) == 2
 
     def test_font_sizes_are_positive(self):
-        for f in [FONT_SMALL, FONT_BODY, FONT_H1, FONT_HERO_B]:
+        for f in [FONT_BODY, FONT_H1]:
             assert f[1] > 0
 
 

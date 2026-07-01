@@ -18,41 +18,20 @@ FG_CODE    = "#c8c8ff"
 BORDER_NRM = "#2a2a4a"
 
 # ─── FONTES — UI (Proporcional) ──────────────────────────────────────
-# Inter é a primary; Segoe UI fallback no Windows; TkDefaultFont fallback final
 _UI = "Inter"
-_UI_FALLBACK = "Segoe UI"
 
-FONT_UI_XSMALL  = (_UI, 9)             # labels de categoria, badges
-FONT_UI_SMALL   = (_UI, 10)            # labels pequenos, footer
-FONT_UI_BODY    = (_UI, 11)            # corpo da UI, labels
 FONT_UI_MEDIUM  = (_UI, 12)            # sidebar, botões, inputs
-FONT_UI_LARGE   = (_UI, 13)            # destaque, seções
-FONT_UI_XLARGE  = (_UI, 14)            # admin dialog, títulos
-FONT_UI_H1      = (_UI, 16)            # status dot / subtítulos
-FONT_UI_HERO    = (_UI, 18)            # header "HUAWEI" "MANAGER"
-
-FONT_UI_SMALL_B  = (_UI, 10, "bold")
 FONT_UI_MEDIUM_B = (_UI, 12, "bold")
-FONT_UI_LARGE_B  = (_UI, 13, "bold")
-FONT_UI_XLARGE_B = (_UI, 14, "bold")
-FONT_UI_H2_B     = (_UI, 15, "bold")
-FONT_UI_HERO_B   = (_UI, 18, "bold")
 
-# ─── FONTES — Código (Monospace, mantidas) ──────────────────────────
-FONT_XSMALL = ("Consolas", 9)     # rodapés, endereços (era 7)
-FONT_SMALL  = ("Consolas", 10)    # labels pequenos, badges (era 8)
-FONT_BODY   = ("Consolas", 11)    # corpo da UI, labels (era 9)
-FONT_MEDIUM = ("Consolas", 12)    # sidebar, botões, inputs (era 10)
-FONT_LARGE  = ("Consolas", 13)    # código / output (era 11)
-FONT_XLARGE = ("Consolas", 14)    # destaque / admin dialog (era 12)
-FONT_H1     = ("Consolas", 16)    # status dot / subtítulos (era 14)
+# ─── FONTES — Código (Monospace) ───────────────────────────────────
+# Ainda usadas por topology.py (_VNFNodeRect, SDN bar, etc.)
+FONT_XSMALL  = ("Consolas", 9)     # type_item no canvas
+FONT_BODY    = ("Consolas", 11)    # SDN bar count, address items
+FONT_LARGE   = ("Consolas", 13)    # código / output principal
+FONT_H1      = ("Consolas", 16)    # SDN bar symbol
 
-FONT_SMALL_B  = ("Consolas", 10, "bold")   # badges bold
-FONT_MEDIUM_B = ("Consolas", 12, "bold")   # botões bold
-FONT_LARGE_B  = ("Consolas", 13, "bold")   # código bold
-FONT_XLARGE_B = ("Consolas", 14, "bold")   # destaque bold
-FONT_H2_B     = ("Consolas", 15, "bold")   # título página bold
-FONT_HERO_B   = ("Consolas", 18, "bold")   # header bold
+FONT_MEDIUM_B = ("Consolas", 12, "bold")   # name_item no canvas
+FONT_LARGE_B  = ("Consolas", 13, "bold")   # SDN bar label
 
 THEME = {
     "BG_BASE":    BG_BASE,    "BG_CARD":    BG_CARD,

@@ -1,307 +1,24 @@
-#!/usr/bin/env python3
-"""
-services.py — Catálogo de Serviços por Tipo de VNF
-====================================================
-Define todos os serviços disponíveis para cada tipo de dispositivo,
-com suporte a execução via Netmiko (CLI) ou modo mock.
+# services.py — Lógica de execução de serviços VNF
+# ==================================================
+# Contém funções de busca, parse e execução de serviços.
+# Dados do catálogo (ServiceDef, SERVICE_REGISTRY, VNF_TYPES) em services_data.py.
 
-Uso:
-    from services import get_services_for, execute_service
-    svcs = get_services_for("ROUTER", category="routing")
-    result = execute_service(svcs[0], session_type="cli", session=netmiko_connection)
-"""
 from __future__ import annotations
 
 import io
 import logging
 import re
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from huawei_manager.services_data import (
+    SERVICE_REGISTRY,
+    VNF_CATEGORIES,  # noqa: F401 — re-exportado para backward compat
+    VNF_TYPES,  # noqa: F401 — re-exportado para backward compat
+    ServiceDef,
+)
 from huawei_manager.utils import clean_output
 
 log = logging.getLogger("huawei.services")
-
-# ── Tipos suportados ──────────────────────────────────────────────────
-VNF_TYPES = {
-    "ROUTER":         "Roteador",
-    "SWITCH":         "Switch",
-    "FIREWALL":       "Firewall",
-    "LOAD-BALANCER":  "Balanceador de Carga",
-    "WAN-ACCEL":      "Acelerador WAN",
-    "AP":             "Access Point / Controladora WiFi",
-}
-
-VNF_CATEGORIES = {
-    "ROUTER": [
-        "routing", "bgp", "ospf", "isis", "mpls", "interface",
-        "vrf", "qos", "acl", "nat", "system", "security", "troubleshoot",
-        "config-nat", "config-interface", "config-acl",
-        "config-bgp", "config-ospf", "config-vlan",
-    ],
-    "SWITCH": [
-        "vlan", "stp", "lacp", "mac", "lldp", "poe", "igmp",
-        "dhcp", "interface", "security", "system", "troubleshoot",
-    ],
-    "FIREWALL": [
-        "policy", "nat", "vpn", "ips", "antivirus", "url-filter",
-        "zone", "ha", "system", "troubleshoot",
-    ],
-    "LOAD-BALANCER": [
-        "slb", "health", "statistics", "system", "troubleshoot",
-    ],
-    "WAN-ACCEL": [
-        "optimization", "statistics", "system", "troubleshoot",
-    ],
-    "AP": [
-        "wireless", "client", "radio", "system", "troubleshoot",
-    ],
-}
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  SERVICE DATACLASS
-# ═══════════════════════════════════════════════════════════════════════
-@dataclass
-class ServiceDef:
-    """Define um serviço executável no catálogo: ID, nome, comandos CLI e metadados."""
-    id: str
-    name: str
-    description: str
-    category: str
-    vnf_types: list[str]
-    cli_commands: list[str] = field(default_factory=list)
-    yang_filter: str | None = None
-    yang_source: str = "get"
-    output_format: str = "text"
-    requires_privilege: bool = False
-    config_mode: bool = False
-
-    def cli(self) -> str:
-        """Retorna os comandos CLI concatenados por ponto-e-vírgula."""
-        return "; ".join(self.cli_commands)
-
-
-# ── factory helper ──────────────────────────────────────────────────
-def _svc(id_, name, desc, cat, types, cmds=None, config=False):
-    """Factory que cria um ServiceDef com fallback de comandos para a descrição."""
-    return ServiceDef(
-        id=id_, name=name, description=desc,
-        category=cat, vnf_types=types,
-        cli_commands=cmds or [desc],
-        config_mode=config,
-    )
-
-# VNF type shorthands para evitar linhas longas no catálogo
-_T_ALL = ['ROUTER', 'SWITCH', 'FIREWALL', 'LOAD-BALANCER', 'WAN-ACCEL', 'AP']
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  CATÁLOGO COMPLETO DE SERVIÇOS
-# ═══════════════════════════════════════════════════════════════════════
-
-SERVICE_REGISTRY: list[ServiceDef] = [
-    _svc('router-routing-table', 'Tabela de Roteamento', 'display ip routing-table', 'routing', ['ROUTER']),
-    _svc('router-routing-table-verbose', 'Roteamento (detalhado)',
-         'display ip routing-table verbose', 'routing', ['ROUTER']),
-    _svc('router-routing-table-stats', 'Estatísticas de Roteamento',
-         'display ip routing-table statistics', 'routing', ['ROUTER']),
-    _svc('router-fib', 'Tabela FIB', 'display fib', 'routing', ['ROUTER']),
-    _svc('router-route-policy', 'Route Policy', 'display route-policy', 'routing', ['ROUTER']),
-    _svc('router-bgp-summary', 'BGP Sumário', 'display bgp peer', 'bgp', ['ROUTER']),
-    _svc('router-bgp-routes', 'BGP Rotas', 'display bgp routing-table', 'bgp', ['ROUTER']),
-    _svc('router-bgp-community', 'BGP Community', 'display bgp routing-table community', 'bgp', ['ROUTER']),
-    _svc('router-bgp-vpnv4', 'BGP VPNv4', 'display bgp vpnv4 all peer', 'bgp', ['ROUTER']),
-    _svc('router-bgp-vpnv6', 'BGP VPNv6', 'display bgp vpnv6 all peer', 'bgp', ['ROUTER']),
-    _svc('router-ospf-peer', 'OSPF Vizinhos', 'display ospf peer', 'ospf', ['ROUTER']),
-    _svc('router-ospf-routes', 'OSPF Rotas', 'display ospf routing-table', 'ospf', ['ROUTER']),
-    _svc('router-ospf-lsdb', 'OSPF LSDB', 'display ospf lsdb', 'ospf', ['ROUTER']),
-    _svc('router-ospf-interface', 'OSPF Interfaces', 'display ospf interface', 'ospf', ['ROUTER']),
-    _svc('router-ospf-error', 'OSPF Erros / Contadores', 'display ospf error', 'ospf', ['ROUTER']),
-    _svc('router-isis-peer', 'IS-IS Vizinhos', 'display isis peer', 'isis', ['ROUTER']),
-    _svc('router-isis-lsdb', 'IS-IS LSDB', 'display isis lsdb', 'isis', ['ROUTER']),
-    _svc('router-isis-route', 'IS-IS Rotas', 'display isis routing-table', 'isis', ['ROUTER']),
-    _svc('router-mpls-ldp', 'MPLS LDP Sessões', 'display mpls ldp peer', 'mpls', ['ROUTER']),
-    _svc('router-mpls-lsp', 'MPLS LSP', 'display mpls lsp', 'mpls', ['ROUTER']),
-    _svc('router-mpls-te', 'MPLS TE Tunnel', 'display mpls te tunnel', 'mpls', ['ROUTER']),
-    _svc('router-mpls-vpn', 'MPLS L3VPN', 'display ip vpn-instance', 'mpls', ['ROUTER']),
-    _svc('router-interface-brief', 'Sumário de Interfaces', 'display interface brief', 'interface', ['ROUTER']),
-    _svc('router-interface-desc', 'Descrição de Interfaces', 'display interface description', 'interface', ['ROUTER']),
-    _svc('router-interface-ip', 'IP de Interfaces', 'display ip interface brief', 'interface', ['ROUTER']),
-    _svc('router-interface-stats', 'Estatísticas de Interface', 'display counters interface', 'interface', ['ROUTER']),
-    _svc('router-vrf', 'VRF Instâncias', 'display ip vpn-instance', 'vrf', ['ROUTER']),
-    _svc('router-vrf-route', 'Roteamento por VRF', 'display ip routing-table vpn-instance', 'vrf', ['ROUTER']),
-    _svc('router-vrf-brief', 'VRF Resumo', 'display ip vpn-instance brief', 'vrf', ['ROUTER']),
-    _svc('router-qos-policy', 'QoS Policy', 'display qos policy', 'qos', ['ROUTER']),
-    _svc('router-qos-queue', 'QoS Filas', 'display qos queue statistics', 'qos', ['ROUTER']),
-    _svc('router-qos-cir', 'QoS CIR/PIR', 'display qos car', 'qos', ['ROUTER']),
-    _svc('router-acl', 'ACLs', 'display acl all', 'acl', ['ROUTER']),
-    _svc('router-nat-session', 'Sessões NAT', 'display nat session', 'nat', ['ROUTER']),
-    _svc('router-nat-rule', 'Regras NAT', 'display nat outbound', 'nat', ['ROUTER']),
-    _svc('router-nat-server', 'NAT Server', 'display nat server', 'nat', ['ROUTER']),
-    _svc('router-vrrp', 'VRRP Status', 'display vrrp', 'security', ['ROUTER']),
-    _svc('router-bfd', 'BFD Sessões', 'display bfd session', 'security', ['ROUTER']),
-    _svc('router-nqa', 'NQA Resultados', 'display nqa results', 'troubleshoot', ['ROUTER']),
-    _svc('router-ping', 'Ping', 'ping diagnóstico', 'troubleshoot', ['ROUTER'],
-         cmds=['ping 10.0.0.1']),
-    _svc('router-tracert', 'Traceroute', 'tracert diagnóstico', 'troubleshoot', ['ROUTER'],
-         cmds=['tracert 10.0.0.1']),
-    _svc('router-log', 'Log do Sistema', 'display logbuffer', 'troubleshoot', ['ROUTER']),
-    _svc('router-debug', 'Debug Info', 'display debugging', 'troubleshoot', ['ROUTER']),
-    _svc('router-config-nat-outbound', 'NAT Outbound',
-         'nat outbound <acl> address-group <id>', 'config-nat', ['ROUTER'],
-         cmds=['nat outbound 2000 address-group 1'],
-         config=True),
-    _svc('router-config-nat-inbound', 'NAT Inbound', 'nat inbound <acl> address-group <id>', 'config-nat', ['ROUTER'],
-         cmds=['nat inbound 3000 address-group 1'],
-         config=True),
-    _svc('router-config-nat-server', 'NAT Server',
-         'nat server protocol tcp global <ip> <port> inside <ip> <port>', 'config-nat', ['ROUTER'],
-         cmds=['nat server protocol tcp global 10.0.0.1 80 inside 192.168.1.10 80'],
-         config=True),
-    _svc('router-config-nat-static', 'NAT Static', 'nat static global <ip> inside <ip>', 'config-nat', ['ROUTER'],
-         cmds=['nat static global 10.0.0.1 inside 192.168.1.1'],
-         config=True),
-    _svc('router-config-nat-address-group', 'NAT Address-Group',
-         'nat address-group <id> <start> <end>', 'config-nat', ['ROUTER'],
-         cmds=['nat address-group 1 10.0.0.1 10.0.0.254'],
-         config=True),
-    _svc('router-config-interface', 'Interface GigabitEthernet',
-         'interface GigabitEthernet <x/x/x>', 'config-interface', ['ROUTER'],
-         cmds=['interface GigabitEthernet0/0/0'],
-         config=True),
-    _svc('router-config-ip-address', 'IP Address', 'ip address <ip> <mask>', 'config-interface', ['ROUTER'],
-         cmds=['ip address 10.0.0.1 255.255.255.0'],
-         config=True),
-    _svc('router-config-description', 'Description', 'description <text>', 'config-interface', ['ROUTER'],
-         cmds=['description LINK-REDE'],
-         config=True),
-    _svc('router-config-shutdown', 'Shutdown / No Shutdown', 'shutdown | undo shutdown', 'config-interface', ['ROUTER'],
-         cmds=['shutdown'],
-         config=True),
-    _svc('router-config-undo-shutdown', 'Undo Shutdown', 'undo shutdown', 'config-interface', ['ROUTER'],
-         config=True),
-    _svc('router-config-acl-number', 'ACL Number', 'acl number <id>', 'config-acl', ['ROUTER'],
-         cmds=['acl number 3000'],
-         config=True),
-    _svc('router-config-acl-rule', 'ACL Rule',
-         'rule <id> permit/deny ip source <ip> <wildcard>', 'config-acl', ['ROUTER'],
-         cmds=['rule 5 permit ip source 10.0.0.0 0.0.0.255'],
-         config=True),
-    _svc('router-config-bgp', 'BGP', 'bgp <asn>', 'config-bgp', ['ROUTER'],
-         cmds=['bgp 65000'],
-         config=True),
-    _svc('router-config-bgp-router-id', 'BGP Router-ID', 'router-id <id>', 'config-bgp', ['ROUTER'],
-         cmds=['router-id 1.1.1.1'],
-         config=True),
-    _svc('router-config-bgp-peer', 'BGP Peer', 'peer <ip> as-number <asn>', 'config-bgp', ['ROUTER'],
-         cmds=['peer 10.0.0.2 as-number 65001'],
-         config=True),
-    _svc('router-config-bgp-network', 'BGP Network', 'network <prefix>', 'config-bgp', ['ROUTER'],
-         cmds=['network 10.0.0.0 255.255.255.0'],
-         config=True),
-    _svc('router-config-ospf', 'OSPF', 'ospf <id>', 'config-ospf', ['ROUTER'],
-         cmds=['ospf 1'],
-         config=True),
-    _svc('router-config-ospf-area', 'OSPF Area', 'area <id>', 'config-ospf', ['ROUTER'],
-         cmds=['area 0'],
-         config=True),
-    _svc('router-config-ospf-network', 'OSPF Network',
-         'network <prefix> <wildcard> area <id>', 'config-ospf', ['ROUTER'],
-         cmds=['network 10.0.0.0 0.0.0.255 area 0'],
-         config=True),
-    _svc('router-config-vlan-batch', 'VLAN Batch', 'vlan batch <start> to <end>', 'config-vlan', ['ROUTER', 'SWITCH'],
-         cmds=['vlan batch 10 to 20'],
-         config=True),
-    _svc('router-config-vlan-port-type', 'Port Link-Type',
-         'port link-type <access|trunk|hybrid>', 'config-vlan', ['ROUTER', 'SWITCH'],
-         cmds=['port link-type trunk'],
-         config=True),
-    _svc('router-config-vlan-default', 'Port Default VLAN',
-         'port default vlan <id>', 'config-vlan', ['ROUTER', 'SWITCH'],
-         cmds=['port default vlan 10'],
-         config=True),
-    _svc('switch-vlan', 'VLANs', 'display vlan', 'vlan', ['SWITCH']),
-    _svc('switch-vlan-all', 'Todas as VLANs', 'display vlan all', 'vlan', ['SWITCH']),
-    _svc('switch-vlan-if', 'Interface VLAN', 'display vlan brief', 'vlan', ['SWITCH']),
-    _svc('switch-stp', 'STP Status', 'display stp brief', 'stp', ['SWITCH']),
-    _svc('switch-stp-detail', 'STP Detalhado', 'display stp', 'stp', ['SWITCH']),
-    _svc('switch-rstp', 'RSTP/MSTP', 'display stp region-configuration', 'stp', ['SWITCH']),
-    _svc('switch-lacp', 'Link Aggregation', 'display link-aggregation summary', 'lacp', ['SWITCH']),
-    _svc('switch-lacp-verbose', 'LACP Detalhado', 'display link-aggregation verbose', 'lacp', ['SWITCH']),
-    _svc('switch-mac', 'Tabela MAC', 'display mac-address', 'mac', ['SWITCH']),
-    _svc('switch-mac-dynamic', 'MAC Dinâmicas', 'display mac-address dynamic', 'mac', ['SWITCH']),
-    _svc('switch-mac-static', 'MAC Estáticas', 'display mac-address static', 'mac', ['SWITCH']),
-    _svc('switch-lldp', 'LLDP Vizinhos', 'display lldp neighbor brief', 'lldp', ['SWITCH']),
-    _svc('switch-lldp-all', 'LLDP Todos', 'display lldp neighbor', 'lldp', ['SWITCH']),
-    _svc('switch-poe', 'PoE Status', 'display poe power-state', 'poe', ['SWITCH']),
-    _svc('switch-poe-detail', 'PoE Detalhado', 'display poe power-state interface', 'poe', ['SWITCH']),
-    _svc('switch-igmp', 'IGMP Snooping', 'display igmp-snooping', 'igmp', ['SWITCH']),
-    _svc('switch-dhcp-snoop', 'DHCP Snooping', 'display dhcp snooping', 'dhcp', ['SWITCH']),
-    _svc('switch-int-brief', 'Sumário de Interfaces', 'display interface brief', 'interface', ['SWITCH']),
-    _svc('switch-int-desc', 'Descrição Interfaces', 'display interface description', 'interface', ['SWITCH']),
-    _svc('switch-port-sec', 'Port Security', 'display port-security', 'security', ['SWITCH']),
-    _svc('switch-storm', 'Storm Control', 'display storm-control', 'security', ['SWITCH']),
-    _svc('switch-arp', 'Tabela ARP', 'display arp', 'security', ['SWITCH']),
-    _svc('switch-stack', 'Stack Info', 'display stack', 'system', ['SWITCH']),
-    _svc('switch-device', 'Info do Dispositivo', 'display device', 'system', ['SWITCH']),
-    _svc('switch-log', 'Logbuffer', 'display logbuffer', 'troubleshoot', ['SWITCH']),
-    _svc('fw-security-policy', 'Security Policy', 'display security-policy', 'policy', ['FIREWALL']),
-    _svc('fw-security-policy-stats', 'Policy Hit Count', 'display security-policy statistics', 'policy', ['FIREWALL']),
-    _svc('fw-session-table', 'Tabela de Sessões', 'display firewall session table', 'policy', ['FIREWALL']),
-    _svc('fw-session-stat', 'Estatísticas de Sessão', 'display firewall session statistics', 'policy', ['FIREWALL']),
-    _svc('fw-nat-policy', 'NAT Policy', 'display nat-policy', 'nat', ['FIREWALL']),
-    _svc('fw-nat-session', 'Sessões NAT', 'display nat session', 'nat', ['FIREWALL']),
-    _svc('fw-ipsec', 'IPSec Policy', 'display ipsec policy', 'vpn', ['FIREWALL']),
-    _svc('fw-ike', 'IKE Proposal', 'display ike proposal', 'vpn', ['FIREWALL']),
-    _svc('fw-ike-sa', 'IKE SA', 'display ike sa', 'vpn', ['FIREWALL']),
-    _svc('fw-ipsec-sa', 'IPSec SA', 'display ipsec sa', 'vpn', ['FIREWALL']),
-    _svc('fw-l2tp', 'L2TP Tunnel', 'display l2tp tunnel', 'vpn', ['FIREWALL']),
-    _svc('fw-vpn-instance', 'VPN Instâncias', 'display vpn-instance', 'vpn', ['FIREWALL']),
-    _svc('fw-ips', 'IPS Status', 'display ips status', 'ips', ['FIREWALL']),
-    _svc('fw-ips-signature', 'IPS Assinaturas', 'display ips signature', 'ips', ['FIREWALL']),
-    _svc('fw-antivirus', 'Anti-Virus Status', 'display antivirus status', 'antivirus', ['FIREWALL']),
-    _svc('fw-url-filter', 'URL Filter Stats', 'display url-filter statistics', 'url-filter', ['FIREWALL']),
-    _svc('fw-zone', 'Zonas de Segurança', 'display firewall zone', 'zone', ['FIREWALL']),
-    _svc('fw-hrp', 'HRP (HA) Status', 'display hrp status', 'ha', ['FIREWALL']),
-    _svc('fw-cpu', 'CPU Usage', 'display firewall cpu-usage', 'system', ['FIREWALL']),
-    _svc('fw-mem', 'Memory Usage', 'display memory-usage', 'system', ['FIREWALL']),
-    _svc('fw-context', 'Contextos (VSYS)', 'display vsys', 'system', ['FIREWALL']),
-    _svc('fw-log', 'Logbuffer', 'display logbuffer', 'troubleshoot', ['FIREWALL']),
-    _svc('fw-firewall-stat', 'Firewall Statistics', 'display firewall statistics', 'troubleshoot', ['FIREWALL']),
-    _svc('fw-interface-stat', 'Interface Stats', 'display interface brief', 'troubleshoot', ['FIREWALL']),
-    _svc('slb-service-group', 'Service Groups', 'display slb service-group', 'slb', ['LOAD-BALANCER']),
-    _svc('slb-virtual-server', 'Virtual Servers', 'display slb virtual-server', 'slb', ['LOAD-BALANCER']),
-    _svc('slb-real-server', 'Real Servers', 'display slb real-server', 'slb', ['LOAD-BALANCER']),
-    _svc('slb-health', 'Health Checks', 'display slb health', 'health', ['LOAD-BALANCER']),
-    _svc('slb-stats', 'Estatísticas SLB', 'display slb statistics', 'statistics', ['LOAD-BALANCER']),
-    _svc('slb-sticky', 'Sticky Sessions', 'display sticky', 'slb', ['LOAD-BALANCER']),
-    _svc('wanac-optimization', 'Otimização WAN', 'display wan-optimization status', 'optimization', ['WAN-ACCEL']),
-    _svc('wanac-flow', 'Fluxos Ativos', 'display wan-optimization flow', 'optimization', ['WAN-ACCEL']),
-    _svc('wanac-compression', 'Compressão', 'display wan-optimization compression', 'optimization', ['WAN-ACCEL']),
-    _svc('wanac-stats', 'Estatísticas', 'display wan-optimization statistics', 'statistics', ['WAN-ACCEL']),
-    _svc('wanac-interface', 'Interfaces', 'display interface brief', 'system', ['WAN-ACCEL']),
-    _svc('ap-wireless', 'Status Wireless', 'display wireless status', 'wireless', ['AP']),
-    _svc('ap-client', 'Clientes Conectados', 'display station', 'client', ['AP']),
-    _svc('ap-radio', 'Rádio Status', 'display radio all', 'radio', ['AP']),
-    _svc('ap-ssid', 'SSIDs', 'display ssid', 'wireless', ['AP']),
-    _svc('ap-ap-list', 'APs Gerenciados', 'display ap all', 'wireless', ['AP']),
-    _svc('ap-int-brief', 'Interfaces', 'display interface brief', 'system', ['AP']),
-    _svc('sys-version', 'Versão do Sistema', 'display version', 'system', _T_ALL),
-    _svc('sys-cpu', 'CPU Usage', 'display cpu-usage', 'system', ['ROUTER', 'SWITCH', 'WAN-ACCEL', 'AP']),
-    _svc('sys-mem', 'Memory Usage', 'display memory-usage', 'system', ['ROUTER', 'SWITCH', 'WAN-ACCEL', 'AP']),
-    _svc('sys-date', 'Relógio do Sistema', 'display clock', 'system', _T_ALL),
-    _svc('sys-uptime', 'Uptime', 'display system uptime', 'system', _T_ALL),
-    _svc('sys-config', 'Configuração Atual', 'display current-configuration', 'system', _T_ALL),
-    _svc('sys-config-last', 'Últimas Alterações',
-         'display current-configuration | include sysname', 'system', ['ROUTER', 'SWITCH']),
-    _svc('sys-diagnose', 'Diagnóstico do Sistema', 'display diagnostic-information', 'troubleshoot', _T_ALL),
-    _svc('sys-license', 'Licenças', 'display license', 'system', ['ROUTER', 'SWITCH', 'FIREWALL']),
-    _svc('sys-hardware', 'Hardware', 'display device', 'system', ['ROUTER', 'SWITCH']),
-    _svc('sys-power', 'Fonte de Alimentação', 'display power', 'system', ['ROUTER', 'SWITCH']),
-    _svc('sys-fan', 'Ventoinhas', 'display fan', 'system', ['ROUTER', 'SWITCH']),
-    _svc('sys-temperature', 'Temperatura', 'display temperature all', 'system', ['ROUTER', 'SWITCH']),
-]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -380,24 +97,14 @@ def parse_params(service: ServiceDef) -> list[tuple[str, str]]:
 # ═══════════════════════════════════════════════════════════════════════
 #  EXECUTION ENGINE
 # ═══════════════════════════════════════════════════════════════════════
+
 def execute_service(
     service: ServiceDef,
     session_type: str = "mock",
     session=None,
     **kwargs,
 ) -> str:
-    """
-    Executa um serviço no dispositivo alvo via Netmiko.
-
-    Args:
-        service: Definição do serviço
-        session_type: 'mock' | 'cli' (ambos usam Netmiko CLI)
-        session: Conexão Netmiko
-        **kwargs: Argumentos adicionais
-
-    Returns:
-        str: Resultado formatado
-    """
+    """Executa um serviço no dispositivo alvo via Netmiko."""
     if session_type == "mock":
         return _execute_mock(service)
     return _execute_cli(service, session, **kwargs)
@@ -621,10 +328,10 @@ Copyright (C) 2012-2025 Huawei Technologies Co., Ltd.
 
         "sys-temperature": """Temperature Information:
   Slot  Sensor         Current  Lower    Upper    Status
-  1     CPU            45°C     0°C      85°C     Normal
-  1     Board          38°C     0°C      75°C     Normal
-  2     CPU            42°C     0°C      85°C     Normal
-  2     Board          36°C     0°C      75°C     Normal""",
+  1     CPU            45C     0C      85C     Normal
+  1     Board          38C     0C      75C     Normal
+  2     CPU            42C     0C      85C     Normal
+  2     Board          36C     0C      75C     Normal""",
 
         # ── WIRELESS ───────────────────────────────────────────────
         "ap-client": """Station Information:
@@ -666,11 +373,10 @@ Total stations: 3""",
     return result + f"\n\n  Timestamp: {ts}"
 
 
-
 def _execute_cli(service: ServiceDef, connection, **kwargs) -> str:
     """Executa via CLI (Netmiko)."""
     if connection is None:
-        return "✘  Sem conexão CLI ativa"
+        return "Sem conexão CLI ativa"
 
     try:
         prev_mode = None
@@ -680,11 +386,11 @@ def _execute_cli(service: ServiceDef, connection, **kwargs) -> str:
         result_parts = []
         if service.config_mode:
             out = connection.send_config_set(service.cli_commands, read_timeout=60)
-            result_parts.append(f"▶  Config applied:\n{'─' * 40}\n{clean_output(out)}")
+            result_parts.append(f">  Config applied:\n{'─' * 40}\n{clean_output(out)}")
         else:
             for cmd in service.cli_commands:
                 out = connection.send_command(cmd, read_timeout=120)
-                result_parts.append(f"▶  {cmd}\n{'─' * 40}\n{clean_output(out)}")
+                result_parts.append(f">  {cmd}\n{'─' * 40}\n{clean_output(out)}")
 
         if prev_mode is not None:
             connection.send_command_timing("quit")
@@ -692,7 +398,4 @@ def _execute_cli(service: ServiceDef, connection, **kwargs) -> str:
         return "\n\n".join(result_parts)
     except Exception as e:
         log.error("execute_service CLI falhou: %s", e)
-        return f"✘  Erro CLI: {e}"
-
-
-
+        return f"Erro CLI: {e}"

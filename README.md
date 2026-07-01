@@ -23,11 +23,11 @@
 - **Log de auditoria** estruturado em JSON Lines com tempo de resposta, status e session-id
 
 ### Fase 4 — Topologia SDN / Multi-VNF
-- **Canvas Tkinter** com barra SDN no topo + grid 4 colunas, nós coloridos por tipo
-- Barra roxa com contador de dispositivos gerenciados + tooltip flutuante
-- Status online/offline/unknown com simulação automática
+- **Canvas PySide6 (QGraphicsView)** com barra SDN no topo + grid 4 colunas, nós coloridos por tipo
+- Barra roxa com contador de dispositivos gerenciados + tooltip nativo Qt
+- Status online/offline/unknown com simulação ou probe TCP real
 - Seleção clicável de VNF como alvo SSH
-- **TopologyPoller** em thread separada, atualização a cada 30s
+- Timer Qt a cada 30s para refresh automático de VNFs
 
 ### Catálogo de Serviços (144 comandos)
 - 78 serviços para **ROUTER**: routing-table, BGP, OSPF, IS-IS, MPLS, VRF, QoS, ACL, NAT, além de templates de config (nat, interface, acl, bgp, ospf, vlan)
@@ -46,13 +46,13 @@
 | Camada | Tecnologia |
 |--------|-----------|
 | **Linguagem** | Python 3.12+ |
-| **Interface** | Tkinter / ttk (native GUI) |
+| **Interface** | PySide6 (Qt for Python) |
 | **SSH/CLI** | Netmiko (paramiko) |
 
 | **Secrets** | python-dotenv / hvac / boto3 |
 | **Criptografia** | cryptography (ED25519) |
 | **Auditoria** | JSON Lines estruturado |
-| **Topologia** | Canvas Tkinter + threading |
+| **Topologia** | Canvas PySide6 (QGraphicsView/QGraphicsScene) |
 | **SDN Mock** | JSON local + simulação de status |
 | **Tema Visual** | Neon / Cyberpunk dark |
 
@@ -64,7 +64,7 @@
 .
 ├── src/
 │   ├── huawei_manager/            # Pacote Python principal
-│   │   ├── app.py                 # Aplicação principal (GUI Tkinter)
+│   │   ├── app.py                 # Aplicação principal (GUI PySide6)
 │   │   ├── pages.py               # Construtor de páginas (8 abas)
 │   │   ├── handlers.py            # Eventos SSH, auth, VNFs
 │   │   ├── _config.py             # Config (logging, secrets, audit)
@@ -131,7 +131,7 @@ SECRETS_BACKEND=env
 
 ## Execução
 
-> ⚠ A interface requer Tkinter com servidor gráfico (DISPLAY). Não funciona em CI/terminal headless.
+> ⚠ A interface requer PySide6 com servidor gráfico (DISPLAY). Não funciona em CI/terminal headless.
 
 ```bash
 # No menu de aplicações
