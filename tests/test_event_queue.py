@@ -28,6 +28,10 @@ class TestEventType:
         assert EventType.COMMAND_EXECUTED is not None
         assert EventType.VNF_STATUS_CHANGED is not None
 
+    def test_has_alert_and_an_trigger(self):
+        assert EventType.ALERT is not None
+        assert EventType.AN_TRIGGER is not None
+
 
 class TestEventDataclass:
     """Event dataclass must hold all required fields."""
@@ -209,3 +213,178 @@ class TestEventQueueThreadSafety:
         # Queue should still work after broken subscriber
         result = eq.get(timeout=1)
         assert result is not None
+
+
+class TestEventPriority:
+    """Priority field in Event dataclass."""
+
+    def test_default_priority_is_10(self):
+        ev = Event(type=EventType.DEVICE_CONNECTED, source="gw-01")
+        assert ev.priority == 10
+
+    def test_custom_priority(self):
+        ev = Event(type=EventType.ALERT, source="gw-01", priority=0)
+        assert ev.priority == 0
+
+    def test_low_priority(self):
+        ev = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        assert ev.priority == 20
+
+
+class TestEventQueuePriorityOrder:
+    """PriorityQueue must return higher priority events first."""
+
+    def test_high_priority_comes_first(self):
+        eq = EventQueue()
+        normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
+        alert = Event(type=EventType.ALERT, source="gw-01", priority=0)
+        eq.put(normal)
+        eq.put(alert)
+        assert eq.get() is alert
+        assert eq.get() is normal
+
+    def test_low_priority_comes_last(self):
+        eq = EventQueue()
+        normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
+        low = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        eq.put(normal)
+        eq.put(low)
+        assert eq.get() is normal
+        assert eq.get() is low
+
+    def test_same_priority_fifo(self):
+        eq = EventQueue()
+        ev1 = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
+        ev2 = Event(type=EventType.DEVICE_DISCONNECTED, source="gw-01", priority=10)
+        ev3 = Event(type=EventType.DEVICE_ERROR, source="gw-01", priority=10)
+        eq.put(ev1)
+        eq.put(ev2)
+        eq.put(ev3)
+        assert eq.get() is ev1
+        assert eq.get() is ev2
+        assert eq.get() is ev3
+
+    def test_critical_preempts_all(self):
+        eq = EventQueue()
+        low = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
+        alert = Event(type=EventType.ALERT, source="gw-01", priority=0)
+        eq.put(low)
+        eq.put(normal)
+        eq.put(alert)
+        # alert has priority 0, should come out first
+        assert eq.get() is alert
+        assert eq.get() is normal
+        assert eq.get() is low
+
+    def test_poll_returns_priority_ordered(self):
+        eq = EventQueue()
+        low = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        alert = Event(type=EventType.ALERT, source="gw-01", priority=0)
+        normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
+        eq.put(low)
+        eq.put(alert)
+        eq.put(normal)
+        events = eq.poll(timeout=0.1)
+        assert len(events) == 3
+        assert events[0] is alert
+        assert events[1] is normal
+        assert events[2] is low
+
+    def test_an_trigger_normal_priority(self):
+        """AN_TRIGGER uses default priority (10) unless specified."""
+        eq = EventQueue()
+        trigger = Event(type=EventType.AN_TRIGGER, source="automation", priority=5)
+        normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
+        eq.put(normal)
+        eq.put(trigger)
+        # trigger has higher priority (5 < 10)
+        assert eq.get() is trigger
+        assert eq.get() is normal
+
+
+class TestEventQueueFullWithPriority:
+    """Full queue behavior with priority items."""
+
+    def test_maxsize_respected_with_priority(self):
+        eq = EventQueue(maxsize=2)
+        eq.put(Event(type=EventType.ALERT, source="gw-01", priority=0))
+        eq.put(Event(type=EventType.DEVICE_CONNECTED, source="gw-02", priority=10))
+        with pytest.raises(queue.Full):
+            eq.put(
+                Event(type=EventType.DEVICE_ERROR, source="gw-03"),
+                block=False,
+            )
+
+    def test_full_queue_still_prioritizes(self):
+        eq = EventQueue(maxsize=2)
+        normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
+        alert = Event(type=EventType.ALERT, source="gw-01", priority=0)
+        eq.put(normal)
+        eq.put(alert)
+        # Even though alert was put second, it comes out first
+        assert eq.get() is alert
+        assert eq.get() is normal
+
+
+class TestEventQueuePriorityConcurrency:
+    """Thread safety with priority ordering."""
+
+    def test_concurrent_high_and_low_priority(self):
+        eq = EventQueue()
+        results: list[Event | None] = []
+        results_lock = threading.Lock()
+
+        def consumer() -> None:
+            for _ in range(4):
+                ev = eq.get(timeout=2)
+                with results_lock:
+                    results.append(ev)
+
+        def producer_high() -> None:
+            for i in range(2):
+                eq.put(
+                    Event(type=EventType.ALERT, source=f"alert-{i}", priority=0)
+                )
+
+        def producer_low() -> None:
+            for i in range(2):
+                eq.put(
+                    Event(
+                        type=EventType.VNF_STATUS_CHANGED,
+                        source=f"vnf-{i}",
+                        priority=20,
+                    )
+                )
+
+        t_consumer = threading.Thread(target=consumer)
+        t_high = threading.Thread(target=producer_high)
+        t_low = threading.Thread(target=producer_low)
+
+        t_consumer.start()
+        t_high.start()
+        t_low.start()
+
+        t_high.join()
+        t_low.join()
+        t_consumer.join()
+
+        assert len(results) == 4
+        # First two should be alerts (priority 0)
+        assert results[0] is not None
+        assert results[0].priority == 0
+        assert results[1] is not None
+        assert results[1].priority == 0
+
+    def test_subscriber_with_priority(self):
+        """Subscribe still works with priority items."""
+        eq = EventQueue()
+        received: list[Event] = []
+
+        def cb(ev: Event) -> None:
+            received.append(ev)
+
+        eq.subscribe(EventType.ALERT, cb)
+        alert = Event(type=EventType.ALERT, source="gw-01", priority=0)
+        eq.put(alert)
+        assert received == [alert]

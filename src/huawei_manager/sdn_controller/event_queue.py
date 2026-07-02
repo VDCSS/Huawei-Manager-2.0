@@ -1,10 +1,12 @@
-"""Event Queue — Fila de eventos thread-safe com pub/sub.
+"""Event Queue — Fila de eventos priorizados thread-safe com pub/sub.
 
 Fornece a infraestrutura de eventos assincronos para o ControllerCore.
-Usada internamente pelo pacote ``sdn_controller/``.
+Usa ``queue.PriorityQueue`` internamente para ordenar eventos por
+prioridade (0 = crítica, 10 = normal, 20 = baixa).
 """
 from __future__ import annotations
 
+import itertools
 import queue
 import threading
 from collections.abc import Callable
@@ -23,6 +25,8 @@ class EventType(Enum):
     TOPOLOGY_CHANGED = auto()
     COMMAND_EXECUTED = auto()
     VNF_STATUS_CHANGED = auto()
+    ALERT = auto()
+    AN_TRIGGER = auto()
 
 
 @dataclass
@@ -33,17 +37,26 @@ class Event:
         type: Categoria do evento.
         source: Identificador do dispositivo ou módulo origem.
         data: Payload opcional do evento (dict).
+        priority: Prioridade (0=crítica, 10=normal, 20=baixa).
         timestamp: Instante de criação do evento.
     """
 
     type: EventType
     source: str
     data: dict | None = None
+    priority: int = 10
     timestamp: datetime = field(default_factory=datetime.now)
 
 
+# Tipo interno para itens da PriorityQueue: (prioridade, contador, evento)
+_PQueueItem = tuple[int, int, Event]
+
+
 class EventQueue:
-    """Fila de eventos thread-safe com padrão pub/sub.
+    """Fila de eventos priorizados thread-safe com padrão pub/sub.
+
+    Eventos com prioridade mais baixa (0 = crítica) saem primeiro.
+    Mesma prioridade mantém ordem de inserção (FIFO).
 
     Duas formas de consumo:
     * Pull — ``get()`` / ``poll()`` para consumers que processam em loop.
@@ -54,9 +67,12 @@ class EventQueue:
     """
 
     def __init__(self, maxsize: int = 0) -> None:
-        self._queue: queue.Queue[Event] = queue.Queue(maxsize=maxsize)
+        self._queue: queue.PriorityQueue[_PQueueItem] = queue.PriorityQueue(
+            maxsize=maxsize
+        )
         self._subscribers: dict[EventType, list[Callable[[Event], None]]] = {}
         self._lock = threading.Lock()
+        self._counter = itertools.count()
 
     def put(
         self,
@@ -64,20 +80,21 @@ class EventQueue:
         block: bool = True,
         timeout: float | None = None,
     ) -> None:
-        """Publica um evento na fila e notifica assinantes.
+        """Publica um evento priorizado na fila e notifica assinantes.
 
         Args:
             event: Evento a ser publicado.
             block: Se True (padrao), bloqueia se a fila estiver cheia.
             timeout: Tempo maximo de espera em segundos se block=True.
         """
-        self._queue.put(event, block=block, timeout=timeout)
+        item: _PQueueItem = (event.priority, next(self._counter), event)
+        self._queue.put(item, block=block, timeout=timeout)
         self._notify(event)
 
     def get(
         self, block: bool = True, timeout: float | None = None
     ) -> Event | None:
-        """Consome o próximo evento da fila.
+        """Consome o próximo evento de maior prioridade.
 
         Args:
             block: Se True, aguarda até um evento estar disponível.
@@ -87,7 +104,7 @@ class EventQueue:
             O próximo ``Event``, ou None se o timeout expirar.
         """
         try:
-            return self._queue.get(block=block, timeout=timeout)
+            return self._queue.get(block=block, timeout=timeout)[2]
         except queue.Empty:
             return None
 
@@ -125,7 +142,8 @@ class EventQueue:
             timeout: Tempo de espera inicial pelo primeiro evento (s).
 
         Returns:
-            Lista de eventos pendentes (pode ser vazia).
+            Lista de eventos pendentes (pode ser vazia), ordenados por
+            prioridade.
         """
         events: list[Event] = []
         head = self.get(block=True, timeout=timeout)
