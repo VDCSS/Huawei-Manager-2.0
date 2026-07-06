@@ -61,7 +61,7 @@ def mock_southbound() -> MagicMock:
 
 @pytest.fixture
 def api(mock_controller, mock_event_queue, mock_audit_logger, mock_southbound):
-    from huawei_manager.sdn_controller.northbound import NorthboundAPI
+    from huawei_manager.sdn_controller._dormant.northbound import NorthboundAPI
 
     return NorthboundAPI(
         controller=mock_controller,
@@ -78,7 +78,7 @@ class TestApiResponse:
     """ApiResponse dataclass must have standard fields."""
 
     def test_success_response(self):
-        from huawei_manager.sdn_controller.northbound import ApiResponse
+        from huawei_manager.sdn_controller._dormant.northbound import ApiResponse
 
         resp = ApiResponse(data={"devices": []})
         assert resp.success is True
@@ -86,7 +86,7 @@ class TestApiResponse:
         assert resp.error is None
 
     def test_error_response(self):
-        from huawei_manager.sdn_controller.northbound import ApiResponse
+        from huawei_manager.sdn_controller._dormant.northbound import ApiResponse
 
         resp = ApiResponse(success=False, error="Not found")
         assert resp.success is False
@@ -94,7 +94,7 @@ class TestApiResponse:
         assert resp.data is None
 
     def test_to_dict(self):
-        from huawei_manager.sdn_controller.northbound import ApiResponse
+        from huawei_manager.sdn_controller._dormant.northbound import ApiResponse
 
         resp = ApiResponse(data={"key": "val"})
         d = resp.to_dict()
@@ -133,7 +133,7 @@ class TestGetDevices:
     def test_controller_error_returns_error_response(
         self, mock_controller, mock_event_queue, mock_audit_logger, mock_southbound,
     ):
-        from huawei_manager.sdn_controller.northbound import NorthboundAPI
+        from huawei_manager.sdn_controller._dormant.northbound import NorthboundAPI
 
         mock_controller.list_devices.side_effect = RuntimeError("Controller down")
         api = NorthboundAPI(
@@ -211,7 +211,7 @@ class TestGetConfig:
         assert result.data["device_id"] == "gw-01"
 
     def test_device_not_found(self, mock_controller, mock_event_queue, mock_audit_logger, mock_southbound):
-        from huawei_manager.sdn_controller.northbound import NorthboundAPI
+        from huawei_manager.sdn_controller._dormant.northbound import NorthboundAPI
 
         mock_controller.get_state.return_value = None
         api = NorthboundAPI(
@@ -324,7 +324,7 @@ class TestNorthboundAPIInit:
     """Constructor and type checks."""
 
     def test_requires_controller(self, mock_event_queue, mock_audit_logger, mock_southbound):
-        from huawei_manager.sdn_controller.northbound import NorthboundAPI
+        from huawei_manager.sdn_controller._dormant.northbound import NorthboundAPI
 
         with pytest.raises(TypeError):
             NorthboundAPI(

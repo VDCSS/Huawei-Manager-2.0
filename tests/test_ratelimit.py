@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from huawei_manager.sdn_controller.ratelimit import RateLimiter, TokenBucket
+from huawei_manager.sdn_controller._dormant.ratelimit import RateLimiter, TokenBucket
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

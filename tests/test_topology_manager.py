@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from huawei_manager.sdn_controller.topology_manager import (
+from huawei_manager.sdn_controller._dormant.topology_manager import (
     TopologyLink,
     TopologyManager,
     TopologyNode,

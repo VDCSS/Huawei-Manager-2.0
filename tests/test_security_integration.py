@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from huawei_manager.audit_log import AuditLogger
-from huawei_manager.sdn_controller.core import ControllerCore, DeviceState
+from huawei_manager.sdn_controller._dormant.northbound import NorthboundAPI
+from huawei_manager.sdn_controller.core import ControllerCore
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import Event, EventQueue, EventType
-from huawei_manager.sdn_controller.northbound import NorthboundAPI
 from huawei_manager.sdn_controller.validator import CommandValidator
 
 

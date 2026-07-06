@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from huawei_manager.sdn_controller.policy import PolicyEngine, PolicyRule
+from huawei_manager.sdn_controller._dormant.policy import PolicyEngine, PolicyRule
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

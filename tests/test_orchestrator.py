@@ -40,7 +40,7 @@ def mock_executor() -> MagicMock:
 
 @pytest.fixture
 def orchestrator(mock_controller, mock_executor):
-    from huawei_manager.sdn_controller.orchestrator import ServiceOrchestrator
+    from huawei_manager.sdn_controller._dormant.orchestrator import ServiceOrchestrator
 
     return ServiceOrchestrator(
         controller=mock_controller,
@@ -235,7 +235,7 @@ class TestExecutionPlan:
     """ExecutionPlan and ExecutionStep dataclasses."""
 
     def test_plan_creation(self):
-        from huawei_manager.sdn_controller.orchestrator import (
+        from huawei_manager.sdn_controller._dormant.orchestrator import (
             ExecutionPlan,
             ExecutionStep,
         )
@@ -246,7 +246,7 @@ class TestExecutionPlan:
         assert plan.service_id == "sys-version"
 
     def test_step_defaults(self):
-        from huawei_manager.sdn_controller.orchestrator import ExecutionStep
+        from huawei_manager.sdn_controller._dormant.orchestrator import ExecutionStep
 
         step = ExecutionStep(device_id="gw-01", commands=["show run"])
         assert step.params == {}
@@ -256,7 +256,7 @@ class TestExecutionResult:
     """ExecutionResult dataclass."""
 
     def test_success_result(self):
-        from huawei_manager.sdn_controller.orchestrator import ExecutionResult
+        from huawei_manager.sdn_controller._dormant.orchestrator import ExecutionResult
 
         result = ExecutionResult(
             device_id="gw-01", success=True, output="output data",
@@ -267,7 +267,7 @@ class TestExecutionResult:
         assert result.error is None
 
     def test_error_result(self):
-        from huawei_manager.sdn_controller.orchestrator import ExecutionResult
+        from huawei_manager.sdn_controller._dormant.orchestrator import ExecutionResult
 
         result = ExecutionResult(
             device_id="gw-01", success=False, output="",
