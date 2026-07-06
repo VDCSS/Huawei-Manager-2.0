@@ -402,12 +402,16 @@ class EventHandlers:
         if vnfs_lock is not None and not vnfs_lock.acquire(blocking=False):
             return
         try:
+            gen_before = self._vnfs_gen
             vnfs = load_vnf_inventory(_INVENTORY_PATH)
             if self._mock_mode:
                 vnfs = simulate_status(vnfs)
             else:
                 vnfs = probe_vnfs(vnfs)
+            if self._vnfs_gen != gen_before:
+                vnfs = load_vnf_inventory(_INVENTORY_PATH)
             save_vnf_inventory(vnfs, _INVENTORY_PATH)
+            self._vnfs_gen += 1
             self._dispatch(lambda: self._update_vnfs_ui(vnfs))
             self._dispatch(lambda: (
                 self._vnf_status_lbl.setText(
@@ -667,6 +671,7 @@ class EventHandlers:
         vnfs = load_vnf_inventory(_INVENTORY_PATH)
         vnfs = [v for v in vnfs if v.id != vnf.id]
         save_vnf_inventory(vnfs, _INVENTORY_PATH)
+        self._vnfs_gen += 1
         if self._target_vnf and self._target_vnf.id == vnf.id:
             self._clear_vnf_target()
         self._spawn_io(self._refresh_vnfs)

@@ -148,6 +148,7 @@ class AppCore(QMainWindow):
         self._last_manut_results: list = []
         self._manut_filter: str = "all"
         self._vnfs_lock = threading.Lock()
+        self._vnfs_gen: int = 0
         self._vnfs: list[VNF] = []
         self._mock_mode: bool = True
         self._dry_run: DryRunEngine | None = None
