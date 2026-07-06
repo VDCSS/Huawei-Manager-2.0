@@ -284,6 +284,39 @@ class ControllerCore:
 
     # ── Timer periodico ────────────────────────────────────────────────────
 
+    def sync_from_vnfs(
+        self,
+        vnfs: list[Any],
+        publish_events: bool = True,
+    ) -> None:
+        """Sincroniza o estado do ControllerCore com o inventario do vnf_models.
+
+        Registra VNFs do inventario que ainda nao estao no controlador.
+        Nao remove dispositivos que existem no core mas nao no inventario
+        (eles podem estar offline temporariamente).
+
+        Args:
+            vnfs: Lista de objetos VNF do vnf_models (com .id, .host, .port, .type).
+            publish_events: Se False, evita publicar eventos durante o sync
+                para nao gerar feedback loop no drain queue.
+        """
+        for v in vnfs:
+            if v.id not in self._devices:
+                state = DeviceState(
+                    device_id=v.id,
+                    host=v.host,
+                    port=v.port,
+                    device_type=v.type or "unknown",
+                    status="unknown",
+                )
+                with self._lock:
+                    self._devices[v.id] = state
+                if publish_events and self._event_queue is not None:
+                    self._event_queue.put(
+                        Event(type=EventType.VNF_STATUS_CHANGED, source=v.id,
+                              data={"status": "unknown"})
+                    )
+
     def start(self) -> None:
         """Inicia o timer de dump periodico.
 

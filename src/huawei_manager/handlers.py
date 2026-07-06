@@ -426,6 +426,7 @@ class EventHandlers:
     def _update_vnfs_ui(self, vnfs: list[VNF]) -> None:
         """Atualiza o canvas de topologia com a nova lista de VNFs."""
         self._vnfs = vnfs
+        self._controller.sync_from_vnfs(vnfs, publish_events=False)
         if self._topo_canvas:
             self._topo_canvas.set_access(self._access_level)
             self._topo_canvas.update_vnfs(vnfs)
