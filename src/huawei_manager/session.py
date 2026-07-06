@@ -9,6 +9,7 @@ from pathlib import Path
 from netmiko import ConnectHandler
 from netmiko.base_connection import BaseConnection as NetmikoConnection
 
+from huawei_manager._config import PROJECT_ROOT
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.utils import clean_output, sanitize_command
 from huawei_manager.vault import SecretsBackend
@@ -185,8 +186,8 @@ class NetmikoSession:
             log.debug("Auth com chave SSH: %s", key)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        sess_dir = Path("sessions")
-        sess_dir.mkdir(exist_ok=True)
+        sess_dir = PROJECT_ROOT / "sessions"
+        sess_dir.mkdir(parents=True, exist_ok=True)
         sess_log = sess_dir / f"{self._host}_{self._port}_{ts}.log"
         kwargs["session_log"] = str(sess_log)
         log.debug("Session log: %s", sess_log)
