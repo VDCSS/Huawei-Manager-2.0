@@ -481,10 +481,18 @@ class EventHandlers:
         self._auth_overlay = overlay
         overlay.show()
 
+    def _require_access(self, level: str = "admin") -> bool:
+        """Verifica se o nivel de acesso atual atende ao requisito.
+
+        Returns True se permitido, False se bloqueado.
+        """
+        levels = {"user": 0, "admin": 1, "tecnico": 2}
+        return levels.get(self._access_level, 0) >= levels.get(level, 1)
+
     # ── Device Dialog ────────────────────────────────────────────────
     def _show_device_dialog(self, vnf: VNF | None = None) -> None:
         """Abre dialogo para cadastrar ou editar um dispositivo VNF."""
-        if self._access_level == "user":
+        if not self._require_access():
             return
         editing = vnf is not None
         vnf = vnf or VNF(id="", name="", host="")
@@ -650,7 +658,7 @@ class EventHandlers:
 
     def _delete_device(self, vnf: VNF) -> None:
         """Remove um VNF do inventario após confirmacao do usuario."""
-        if self._access_level == "user":
+        if not self._require_access():
             return
         reply = QMessageBox.question(None, "Excluir",
             f"Confirmar exclusao de {vnf.name} ({vnf.host})?")
