@@ -79,7 +79,6 @@ class AppCore(QMainWindow):
         self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
         self._mock_mode: bool = True
-        self._vnfs_busy: bool = False
         self._theme: str = "dark"
         self._theme_toggling: bool = False
 
