@@ -76,6 +76,7 @@ class SSHSouthbound(SouthboundProtocol):
         self._timeout = timeout
         self._max_retries = max_retries
         self._connected = False
+        self._alive_cache: tuple[bool, float] = (False, 0.0)
 
     def connect(self) -> None:
         """Tenta conectar com retry em caso de falha transiente."""
@@ -107,8 +108,20 @@ class SSHSouthbound(SouthboundProtocol):
         self._connected = False
 
     def is_alive(self) -> bool:
-        """Retorna True se a sessao esta conectada."""
-        return self._connected
+        """Retorna True se a sessao esta conectada (com cache de 2s).
+
+        Usa cache para evitar I/O de rede na main thread
+        (chamado pelo dashboard timer a cada 5s).
+        Delegado a NetmikoSession.is_connected() que verifica
+        o estado real da conexao.
+        """
+        now = time.time()
+        if now - self._alive_cache[1] < 2.0:
+            return self._alive_cache[0]
+        alive = self._session.is_connected()
+        self._alive_cache = (alive, now)
+        self._connected = alive
+        return alive
 
     def send_command(self, command: str) -> str:
         """Envia um comando show e retorna o output."""

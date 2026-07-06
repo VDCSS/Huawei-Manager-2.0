@@ -169,13 +169,13 @@ class TestSSHSouthboundLifecycle:
         mock_session.disconnect.assert_called_once()
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
-    def test_is_alive_delegates(self, mock_session_cls):
+    def test_is_alive_true_when_connected(self, mock_session_cls):
         from huawei_manager.sdn_controller.southbound import (
             SSHSouthbound,
         )
 
         mock_session = MagicMock()
-        mock_session.is_connected = True
+        mock_session.is_connected.return_value = True
         mock_session_cls.return_value = mock_session
 
         sb = SSHSouthbound(EnvBackend(), AuditLogger())
@@ -189,7 +189,7 @@ class TestSSHSouthboundLifecycle:
         )
 
         mock_session = MagicMock()
-        mock_session.is_connected = False
+        mock_session.is_connected.return_value = False
         mock_session_cls.return_value = mock_session
 
         sb = SSHSouthbound(EnvBackend(), AuditLogger())
@@ -274,10 +274,7 @@ class TestSSHSouthboundRetry:
             RuntimeError("Timeout"),
             None,
         ]
-        # Mock is_alive to return True after successful connect
-        type(mock_session).is_connected = PropertyMock(
-            side_effect=[False, False, True]
-        )
+        mock_session.is_connected.return_value = True
 
         sb = SSHSouthbound(
             EnvBackend(), AuditLogger(), timeout=10, max_retries=3
