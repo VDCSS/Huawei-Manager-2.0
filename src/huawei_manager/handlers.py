@@ -277,7 +277,11 @@ class EventHandlers:
             except Exception:
                 pass
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
-        ok, msg = self._sb.send_config(cmd.strip().splitlines())
+        try:
+            ok, msg = self._sb.send_config(cmd.strip().splitlines())
+        except RuntimeError:
+            self._write(self.out_cmd, "\u2718  Sessao SSH inativa. Conecte-se primeiro.")
+            return
         self._write(self.out_cmd, msg)
         self._event_queue.put(Event(EventType.CONFIG_CHANGED,
                                     source="editor", data={"status": "ok" if ok else "error"}))
