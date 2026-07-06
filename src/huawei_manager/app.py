@@ -6,7 +6,8 @@ import atexit
 import datetime
 import logging
 import os
-import queue
+import threading
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import Qt, QTimer
@@ -102,7 +103,7 @@ class AppCore(QMainWindow):
         self._io_executor = ThreadPoolExecutor(max_workers=io_w, thread_name_prefix="hw-io")
         self._cpu_executor = ThreadPoolExecutor(max_workers=cpu_w, thread_name_prefix="hw-cpu")
         atexit.register(self._cleanup_executors)
-        self._ui_queue: queue.SimpleQueue = queue.SimpleQueue()
+        self._ui_queue: deque = deque(maxlen=1000)
         self._watcher = Watcher(self, self._on_watcher_update)
         self._watcher_results: list | None = None
 
@@ -154,6 +155,7 @@ class AppCore(QMainWindow):
         self._auth_overlay: QWidget | None = None
         self._last_manut_results: list = []
         self._manut_filter: str = "all"
+        self._vnfs_lock = threading.Lock()
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:
@@ -506,6 +508,8 @@ class AppCore(QMainWindow):
         if old:
             old.setParent(None)
             old.deleteLater()
+        self.content = None
+        self._page_container = None
         from PySide6.QtCore import QCoreApplication
         QCoreApplication.processEvents()
 
@@ -619,24 +623,41 @@ class AppCore(QMainWindow):
 
     # ── Helpers de threading ──────────────────────────────────────────
     def _dispatch(self, fn) -> None:
-        self._ui_queue.put(fn)
+        maxlen = self._ui_queue.maxlen
+        if maxlen is not None and len(self._ui_queue) >= maxlen:
+            _app_log.warning("UI queue overflow (%d), descartando callback", len(self._ui_queue))
+            return
+        self._ui_queue.append(fn)
 
     def _poll_queue(self) -> None:
-        while True:
+        for _ in range(500):
             try:
-                fn = self._ui_queue.get_nowait()
-            except queue.Empty:
+                fn = self._ui_queue.popleft()
+            except IndexError:
                 break
             try:
                 fn()
             except Exception:
                 _app_log.exception("_poll_queue: callback %r falhou", fn)
+        # Drenar event_queue (PriorityQueue cresce sem consumidor)
+        drained = 0
+        while drained < 100:
+            ev = self._event_queue.get(block=False)
+            if ev is None:
+                break
+            drained += 1
+        if drained > 0:
+            _app_log.debug("Drained %d SDN events from queue", drained)
 
     def _spawn_io(self, fn, *args) -> None:
-        self._io_executor.submit(fn, *args)
+        future = self._io_executor.submit(fn, *args)
+        future.add_done_callback(lambda f: f.exception() and
+            _app_log.error("Task %s falhou: %s", fn.__name__, f.exception()))
 
     def _spawn_cpu(self, fn, *args) -> None:
-        self._cpu_executor.submit(fn, *args)
+        future = self._cpu_executor.submit(fn, *args)
+        future.add_done_callback(lambda f: f.exception() and
+            _app_log.error("CPU task %s falhou: %s", fn.__name__, f.exception()))
 
     def _run(self, func) -> None:
         if not self._sb.is_alive():

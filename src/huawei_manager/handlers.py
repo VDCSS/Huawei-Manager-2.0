@@ -84,6 +84,7 @@ class EventHandlers:
 
     def _do_connect(self, on_success_fmt: str, on_error_msg: str) -> None:
         """Tenta conectar SSH em background; atualiza status conforme resultado."""
+        self._session_tracker.touch()
         def _do():
             """Executa a conexao SSH em background."""
             try:
@@ -138,6 +139,7 @@ class EventHandlers:
     # ══════════════════════════════════════════════════════════════════
     def _fetch_config(self) -> None:
         """Busca a configuracao atual do roteador (display current-configuration)."""
+        self._session_tracker.touch()
         self._loading(self.out_config, "Carregando configuracao atual\u2026")
         output = self._sb.send_command("display current-configuration")
         self._write(self.out_config, output)
@@ -146,6 +148,7 @@ class EventHandlers:
 
     def _fetch_route(self) -> None:
         """Busca a tabela de roteamento com o filtro selecionado."""
+        self._session_tracker.touch()
         label_to_key = {v: k for k, v in ROUTE_FILTER_LABELS.items()}
         fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
         if fkey == "routing":
@@ -169,6 +172,7 @@ class EventHandlers:
 
     def _fetch_arp(self) -> None:
         """Busca a tabela ARP do roteador."""
+        self._session_tracker.touch()
         entries = self._drv.get_arp_table()
         buf = io.StringIO()
         buf.write(f"{'IP Address':<18} {'MAC Address':<20} {'Tipo':<6} {'Interface'}\n")
@@ -181,6 +185,7 @@ class EventHandlers:
 
     def _fetch_info(self) -> None:
         """Coleta multiplas informacoes do sistema (versao, CPU, memoria, interfaces, LLDP)."""
+        self._session_tracker.touch()
         self._loading(self.out_info, "Coletando informacoes do sistema\u2026")
         buf = io.StringIO()
         commands = [
@@ -218,22 +223,21 @@ class EventHandlers:
 
     def _exec_cmd(self) -> None:
         """Executa o comando do editor, opcionalmente dentro de system-view."""
+        self._session_tracker.touch()
         cmd = self._get_editor_cmd()
         if not cmd:
             self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite um comando")
             return
+        validator: CommandValidator | None = getattr(self, "_cmd_validator", None)
+        if validator is not None:
+            vr = validator.validate(cmd, getattr(self, "_access_level", "user"))
+            if not vr.allowed:
+                self._write(self.out_cmd, f"\u2718  Comando bloqueado: {vr.reason}")
+                return
         if self._sysview_var:
-            validator: CommandValidator | None = getattr(self, "_cmd_validator", None)
-            if validator is not None:
-                vr = validator.validate(cmd, getattr(self, "_access_level", "user"))
-                if not vr.allowed:
-                    self._write(self.out_cmd, f"\u2718  Comando bloqueado: {vr.reason}")
-                    return
             self._loading(self.out_cmd,
                           "system-view \u2192 " + cmd.splitlines()[0] + " \u2192 quit\u2026")
-            self.session.run_cli_timing("system-view")
-            result = self.session.run_cli_timing(cmd)
-            self.session.run_cli_timing("quit")
+            _ok, result = self._sb.send_config(cmd.strip().splitlines())
         else:
             self._loading(self.out_cmd, f"Executando: {cmd}\u2026")
             result = self._sb.send_command(cmd or "")
@@ -243,6 +247,7 @@ class EventHandlers:
 
     def _exec_config(self) -> None:
         """Envia comandos de configuracao do editor via send_config."""
+        self._session_tracker.touch()
         cmd = self._get_editor_cmd()
         if not cmd:
             self._write(self.out_cmd,
@@ -282,6 +287,7 @@ class EventHandlers:
     # ══════════════════════════════════════════════════════════════════
     def _do_backup(self) -> None:
         """Salva a running-config em arquivo TXT e registra na auditoria."""
+        self._session_tracker.touch()
         fmt = self._backup_fmt_cb.currentText()
         self._loading(self.out_backup, "Coletando configuracao para backup\u2026")
         conteudo = self._sb.send_command("display current-configuration")
@@ -392,9 +398,9 @@ class EventHandlers:
 
     def _refresh_vnfs(self) -> None:
         """Recarrega o inventario de VNFs, aplica probe/simulacao e atualiza a UI."""
-        if getattr(self, "_vnfs_busy", False):
+        vnfs_lock = getattr(self, "_vnfs_lock", None)
+        if vnfs_lock is not None and not vnfs_lock.acquire(blocking=False):
             return
-        self._vnfs_busy = True
         try:
             vnfs = load_vnf_inventory(_INVENTORY_PATH)
             if getattr(self, "_mock_mode", False):
@@ -410,7 +416,8 @@ class EventHandlers:
                 )
             ) if self._vnf_status_lbl is not None else None)
         finally:
-            self._vnfs_busy = False
+            if vnfs_lock is not None:
+                vnfs_lock.release()
 
     def _update_vnfs_ui(self, vnfs: list[VNF]) -> None:
         """Atualiza o canvas de topologia com a nova lista de VNFs."""
