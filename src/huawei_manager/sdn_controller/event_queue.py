@@ -78,14 +78,14 @@ class EventQueue:
         self,
         event: Event,
         block: bool = True,
-        timeout: float | None = None,
+        timeout: float | None = 0.5,
     ) -> None:
         """Publica um evento priorizado na fila e notifica assinantes.
 
         Args:
             event: Evento a ser publicado.
             block: Se True (padrao), bloqueia se a fila estiver cheia.
-            timeout: Tempo maximo de espera em segundos se block=True.
+            timeout: Tempo maximo de espera em segundos (padrao 0.5s).
         """
         item: _PQueueItem = (event.priority, next(self._counter), event)
         self._queue.put(item, block=block, timeout=timeout)

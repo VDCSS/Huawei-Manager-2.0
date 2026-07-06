@@ -71,7 +71,7 @@ class AppCore(QMainWindow):
         assert _secrets is not None, "_config.init() must be called first"
         assert audit is not None, "_config.init() must be called first"
         self.session = NetmikoSession(_secrets, audit)
-        self._event_queue = EventQueue()
+        self._event_queue = EventQueue(maxsize=1000)
         self._sb = SSHSouthbound(_secrets, audit, session=self.session)
         self._cmd_validator = CommandValidator()
         self._dry_run = DryRunEngine()
@@ -641,7 +641,7 @@ class AppCore(QMainWindow):
                 _app_log.exception("_poll_queue: callback %r falhou", fn)
         # Drenar event_queue (PriorityQueue cresce sem consumidor)
         drained = 0
-        while drained < 100:
+        while True:
             ev = self._event_queue.get(block=False)
             if ev is None:
                 break
