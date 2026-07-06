@@ -31,7 +31,9 @@ from huawei_manager.agents.watcher import Watcher
 from huawei_manager.constants import set_theme
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.pages import PageBuilder
+from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.sdn_controller.core import ControllerCore
+from huawei_manager.sdn_controller.drivers.router import RouterDriver
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import EventQueue
 from huawei_manager.sdn_controller.northbound import NorthboundAPI
@@ -80,7 +82,8 @@ class AppCore(QMainWindow):
             sb=self._sb,
         )
         self._snmp_handler = SnmpTrapHandler()
-        self._session_tracker = self._northbound  # placeholder: SessionTracker via NorthboundAPI
+        self._drv = RouterDriver(southbound=self._sb, event_queue=self._event_queue)
+        self._session_tracker = SessionTracker(timeout_secs=300)
         self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
         self._mock_mode: bool = True

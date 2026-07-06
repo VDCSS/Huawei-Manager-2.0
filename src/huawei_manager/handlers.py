@@ -222,7 +222,13 @@ class EventHandlers:
         if not cmd:
             self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite um comando")
             return
-        if self._sysview_var.get():
+        if self._sysview_var:
+            validator: CommandValidator | None = getattr(self, "_cmd_validator", None)
+            if validator is not None:
+                vr = validator.validate(cmd, getattr(self, "_access_level", "user"))
+                if not vr.allowed:
+                    self._write(self.out_cmd, f"\u2718  Comando bloqueado: {vr.reason}")
+                    return
             self._loading(self.out_cmd,
                           "system-view \u2192 " + cmd.splitlines()[0] + " \u2192 quit\u2026")
             self.session.run_cli_timing("system-view")
