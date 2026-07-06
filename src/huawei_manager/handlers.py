@@ -228,9 +228,9 @@ class EventHandlers:
         if not cmd:
             self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite um comando")
             return
-        validator: CommandValidator | None = getattr(self, "_cmd_validator", None)
+        validator: CommandValidator | None = self._cmd_validator
         if validator is not None:
-            vr = validator.validate(cmd, getattr(self, "_access_level", "user"))
+            vr = validator.validate(cmd, self._access_level)
             if not vr.allowed:
                 self._write(self.out_cmd, f"\u2718  Comando bloqueado: {vr.reason}")
                 return
@@ -253,13 +253,13 @@ class EventHandlers:
             self._write(self.out_cmd,
                          "\u2718  Editor vazio \u2014 digite os comandos de configuracao")
             return
-        validator: CommandValidator | None = getattr(self, "_cmd_validator", None)
+        validator: CommandValidator | None = self._cmd_validator
         if validator is not None:
-            vr = validator.validate(cmd, getattr(self, "_access_level", "user"))
+            vr = validator.validate(cmd, self._access_level)
             if not vr.allowed:
                 self._write(self.out_cmd, f"\u2718  Config bloqueada: {vr.reason}")
                 return
-        dry_run: DryRunEngine | None = getattr(self, "_dry_run", None)
+        dry_run: DryRunEngine | None = self._dry_run
         if dry_run is not None and self.session.is_connected:
             try:
                 current = self.session.run_cli_rpc("display current-configuration")
@@ -398,12 +398,12 @@ class EventHandlers:
 
     def _refresh_vnfs(self) -> None:
         """Recarrega o inventario de VNFs, aplica probe/simulacao e atualiza a UI."""
-        vnfs_lock = getattr(self, "_vnfs_lock", None)
+        vnfs_lock = self._vnfs_lock
         if vnfs_lock is not None and not vnfs_lock.acquire(blocking=False):
             return
         try:
             vnfs = load_vnf_inventory(_INVENTORY_PATH)
-            if getattr(self, "_mock_mode", False):
+            if self._mock_mode:
                 vnfs = simulate_status(vnfs)
             else:
                 vnfs = probe_vnfs(vnfs)
@@ -720,7 +720,7 @@ class EventHandlers:
                 f"color: #ff4d4d; font: bold 14px 'Inter'; background: {C.BG_INPUT};")
             self._dash_conn_host.setText("Host: ---")
 
-        vnfs = getattr(self, "_vnfs", [])
+        vnfs = self._vnfs
         online = sum(1 for v in vnfs if getattr(v, "status", "") == "online")
         offline = sum(1 for v in vnfs if getattr(v, "status", "") == "offline")
         unknown = sum(1 for v in vnfs if getattr(v, "status", "") not in ("online", "offline"))

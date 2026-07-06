@@ -6,6 +6,7 @@ import atexit
 import datetime
 import logging
 import os
+import subprocess
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QStackedWidget,
@@ -146,6 +148,14 @@ class AppCore(QMainWindow):
         self._last_manut_results: list = []
         self._manut_filter: str = "all"
         self._vnfs_lock = threading.Lock()
+        self._vnfs: list[VNF] = []
+        self._mock_mode: bool = True
+        self._dry_run: DryRunEngine | None = None
+        self._cmd_validator: CommandValidator | None = None
+        self._dev_process: subprocess.Popen | None = None
+        self.backup_path: str = ""
+        self._svc_mode_var: str = "mock"
+        self._svc_param_entries: dict[str, QLineEdit] = {}
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:
@@ -672,8 +682,7 @@ class AppCore(QMainWindow):
     # ── Cleanup ───────────────────────────────────────────────────────
     def _cleanup_executors(self) -> None:
         """Desliga ambos os pools com timeout de 5s cada."""
-        for pool in (getattr(self, "_io_executor", None),
-                     getattr(self, "_cpu_executor", None)):
+        for pool in (self._io_executor, self._cpu_executor):
             if pool is not None:
                 pool.shutdown(wait=True, timeout=5)
 

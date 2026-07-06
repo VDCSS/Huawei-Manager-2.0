@@ -1113,7 +1113,7 @@ class PageBuilder:
 
         from huawei_manager._config import PROJECT_ROOT
 
-        if getattr(self, "_dev_process", None) is not None:
+        if self._dev_process is not None:
             try:
                 self._dev_process.kill()
             except Exception:
@@ -1246,7 +1246,7 @@ class PageBuilder:
             self._write(self._manut_output, "\u2705  Nenhum problema encontrado para o filtro atual.")
 
     def _cancel_and_clear(self) -> None:
-        if getattr(self, "_dev_process", None) is not None:
+        if self._dev_process is not None:
             try:
                 self._dev_process.kill()
             except Exception:
@@ -1262,7 +1262,7 @@ class PageBuilder:
 
         from huawei_manager._config import PROJECT_ROOT
 
-        if getattr(self, "_dev_process", None) is not None:
+        if self._dev_process is not None:
             try:
                 self._dev_process.kill()
             except Exception:
