@@ -31,10 +31,13 @@ from huawei_manager.agents.watcher import Watcher
 from huawei_manager.constants import set_theme
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.pages import PageBuilder
-from huawei_manager.sdn_controller.authz import SessionTracker
-from huawei_manager.sdn_controller.drivers.router import RouterDriver
+from huawei_manager.sdn_controller.core import ControllerCore
+from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import EventQueue
+from huawei_manager.sdn_controller.northbound import NorthboundAPI
+from huawei_manager.sdn_controller.snmp_handler import SnmpTrapHandler
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
+from huawei_manager.sdn_controller.validator import CommandValidator
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vnf_models import VNF
 from huawei_manager.widgets import ActionButton, NeonButton, action_button, neon_button
@@ -67,7 +70,17 @@ class AppCore(QMainWindow):
         self.session = NetmikoSession(_secrets, audit)
         self._event_queue = EventQueue()
         self._sb = SSHSouthbound(_secrets, audit, session=self.session)
-        self._drv = RouterDriver(self._sb, self._event_queue)
+        self._cmd_validator = CommandValidator()
+        self._dry_run = DryRunEngine()
+        self._controller = ControllerCore(event_queue=self._event_queue)
+        self._northbound = NorthboundAPI(
+            controller=self._controller,
+            event_queue=self._event_queue,
+            audit_logger=audit,
+            sb=self._sb,
+        )
+        self._snmp_handler = SnmpTrapHandler()
+        self._session_tracker = self._northbound  # placeholder: SessionTracker via NorthboundAPI
         self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
         self._mock_mode: bool = True
@@ -77,7 +90,6 @@ class AppCore(QMainWindow):
 
         self._admin_attempts = 0
         self._admin_locked_until: float = 0
-        self._session_tracker = SessionTracker(timeout_secs=900)  # 15 min
 
         self._target_vnf: VNF | None = None
         self._vnfs: list[VNF] = []

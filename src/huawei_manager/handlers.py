@@ -24,10 +24,21 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as C
-from huawei_manager._config import ADMIN_PASSWORD, PROJECT_ROOT, TECNICO_PASSWORD, audit, log
-from huawei_manager.constants import CLI_FILTERS, ROUTE_FILTER_LABELS
+from huawei_manager._config import (
+    ADMIN_PASSWORD,
+    PROJECT_ROOT,
+    TECNICO_PASSWORD,
+    audit,
+    log,
+)
+from huawei_manager.constants import (
+    CLI_FILTERS,
+    ROUTE_FILTER_LABELS,
+)
 from huawei_manager.sdn_controller.authz import Role
+from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import Event, EventType
+from huawei_manager.sdn_controller.validator import CommandValidator
 from huawei_manager.services import VNF_TYPES, ServiceDef, execute_service
 from huawei_manager.vnf_models import (
     VNF,
@@ -211,7 +222,7 @@ class EventHandlers:
         if not cmd:
             self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite um comando")
             return
-        if self._sysview_var:
+        if self._sysview_var.get():
             self._loading(self.out_cmd,
                           "system-view \u2192 " + cmd.splitlines()[0] + " \u2192 quit\u2026")
             self.session.run_cli_timing("system-view")
@@ -231,6 +242,29 @@ class EventHandlers:
             self._write(self.out_cmd,
                          "\u2718  Editor vazio \u2014 digite os comandos de configuracao")
             return
+        validator: CommandValidator | None = getattr(self, "_cmd_validator", None)
+        if validator is not None:
+            vr = validator.validate(cmd, getattr(self, "_access_level", "user"))
+            if not vr.allowed:
+                self._write(self.out_cmd, f"\u2718  Config bloqueada: {vr.reason}")
+                return
+        dry_run: DryRunEngine | None = getattr(self, "_dry_run", None)
+        if dry_run is not None and self.session.is_connected:
+            try:
+                current = self.session.run_cli_rpc("display current-configuration")
+                diff_report = dry_run.diff(current, cmd)
+                if diff_report.has_changes:
+                    preview = diff_report.summary + "\n\n"
+                    for line in diff_report.added[:10]:
+                        preview += line
+                    for line in diff_report.removed[:10]:
+                        preview += line
+                    self._loading(self.out_cmd, f"Dry-run: {diff_report.summary}")
+                else:
+                    self._write(self.out_cmd, "\u2139  Nenhuma alteracao detectada em relacao a config atual.")
+                    return
+            except Exception:
+                pass
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
         ok, msg = self._sb.send_config(cmd.strip().splitlines())
         self._write(self.out_cmd, msg)
