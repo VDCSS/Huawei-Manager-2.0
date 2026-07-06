@@ -37,8 +37,6 @@ from huawei_manager.sdn_controller.core import ControllerCore
 from huawei_manager.sdn_controller.drivers.router import RouterDriver
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import EventQueue
-from huawei_manager.sdn_controller.northbound import NorthboundAPI
-from huawei_manager.sdn_controller.snmp_handler import SnmpTrapHandler
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.sdn_controller.validator import CommandValidator
 from huawei_manager.session import NetmikoSession
@@ -76,13 +74,6 @@ class AppCore(QMainWindow):
         self._cmd_validator = CommandValidator()
         self._dry_run = DryRunEngine()
         self._controller = ControllerCore(event_queue=self._event_queue)
-        self._northbound = NorthboundAPI(
-            controller=self._controller,
-            event_queue=self._event_queue,
-            audit_logger=audit,
-            sb=self._sb,
-        )
-        self._snmp_handler = SnmpTrapHandler()
         self._drv = RouterDriver(southbound=self._sb, event_queue=self._event_queue)
         self._session_tracker = SessionTracker(timeout_secs=300)
         self._active_btn: NeonButton | None = None
