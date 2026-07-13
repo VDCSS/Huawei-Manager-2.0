@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """vnf_models.py — VNF data model, probe TCP, inventory I/O.
 
 Extraído de topology.py para separar modelo de dados (puro, testável
@@ -6,6 +5,8 @@ sem Qt) da view Qt (TopologyCanvas, _VNFNodeRect, _TopoView).
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
 import random
@@ -16,10 +17,91 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from threading import Lock
 
+from cryptography.fernet import Fernet
+
+from huawei_manager import _config
+
 log = logging.getLogger("huawei.topology")
 
 VNF_INVENTORY_FILE = "vnf_inventory.json"
 _INV_LOCK = Lock()
+
+# ═══════════════════════════════════════════════════════════════════════
+#  FERNET ENCRYPTION HELPERS  (C4)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def _get_fernet_encrypt() -> Fernet:
+    """Retorna Fernet para *criptografia* — exige VNF_ENCRYPT_KEY, SEM fallback.
+
+    Se VNF_ENCRYPT_KEY nao estiver configurada, dados sensiveis serao
+    salvos em plaintext (log.warning).
+    """
+    raw = _config._s("VNF_ENCRYPT_KEY")
+    if not raw:
+        log.warning(
+            "VNF_ENCRYPT_KEY nao configurada — senhas/chaves VNF "
+            "serao salvas em plaintext! "
+            "Defina VNF_ENCRYPT_KEY no .env (gere com: "
+            "python3 -c \"from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())\")"
+        )
+        raise ValueError("VNF_ENCRYPT_KEY nao configurada")
+    try:
+        return Fernet(raw.encode())
+    except Exception as exc:
+        log.warning("VNF_ENCRYPT_KEY invalida: %s", exc)
+        raise
+
+
+def _get_fernet_decrypt() -> Fernet | None:
+    """Retorna Fernet para *descriptografia* — tenta VNF_ENCRYPT_KEY,
+    depois fallback HMAC (compatibilidade reversa com dados antigos)."""
+    raw = _config._s("VNF_ENCRYPT_KEY")
+    if raw:
+        try:
+            return Fernet(raw.encode())
+        except Exception:
+            log.warning("VNF_ENCRYPT_KEY invalida, tentando fallback HMAC")
+            raw = ""
+    if not raw:
+        raw = _config._s("AUDIT_HMAC_KEY", "")
+    if raw:
+        return Fernet(base64.urlsafe_b64encode(hashlib.sha256(raw.encode()).digest()))
+    return None
+
+
+def _encrypt_val(text: str) -> str:
+    """Criptografa valor com VNF_ENCRYPT_KEY.
+
+    Se a chave nao existir (ValueError), retorna plaintext com log.warning
+    (design intencional — aceita chave opcional).
+    Se a chave existir mas a criptografia falhar, PROPAGA o erro (fail fast).
+    """
+    try:
+        f = _get_fernet_encrypt()
+    except ValueError:
+        # Chave nao configurada — fallback plaintext (log ja emitido em _get_fernet_encrypt)
+        return text
+    try:
+        return f.encrypt(text.encode()).decode()
+    except Exception as exc:
+        log.error("Falha ao criptografar senha VNF: %s", exc)
+        raise
+
+
+def _decrypt_val(enc: str) -> str:
+    """Descriptografa valor; tenta VNF_ENCRYPT_KEY, fallback HMAC."""
+    f = _get_fernet_decrypt()
+    if f is None:
+        log.warning("VNF_ENCRYPT_KEY ausente — dados descriptografados em plaintext")
+        return enc
+    try:
+        return f.decrypt(enc.encode()).decode()
+    except Exception:
+        log.warning("Falha ao decriptar senha VNF — usando valor original")
+        return enc
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  VNF DATACLASS
@@ -52,8 +134,12 @@ class VNF:
 
     @classmethod
     def from_dict(cls, d: dict) -> VNF:
-        """Cria VNF a partir de um dicionario, ignorando chaves extras."""
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+        v = cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+        if v.password:
+            v.password = _decrypt_val(v.password)
+        if v.ssh_key:
+            v.ssh_key = _decrypt_val(v.ssh_key)
+        return v
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -90,13 +176,15 @@ def _vnf_cache_key(vnf: VNF) -> str:
     return f"{vnf.host}:{vnf.port or 22}"
 
 
-def _check_vnf(vnf: VNF, timeout: int = 2) -> str:
+def _check_vnf(vnf: VNF, timeout: int = 5) -> str:
     """Tenta conexao TCP ao VNF; retorna 'online' ou lanca excecao."""
     socket.create_connection((vnf.host, vnf.port or 22), timeout=timeout).close()
     return "online"
 
 
-def probe_vnfs(vnfs: list[VNF], timeout: int = 2) -> list[VNF]:
+def probe_vnfs(vnfs: list[VNF], timeout: int | None = None) -> list[VNF]:
+    if timeout is None:
+        timeout = int(_config._s("VNF_PROBE_TIMEOUT", "5"))
     global _probe_cache
     now = time.time()
     to_probe: list[VNF] = []
@@ -161,8 +249,14 @@ def load_vnf_inventory(filename: str = VNF_INVENTORY_FILE) -> list[VNF]:
 
 
 def save_vnf_inventory(vnfs: list[VNF], filename: str = VNF_INVENTORY_FILE) -> None:
-    """Salva inventario de VNFs no arquivo JSON."""
-    data = {"vnfs": [asdict(v) for v in vnfs]}
+    data = {"vnfs": []}
+    for v in vnfs:
+        d = asdict(v)
+        if d["password"]:
+            d["password"] = _encrypt_val(d["password"])
+        if d["ssh_key"]:
+            d["ssh_key"] = _encrypt_val(d["ssh_key"])
+        data["vnfs"].append(d)
     with _INV_LOCK:
         Path(filename).write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"

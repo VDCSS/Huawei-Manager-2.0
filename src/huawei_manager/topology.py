@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 topology.py — VNF Topology + Canvas (PySide6)
 ==============================================
@@ -119,19 +118,19 @@ class _VNFNodeRect(QGraphicsRectItem):
         self.setBrush(normal_brush)
         self.setData(ITEM_DATA_KEY, vnf.id)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._canvas._on_click(self._vnf)
             event.accept()
         else:
             super().mousePressEvent(event)
 
-    def hoverEnterEvent(self, event) -> None:  # noqa: N802
+    def hoverEnterEvent(self, event) -> None:
         self.setBrush(self._hover_brush)
         self._canvas._on_hover_enter(self._vnf)
         super().hoverEnterEvent(event)
 
-    def hoverLeaveEvent(self, event) -> None:  # noqa: N802
+    def hoverLeaveEvent(self, event) -> None:
         self.setBrush(self._normal_brush)
         self._canvas._on_hover_leave()
         super().hoverLeaveEvent(event)
@@ -148,7 +147,7 @@ class _TopoView(QGraphicsView):
         super().__init__(scene)
         self._canvas = canvas
 
-    def contextMenuEvent(self, event) -> None:  # noqa: N802
+    def contextMenuEvent(self, event) -> None:
         item = self.itemAt(event.pos())
         if item:
             vnf_id = item.data(ITEM_DATA_KEY)
@@ -157,7 +156,7 @@ class _TopoView(QGraphicsView):
                 return
         super().contextMenuEvent(event)
 
-    def resizeEvent(self, event) -> None:  # noqa: N802
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._canvas._draw()
 

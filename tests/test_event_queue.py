@@ -85,11 +85,13 @@ class TestEventQueuePutGet:
     def test_maxsize_blocks_on_full(self):
         eq = EventQueue(maxsize=1)
         eq.put(Event(type=EventType.DEVICE_CONNECTED, source="gw-01"))
-        with pytest.raises(queue.Full):
-            eq.put(
-                Event(type=EventType.DEVICE_CONNECTED, source="gw-02"),
-                block=False,
-            )
+        eq.put(
+            Event(type=EventType.DEVICE_CONNECTED, source="gw-02"),
+            block=False,
+        )
+        ev = eq.get()
+        assert ev is not None
+        assert ev.source == "gw-01"
 
 
 class TestEventQueueSubscribe:
@@ -310,11 +312,13 @@ class TestEventQueueFullWithPriority:
         eq = EventQueue(maxsize=2)
         eq.put(Event(type=EventType.ALERT, source="gw-01", priority=0))
         eq.put(Event(type=EventType.DEVICE_CONNECTED, source="gw-02", priority=10))
-        with pytest.raises(queue.Full):
-            eq.put(
-                Event(type=EventType.DEVICE_ERROR, source="gw-03"),
-                block=False,
-            )
+        eq.put(
+            Event(type=EventType.DEVICE_ERROR, source="gw-03"),
+            block=False,
+        )
+        ev = eq.get()
+        assert ev is not None
+        assert ev.type == EventType.ALERT
 
     def test_full_queue_still_prioritizes(self):
         eq = EventQueue(maxsize=2)

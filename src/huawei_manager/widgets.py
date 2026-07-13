@@ -8,7 +8,7 @@ import logging
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
@@ -315,6 +315,7 @@ class AuthOverlay(QWidget):
         self._lockout_secs = admin_lockout_secs
         self._locked_until = admin_locked_until
         self._attempts = attempts_so_far
+        self._lockout_handled = False
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.setStyleSheet("AuthOverlay { background: rgba(0, 0, 0, 140); }")
@@ -407,7 +408,8 @@ class AuthOverlay(QWidget):
 
     def close_(self) -> None:
         locked = self._locked_until if time.time() < self._locked_until else 0
-        self.on_result("user", self._attempts, locked)
+        if not self._lockout_handled:
+            self.on_result("user", self._attempts, locked)
         self.hide()
         self.deleteLater()
 
@@ -441,6 +443,7 @@ class AuthOverlay(QWidget):
             if remaining <= 0:
                 self._locked_until = time.time() + self._lockout_secs
                 self.on_result("user", 0, self._locked_until)
+                self._lockout_handled = True
                 self._show_lockout()
             else:
                 self.on_result("user", self._attempts, 0)
@@ -458,3 +461,17 @@ class AuthOverlay(QWidget):
         self._auth_btn.setEnabled(False)
         self._error_lbl.setText(f"Acesso bloqueado por {remaining}s")
         self._error_lbl.show()
+        if remaining > 0:
+            QTimer.singleShot(self._lockout_secs * 1000, self._reenable_after_lockout)
+
+    def _reenable_after_lockout(self) -> None:
+        """Reabilita inputs apos lockout, seguro para widget deletado."""
+        try:
+            if time.time() >= self._locked_until:
+                self._user_entry.setEnabled(True)
+                self._pw_entry.setEnabled(True)
+                self._auth_btn.setEnabled(True)
+                self._error_lbl.setText("")
+                self._error_lbl.hide()
+        except RuntimeError:
+            pass  # Widget foi deletado (dialog fechado durante lockout)

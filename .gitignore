@@ -29,3 +29,4 @@ scripts/wayland_diag.py
 .coverage
 *.cover
 *,cover
+graphify-out/

@@ -6,7 +6,7 @@
       "host": "10.100.74.254",
       "port": 2222,
       "type": "ROUTER",
-      "status": "unknown",
+      "status": "offline",
       "version": "",
       "location": "",
       "username": "",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 # ── Tipos suportados ──────────────────────────────────────────────────
 VNF_TYPES = {
@@ -63,13 +64,38 @@ class ServiceDef:
 
 
 # ── factory helper ──────────────────────────────────────────────────
-def _svc(id_, name, desc, cat, types, cmds=None, config=False):
-    """Factory que cria um ServiceDef com fallback de comandos para a descrição."""
+@dataclass
+class _SvcSpec:
+    id: str
+    name: str
+    desc: str
+    cat: str
+    types: list[str]
+    cmds: list[str] | None = None
+    config: bool = False
+
+
+def _svc(*args: Any, **kw: Any) -> ServiceDef:
+    """Factory que cria um ServiceDef com fallback de comandos para a descrição.
+
+    Aceita argumentos posicionais (backward compat) ou keyword args (via _SvcSpec).
+    """
+    if args:
+        id_, name, desc, cat, types, *rest = args
+        cmds = kw.pop("cmds", rest[0] if rest else None)
+        config = kw.pop("config", rest[1] if len(rest) > 1 else False)
+        return ServiceDef(
+            id=id_, name=name, description=desc,
+            category=cat, vnf_types=types,
+            cli_commands=cmds or [desc],
+            config_mode=config,
+        )
+    spec = _SvcSpec(**kw)
     return ServiceDef(
-        id=id_, name=name, description=desc,
-        category=cat, vnf_types=types,
-        cli_commands=cmds or [desc],
-        config_mode=config,
+        id=spec.id, name=spec.name, description=spec.desc,
+        category=spec.cat, vnf_types=spec.types,
+        cli_commands=spec.cmds or [spec.desc],
+        config_mode=spec.config,
     )
 
 

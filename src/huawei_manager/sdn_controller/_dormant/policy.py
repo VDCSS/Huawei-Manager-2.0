@@ -129,7 +129,7 @@ class PolicyEngine:
                     rule.action()
                     result["triggered"] = True
                     self._log_triggered(rule)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 result["error"] = str(e)
 
             results.append(result)

@@ -55,7 +55,7 @@ class SecurityEvent:
         return self.severity == "critical"
 
     @property
-    def id(self) -> str:  # noqa: A003
+    def id(self) -> str:
         """Alias para event_id."""
         return self.event_id
 

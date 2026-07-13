@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from huawei_manager.audit_log import AuditLogger
+from huawei_manager.sdn_controller.validator import CommandValidator, ValidationResult
 from huawei_manager.vault import EnvBackend
 
 
@@ -372,3 +373,132 @@ class TestSSHSouthboundCredentialSanitization:
                 for arg in _call.args:
                     if isinstance(arg, str):
                         assert "supersecret" not in arg
+
+
+class TestSSHSouthboundWithValidator:
+    """SSHSouthbound integration with CommandValidator."""
+
+    @pytest.fixture
+    def mock_session(self):
+        with patch("huawei_manager.sdn_controller.southbound.NetmikoSession") as cls:
+            ms = MagicMock()
+            cls.return_value = ms
+            yield ms
+
+    @pytest.fixture
+    def mock_validator(self):
+        v = MagicMock(spec=CommandValidator)
+        v.validate = MagicMock(return_value=ValidationResult(allowed=True))
+        return v
+
+    @pytest.fixture
+    def sb(self, mock_session, mock_validator):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+        return SSHSouthbound(EnvBackend(), AuditLogger(), validator=mock_validator)
+
+    def test_validator_called_on_send_command(self, sb, mock_validator):
+        sb.connect()
+        sb.send_command("display version")
+        mock_validator.validate.assert_called_once_with("display version", "user")
+
+    def test_validator_called_on_send_config(self, sb, mock_validator):
+        sb.connect()
+        sb.send_config(["vlan 10", "name test"])
+        mock_validator.validate.assert_called_once_with("vlan 10\nname test", "user")
+
+    def test_send_command_blocked_by_validator(self, sb, mock_validator):
+        sb.connect()
+        mock_validator.validate.return_value = ValidationResult(
+            allowed=False, reason="Unknown command"
+        )
+        with pytest.raises(RuntimeError, match="denied by policy"):
+            sb.send_command("format flash")
+
+    def test_send_config_blocked_by_validator(self, sb, mock_validator):
+        sb.connect()
+        mock_validator.validate.return_value = ValidationResult(
+            allowed=False, reason="Command denied by policy: reset"
+        )
+        with pytest.raises(RuntimeError, match="denied by policy"):
+            sb.send_config(["reset saved-configuration"])
+
+    def test_set_access_role_updates_role(self, sb):
+        assert sb._access_role == "user"
+        sb.set_access_role("admin")
+        assert sb._access_role == "admin"
+
+    def test_validator_uses_updated_role(self, sb, mock_validator):
+        sb.connect()
+        sb.set_access_role("tecnico")
+        sb.send_command("reset counters")
+        mock_validator.validate.assert_called_once_with("reset counters", "tecnico")
+
+
+class TestSSHSouthboundServiceCommands:
+    """send_service_commands delegates correctly."""
+
+    def test_show_command_mode(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        mock_session = MagicMock()
+        sb._session = mock_session
+        sb._connected = True
+
+        mock_session.run_cli_rpc.side_effect = ["output1"]
+        out = sb.send_service_commands(["display clock"], config_mode=False)
+        assert "output1" in out
+        mock_session.run_cli_rpc.assert_called_once_with("display clock")
+        # No system-view/quit calls
+        assert mock_session.run_cli_rpc.call_count == 1
+
+    def test_config_mode_system_view(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        mock_session = MagicMock()
+        mock_session.edit_config.return_value = (True, "ok")
+        sb._session = mock_session
+        sb._connected = True
+
+        out = sb.send_service_commands(
+            ["vlan 10", "name test"], config_mode=True
+        )
+        assert "Config applied" in out
+        assert mock_session.run_cli_rpc.call_count == 2  # system-view + quit
+
+    def test_multiple_commands(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        mock_session = MagicMock()
+        mock_session.run_cli_rpc.side_effect = ["output1", "output2"]
+        sb._session = mock_session
+        sb._connected = True
+
+        out = sb.send_service_commands(["display clock", "display version"])
+        assert "output1" in out
+        assert "output2" in out
+        assert mock_session.run_cli_rpc.call_count == 2
+
+    def test_raises_if_not_connected(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        with pytest.raises(RuntimeError, match="Not connected"):
+            sb.send_service_commands(["display version"])
+
+    def test_with_validator_blocks_denied(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        v = MagicMock(spec=CommandValidator)
+        v.validate.return_value = ValidationResult(allowed=False, reason="test deny")
+        sb = SSHSouthbound(EnvBackend(), AuditLogger(), validator=v)
+        mock_session = MagicMock()
+        sb._session = mock_session
+        sb._connected = True
+
+        with pytest.raises(RuntimeError, match="denied by policy"):
+            sb.send_service_commands(["format flash"], config_mode=False)
+        v.validate.assert_called_once()
+        mock_session.run_cli_rpc.assert_not_called()

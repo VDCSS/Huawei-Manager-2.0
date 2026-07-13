@@ -188,6 +188,91 @@ class TestGet:
         assert "output" in result or "ERRO" not in result
 
 
+class TestProperties:
+    """Test property accessors for user, pass, ssh_key, etc."""
+
+    def test_user_override(self, session):
+        """_user returns override_username when set."""
+        session.override_username = "root"
+        assert session._user == "root"
+
+    def test_user_fallback(self, session):
+        """_user falls back to backend when override is empty."""
+        session.override_username = ""
+        # Set via backend
+        assert session._user == session._backend.get("ROUTER_USERNAME")
+
+    def test_pass_override(self, session):
+        """_pass returns override_password when set."""
+        session.override_password = "s3cret"
+        assert session._pass == "s3cret"
+
+    def test_pass_fallback(self, session):
+        """_pass falls back to backend when override is empty."""
+        session.override_password = ""
+        assert session._pass == session._backend.get("ROUTER_PASSWORD")
+
+    def test_ssh_key_none_when_empty(self, session):
+        """_ssh_key returns None when no key is configured."""
+        session._backend.put("ROUTER_SSH_KEY", "")
+        assert session._ssh_key is None
+
+    def test_session_id_with_conn(self, session):
+        """_session_id returns host:port when connected."""
+        mock_conn = MagicMock()
+        session._conn = mock_conn
+        with (
+            patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(session), "_port", new_callable=PropertyMock, return_value=22),
+        ):
+            assert session._session_id == "10.0.0.1:22"
+
+
+class TestCmdPaths:
+    """Additional _cmd and run_cli_timing path tests."""
+
+    def test_cmd_exception_returns_error(self, session):
+        """_cmd returns error message when command fails."""
+        mock_conn = MagicMock()
+        mock_conn.send_command.side_effect = RuntimeError("timeout")
+        session._conn = mock_conn
+        result = session._cmd("display invalid")
+        assert "ERRO" in result
+
+    def test_run_cli_timing_no_conn(self, session):
+        """run_cli_timing returns 'Sem conexao' when not connected."""
+        session._conn = None
+        result = session.run_cli_timing("display clock")
+        assert "Sem conexao" in result
+
+    def test_get_no_conn(self, session):
+        """get returns 'Sem conexao' when not connected."""
+        session._conn = None
+        result = session.get("full_config")
+        assert "Sem conexao" in result
+
+
+class TestDisconnectErrors:
+    def test_disconnect_swallows_exception(self, session):
+        """disconnect doesn't crash even if disconnect() raises."""
+        mock_conn = MagicMock()
+        mock_conn.disconnect.side_effect = RuntimeError("conn lost")
+        session._conn = mock_conn
+        session.disconnect()  # must not raise
+        assert session._conn is None
+
+
+class TestIsConnected:
+    def test_is_connected_false_when_no_conn(self, session):
+        assert session.is_connected is False
+
+    def test_is_connected_true(self, session):
+        mock_conn = MagicMock()
+        mock_conn.is_alive.return_value = True
+        session._conn = mock_conn
+        assert session.is_connected is True
+
+
 # ── Host Key Verification ─────────────────────────────────────────
 
 

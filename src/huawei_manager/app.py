@@ -6,7 +6,6 @@ import atexit
 import datetime
 import logging
 import os
-import subprocess
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -153,7 +152,7 @@ class AppCore(QMainWindow):
         self._mock_mode: bool = True
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
-        self._dev_process: subprocess.Popen | None = None
+        self._cancel_event: threading.Event | None = None
         self.backup_path: str = ""
         self._svc_mode_var: str = "mock"
         self._svc_param_entries: dict[str, QLineEdit] = {}
@@ -497,6 +496,9 @@ class AppCore(QMainWindow):
         self._dash_timer.stop()
         self._vnf_timer.stop()
         self._poll_timer.stop()
+        self._session_timer.stop()
+        self._clock_timer.stop()
+        self._watcher.stop()
 
         # 2. Salvar estado
         current_page = self._current_page
@@ -522,6 +524,10 @@ class AppCore(QMainWindow):
         self._dash_timer.start()
         self._vnf_timer.start()
         self._poll_timer.start()
+        self._session_timer.start()
+        self._clock_timer.start()
+        if self._watcher.is_active:
+            self._watcher.start()
 
     # ── Atalhos de teclado ─────────────────────────────────────────────
     def _setup_bindings(self) -> None:
@@ -550,7 +556,9 @@ class AppCore(QMainWindow):
         if page == "config":
             self._run(self._fetch_config)
         elif page == "route":
-            self._run(self._fetch_route)
+            label_to_key = {v: k for k, v in C.ROUTE_FILTER_LABELS.items()}
+            fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
+            self._run(lambda: self._fetch_route(fkey))
         elif page == "arp":
             self._run(self._fetch_arp)
         elif page == "info":
@@ -558,13 +566,16 @@ class AppCore(QMainWindow):
         elif page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
-                self._run(self._exec_cmd)
+                self._run(lambda: self._exec_cmd(cmd))
         elif page == "backup":
-            self._run(self._do_backup)
+            fmt = self._backup_fmt_cb.currentText()
+            self._run(lambda: self._do_backup(fmt))
 
     def _on_ctrl_shift_enter(self) -> None:
         if self._current_page == "cmd":
-            self._run(self._exec_config)
+            cmd = self._get_editor_cmd()
+            if cmd:
+                self._run(lambda: self._exec_config(cmd))
 
     def _on_ctrl_d(self) -> None:
         self._toggle_connect()
@@ -688,7 +699,7 @@ class AppCore(QMainWindow):
                 pool.shutdown(wait=True, timeout=5)
 
     def _on_close(self) -> None:
-        self._watcher.stop()
+        self._watcher.shutdown()
         self._sb.disconnect()
         self._cleanup_executors()
 

@@ -66,7 +66,7 @@ class _CmdReturnFilter(QObject):
                         cursor.insertText("\n")
                     return True
                 else:
-                    self.app._run(self.app._exec_cmd)
+                    self.app._run(lambda cmd=self.app._get_editor_cmd(): self.app._exec_cmd(cmd))
                     return True
         return super().eventFilter(obj, event)
 
@@ -163,7 +163,11 @@ class PageBuilder:
         self._page_layout(p).addWidget(self.out_route, stretch=1)
         self._page_layout(p).addSpacing(10)
         btn = action_button(p, "\u21bb  Carregar",
-                            lambda: self._run(self._fetch_route), C.NEON_CYAN)
+                            lambda: self._run(
+                                lambda fkey=(
+                                    {v: k for k, v in ROUTE_FILTER_LABELS.items()}
+                                    .get(self._route_filter_cb.currentText(), "routing")
+                                ): self._fetch_route(fkey)), C.NEON_CYAN)
         self._page_layout(p).addWidget(btn)
 
     # ── ARP ───────────────────────────────────────────────────────────
@@ -306,11 +310,13 @@ class PageBuilder:
         right_layout.addSpacing(6)
 
         btn_exec = action_button(abar, "\u25b6 Executar",
-                                 lambda: self._run(self._exec_cmd), C.NEON_CYAN)
+                                 lambda: self._run(
+                                     lambda cmd=self._get_editor_cmd(): self._exec_cmd(cmd)), C.NEON_CYAN)
         abar_layout.addWidget(btn_exec)
         abar_layout.addSpacing(6)
         btn_cfg = action_button(abar, "\u2699 Enviar Config",
-                                lambda: self._run(self._exec_config), C.NEON_AMBER)
+                                lambda: self._run(
+                                    lambda cmd=self._get_editor_cmd(): self._exec_config(cmd)), C.NEON_AMBER)
         abar_layout.addWidget(btn_cfg)
 
         self._sysview_var = False
@@ -394,7 +400,8 @@ class PageBuilder:
         self._page_layout(p).addWidget(self.out_backup, stretch=1)
         self._page_layout(p).addSpacing(10)
         btn = action_button(p, "\U0001f4be  Fazer Backup",
-                            lambda: self._run(self._do_backup), C.NEON_PURP)
+                            lambda: self._run(
+                                lambda fmt=self._backup_fmt_cb.currentText(): self._do_backup(fmt)), C.NEON_PURP)
         self._page_layout(p).addWidget(btn)
 
     # ── Topology ──────────────────────────────────────────────────────
@@ -1108,17 +1115,15 @@ class PageBuilder:
             self._apply_manut_filter()
 
     def _run_dev_cmd(self, target: str) -> None:
+        if not self._require_access("tecnico"):
+            return
         import subprocess
         import threading
 
         from huawei_manager._config import PROJECT_ROOT
 
-        if self._dev_process is not None:
-            try:
-                self._dev_process.kill()
-            except Exception:
-                pass
-            self._dev_process = None
+        # Cancela processo anterior se houver
+        self._cancel_and_clear()
 
         cmds = {
             "lint":      ["make", "lint"],
@@ -1128,6 +1133,9 @@ class PageBuilder:
         }
         cmd_list = cmds.get(target, ["true"])
         self._loading(self._manut_output, f"Executando: {' '.join(cmd_list)}...")
+
+        cancel = threading.Event()
+        self._cancel_event = cancel
 
         def target_fn():
             buf: list[str] = []
@@ -1142,20 +1150,25 @@ class PageBuilder:
                             self._manut_output.setPlainText(t),
                         ))
 
+            proc: subprocess.Popen | None = None
             try:
                 proc = subprocess.Popen(
                     cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, cwd=str(PROJECT_ROOT),
                 )
-                self._dev_process = proc
                 assert proc.stdout is not None
                 for line in proc.stdout:
-                    if proc.poll() is not None and not line:
+                    if cancel.is_set() or (proc.poll() is not None and not line):
                         break
                     buf.append(line.rstrip("\n"))
-                    # Atualiza UI a cada 5 linhas ou a cada 500ms (batch)
                     if len(buf) % 5 == 0:
                         _flush()
+                if cancel.is_set():
+                    proc.kill()
+                    proc.wait(timeout=5)
+                    self._dispatch(lambda: self._manut_output.append(
+                        "\n\u26a1  Processo cancelado"))
+                    return
                 proc.wait(timeout=180)
                 _flush()
                 rc = proc.returncode
@@ -1169,11 +1182,18 @@ class PageBuilder:
                 self._dispatch(lambda err=str(e): self._manut_output.append(
                     f"\n\u274c  Erro: {err}"))
             finally:
-                self._dev_process = None
+                if proc is not None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                self._dispatch(lambda: setattr(self, '_cancel_event', None))
 
         self._spawn_io(target_fn)
 
     def _run_agents(self) -> None:
+        if not self._require_access("tecnico"):
+            return
         from huawei_manager.agents.runner import run_all
 
         self._loading(self._manut_output, "Varrendo projeto com agentes...")
@@ -1246,31 +1266,28 @@ class PageBuilder:
             self._write(self._manut_output, "\u2705  Nenhum problema encontrado para o filtro atual.")
 
     def _cancel_and_clear(self) -> None:
-        if self._dev_process is not None:
-            try:
-                self._dev_process.kill()
-            except Exception:
-                pass
-            self._dev_process = None
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+            self._cancel_event = None
             self._dispatch(lambda: self._manut_output.append("\n\u26a1  Processo cancelado"))
         else:
             self._write(self._manut_output, "")
 
     def _run_setup(self, mode: str) -> None:
+        if not self._require_access("tecnico"):
+            return
         import subprocess
         import threading
 
         from huawei_manager._config import PROJECT_ROOT
 
-        if self._dev_process is not None:
-            try:
-                self._dev_process.kill()
-            except Exception:
-                pass
-            self._dev_process = None
+        self._cancel_and_clear()
 
         setup_script = str(PROJECT_ROOT / "setup" / "setup.sh")
         self._loading(self._manut_output, f"setup.sh {mode}...")
+
+        cancel = threading.Event()
+        self._cancel_event = cancel
 
         def target_fn():
             buf: list[str] = []
@@ -1285,21 +1302,26 @@ class PageBuilder:
                             self._manut_output.setPlainText(t),
                         ))
 
+            proc: subprocess.Popen | None = None
             try:
                 proc = subprocess.Popen(
                     [setup_script, mode], stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
                     cwd=str(PROJECT_ROOT),
                 )
-                self._dev_process = proc
                 assert proc.stdout is not None
                 for line in proc.stdout:
-                    if proc.poll() is not None and not line:
+                    if cancel.is_set() or (proc.poll() is not None and not line):
                         break
                     buf.append(line.rstrip("\n"))
-                    # Atualiza UI a cada 5 linhas
                     if len(buf) % 5 == 0:
                         _flush()
+                if cancel.is_set():
+                    proc.kill()
+                    proc.wait(timeout=5)
+                    self._dispatch(lambda: self._manut_output.append(
+                        "\n\u26a1  Processo cancelado"))
+                    return
                 proc.wait(timeout=120)
                 _flush()
                 rc = proc.returncode
@@ -1313,7 +1335,12 @@ class PageBuilder:
                 self._dispatch(lambda err=str(e): self._manut_output.append(
                     f"\n\u274c  Erro: {err}"))
             finally:
-                self._dev_process = None
+                if proc is not None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                self._dispatch(lambda: setattr(self, '_cancel_event', None))
 
         self._spawn_io(target_fn)
 

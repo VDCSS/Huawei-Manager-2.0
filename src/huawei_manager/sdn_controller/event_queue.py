@@ -7,12 +7,15 @@ prioridade (0 = crítica, 10 = normal, 20 = baixa).
 from __future__ import annotations
 
 import itertools
+import logging
 import queue
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
+
+_LOG = logging.getLogger(__name__)
 
 
 class EventType(Enum):
@@ -88,7 +91,12 @@ class EventQueue:
             timeout: Tempo maximo de espera em segundos (padrao 0.5s).
         """
         item: _PQueueItem = (event.priority, next(self._counter), event)
-        self._queue.put(item, block=block, timeout=timeout)
+        try:
+            self._queue.put(item, block=block, timeout=timeout)
+        except queue.Full:
+            _LOG.warning("EventQueue cheia (%d), descartando %s/%s",
+                         self._queue.maxsize, event.type.name, event.source)
+            return
         self._notify(event)
 
     def get(
@@ -133,13 +141,15 @@ class EventQueue:
             try:
                 cb(event)
             except Exception:
-                pass  # Assinante não quebra a fila
+                _LOG.exception("Subscriber %r falhou ao processar %s/%s",
+                               cb, event.type.name, event.source)
 
-    def poll(self, timeout: float = 0.1) -> list[Event]:
-        """Drena todos os eventos disponíveis (non-blocking drain).
+    def poll(self, timeout: float = 0.1, max_events: int = 100) -> list[Event]:
+        """Drena eventos disponiveis ate o limite (non-blocking drain).
 
         Args:
             timeout: Tempo de espera inicial pelo primeiro evento (s).
+            max_events: Numero maximo de eventos a drenar (padrao 100).
 
         Returns:
             Lista de eventos pendentes (pode ser vazia), ordenados por
@@ -150,7 +160,7 @@ class EventQueue:
         if head is None:
             return events
         events.append(head)
-        while True:
+        while len(events) < max_events:
             ev = self.get(block=False)
             if ev is None:
                 break

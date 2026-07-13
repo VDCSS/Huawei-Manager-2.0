@@ -41,6 +41,7 @@ class Watcher:
 
     def stop(self) -> None:
         self._active = False
+        self._scanning = False
         if self._timer.isActive():
             self._timer.stop()
         log.info("Watcher parado")
@@ -49,11 +50,21 @@ class Watcher:
     def is_active(self) -> bool:
         return self._active
 
+    def shutdown(self) -> None:
+        """Para o timer e finaliza o pool de threads."""
+        self.stop()
+        self._executor.shutdown(wait=False)
+
     def _tick(self) -> None:
         if not self._active or self._scanning:
             return
         self._scanning = True
-        self._executor.submit(self._run_scan)
+        try:
+            self._executor.submit(self._run_scan)
+        except RuntimeError:
+            # Executor shut down — reseta flag
+            self._scanning = False
+            log.warning("Watcher: executor rejeitou scan (shutdown?)")
 
     def _run_scan(self) -> None:
         try:

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Module-level setup: logging, secrets, audit, config constants."""
 
 from __future__ import annotations

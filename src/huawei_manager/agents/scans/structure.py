@@ -11,11 +11,11 @@ log = logging.getLogger("huawei.agents.structure")
 
 REQUIRED_DIRS = [
     "src/huawei_manager",
+    "src/huawei_manager/data",
     "tests",
     "share/icons",
     "share/shell",
     "share/shell/completion",
-    "data",
     "setup",
 ]
 

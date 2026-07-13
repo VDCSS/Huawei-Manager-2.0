@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 vault.py — Abstração de secrets (Fase 3)
 ==========================================
@@ -258,7 +257,7 @@ class VaultBackend(SecretsBackend):
     def __init__(self) -> None:
         """Autentica no Vault via VAULT_ADDR/VAULT_TOKEN."""
         try:
-            import hvac  # noqa: F401 # pyright: ignore[reportMissingModuleSource]
+            import hvac  # pyright: ignore[reportMissingModuleSource]
         except ImportError:
             raise RuntimeError("hvac não instalado: pip install hvac")
 
@@ -308,7 +307,7 @@ class AWSBackend(SecretsBackend):
     def __init__(self) -> None:
         """Autentica na AWS Secrets Manager via boto3."""
         try:
-            import boto3  # noqa: F401 # pyright: ignore[reportMissingImports]
+            import boto3  # pyright: ignore[reportMissingImports]
             self._boto3 = boto3
         except ImportError:
             raise RuntimeError("boto3 não instalado: pip install boto3")

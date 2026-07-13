@@ -16,7 +16,7 @@ from huawei_manager.agents.scans import cross_ref, dead_code, deps, security, st
 
 log = logging.getLogger("huawei.agents.runner")
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 SCAN_TIMEOUT_S = 15
 

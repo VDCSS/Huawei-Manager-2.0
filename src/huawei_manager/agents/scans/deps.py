@@ -12,8 +12,8 @@ from huawei_manager.agents import AgentItem, AgentResult
 log = logging.getLogger("huawei.agents.deps")
 
 STDLIB_MODULES: set[str] = {
-    "abc", "ast", "asyncio", "base64", "collections", "concurrent", "contextlib",
-    "copy", "csv", "dataclasses", "datetime", "decimal", "enum", "functools",
+    "abc", "ast", "asyncio", "atexit", "base64", "collections", "concurrent", "contextlib",
+    "copy", "csv", "dataclasses", "datetime", "decimal", "difflib", "enum", "functools",
     "__future__",
     "glob", "hashlib", "hmac", "html", "http", "importlib", "inspect", "io",
     "itertools", "json", "linecache", "logging", "math", "multiprocessing",
@@ -32,7 +32,7 @@ KNOWN_OK: set[str] = {
 
 # Módulos que são pacotes locais do projeto (não externos)
 LOCAL_PACKAGES: set[str] = {
-    "agents", "huawei_manager",
+    "agents", "huawei_manager", "tests",
 }
 
 # Package name → módulo importável (quando diferem)

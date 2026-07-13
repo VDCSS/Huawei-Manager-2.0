@@ -1,9 +1,14 @@
+import inspect
 import json
+
+from cryptography.fernet import Fernet
 
 from huawei_manager.vnf_models import (
     VNF,
+    _check_vnf,
     _normalize_status,
     load_vnf_inventory,
+    probe_vnfs,
     save_vnf_inventory,
 )
 
@@ -79,3 +84,81 @@ class TestNormalizeStatus:
 
     def test_unknown_becomes_unknown(self):
         assert _normalize_status("something") == "unknown"
+
+
+class TestVnfPasswordEncryption:
+    def test_password_encrypted_on_disk(self, tmp_path, monkeypatch):
+        key = Fernet.generate_key().decode()
+        def fake_s(k, d=""):
+            return key if k == "VNF_ENCRYPT_KEY" else d
+        monkeypatch.setattr("huawei_manager._config._s", fake_s)
+
+        v = VNF(id="r1", name="R1", host="10.0.0.1", password="my_secret_pass")
+        p = tmp_path / "inventory.json"
+        save_vnf_inventory([v], str(p))
+
+        raw = json.loads(p.read_text())
+        saved_pw = raw["vnfs"][0]["password"]
+        assert saved_pw != "my_secret_pass"
+        assert saved_pw.startswith("gAAAAA")
+
+        loaded = load_vnf_inventory(str(p))
+        assert loaded[0].password == "my_secret_pass"
+
+    def test_password_fallback_no_key(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("huawei_manager._config._s", lambda k, d="": "")
+
+        v = VNF(id="r1", name="R1", host="10.0.0.1", password="secret123")
+        p = tmp_path / "inventory.json"
+        save_vnf_inventory([v], str(p))
+
+        raw = json.loads(p.read_text())
+        assert raw["vnfs"][0]["password"] == "secret123"
+
+        loaded = load_vnf_inventory(str(p))
+        assert loaded[0].password == "secret123"
+
+
+    def test_ssh_key_encrypted_on_disk(self, tmp_path, monkeypatch):
+        key = Fernet.generate_key().decode()
+        def fake_s(k, d=""):
+            return key if k == "VNF_ENCRYPT_KEY" else d
+        monkeypatch.setattr("huawei_manager._config._s", fake_s)
+
+        v = VNF(id="r1", name="R1", host="10.0.0.1",
+                ssh_key="-----BEGIN OPENSSH PRIVATE KEY-----\nfake")
+        p = tmp_path / "inventory.json"
+        save_vnf_inventory([v], str(p))
+
+        raw = json.loads(p.read_text())
+        saved_sk = raw["vnfs"][0]["ssh_key"]
+        assert saved_sk != v.ssh_key
+        assert saved_sk.startswith("gAAAAA")
+
+        loaded = load_vnf_inventory(str(p))
+        assert loaded[0].ssh_key == v.ssh_key
+
+    def test_ssh_key_fallback_no_key(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("huawei_manager._config._s", lambda k, d="": "")
+
+        v = VNF(id="r1", name="R1", host="10.0.0.1",
+                ssh_key="-----BEGIN OPENSSH PRIVATE KEY-----\nfake")
+        p = tmp_path / "inventory.json"
+        save_vnf_inventory([v], str(p))
+
+        raw = json.loads(p.read_text())
+        assert raw["vnfs"][0]["ssh_key"] == v.ssh_key
+
+        loaded = load_vnf_inventory(str(p))
+        assert loaded[0].ssh_key == v.ssh_key
+
+
+class TestProbeTimeout:
+    def test_timeout_configurable(self):
+        sig = inspect.signature(probe_vnfs)
+        assert "timeout" in sig.parameters
+
+    def test_default_timeout_reasonable(self):
+        sig = inspect.signature(_check_vnf)
+        default = sig.parameters["timeout"].default
+        assert isinstance(default, int) and default >= 3

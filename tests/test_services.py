@@ -9,6 +9,7 @@ from huawei_manager.services import (
     get_services_for,
     parse_params,
 )
+from huawei_manager.services_data import _svc
 
 
 class TestGetServicesFor:
@@ -180,3 +181,34 @@ class TestRegistryIntegrity:
             all_valid.update(cats)
         for s in SERVICE_REGISTRY:
             assert s.category in all_valid, f"{s.id} has unknown category {s.category}"
+
+
+class TestSvcFactory:
+    def test_svc_backward_compat(self):
+        svc = _svc("x", "Test", "display x", "system", ["ROUTER"])
+        assert svc.id == "x"
+        assert svc.name == "Test"
+        assert svc.description == "display x"
+        assert svc.category == "system"
+        assert svc.vnf_types == ["ROUTER"]
+        assert svc.cli_commands == ["display x"]
+        assert not svc.config_mode
+
+    def test_svc_keyword_args(self):
+        svc = _svc(id="x", name="Test", desc="display x", cat="system", types=["ROUTER"])
+        assert svc.id == "x"
+        assert svc.name == "Test"
+        assert svc.description == "display x"
+        assert svc.category == "system"
+        assert svc.vnf_types == ["ROUTER"]
+        assert svc.cli_commands == ["display x"]
+        assert not svc.config_mode
+
+    def test_svc_keyword_with_config(self):
+        svc = _svc(id="x", name="Test", desc="display x", cat="system", types=["ROUTER"], config=True)
+        assert svc.config_mode
+
+    def test_svc_backward_compat_with_cmds(self):
+        svc = _svc("x", "Test", "display x", "system", ["ROUTER"], ["display x verbose"], True)
+        assert svc.cli_commands == ["display x verbose"]
+        assert svc.config_mode

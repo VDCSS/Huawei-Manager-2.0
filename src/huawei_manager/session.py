@@ -187,10 +187,16 @@ class NetmikoSession:
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         sess_dir = PROJECT_ROOT / "sessions"
-        sess_dir.mkdir(parents=True, exist_ok=True)
-        sess_log = sess_dir / f"{self._host}_{self._port}_{ts}.log"
-        kwargs["session_log"] = str(sess_log)
-        log.debug("Session log: %s", sess_log)
+        try:
+            sess_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            log.warning("Nao foi possivel criar %s — session log desabilitado", sess_dir)
+            sess_log_path = ""
+        else:
+            sess_log_path = str(sess_dir / f"{self._host}_{self._port}_{ts}.log")
+            log.debug("Session log: %s", sess_log_path)
+        if sess_log_path:
+            kwargs["session_log"] = sess_log_path
 
         with self._audit.timed("connect", user=self._user, host=self._host) as ctx:
             self._conn = ConnectHandler(**kwargs)
@@ -370,7 +376,8 @@ class NetmikoSession:
     # ── capabilities ─────────────────────────────────────────────────
     def get_capabilities(self) -> str:
         """Retorna a versao do dispositivo via CLI (display version)."""
-        return self._cmd("display version")
+        with self._lock:
+            return self._cmd("display version")
 
     # ── comando CLI livre ─────────────────────────────────────────────
     def run_cli_rpc(self, cmd: str) -> str:

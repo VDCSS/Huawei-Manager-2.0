@@ -33,7 +33,6 @@ from huawei_manager._config import (
 )
 from huawei_manager.constants import (
     CLI_FILTERS,
-    ROUTE_FILTER_LABELS,
 )
 from huawei_manager.sdn_controller.authz import Role
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
@@ -141,18 +140,29 @@ class EventHandlers:
         """Busca a configuracao atual do roteador (display current-configuration)."""
         self._session_tracker.touch()
         self._loading(self.out_config, "Carregando configuracao atual\u2026")
-        output = self._sb.send_command("display current-configuration")
+        try:
+            output = self._sb.send_command("display current-configuration")
+        except RuntimeError:
+            self._sb.invalidate_connection()
+            return
         self._write(self.out_config, output)
         self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
                                     source="fetch", data={"command": "display current-configuration"}))
 
-    def _fetch_route(self) -> None:
-        """Busca a tabela de roteamento com o filtro selecionado."""
+    def _fetch_route(self, fkey: str = "") -> None:
+        """Busca a tabela de roteamento com o filtro selecionado.
+
+        fkey deve ser extraido da UI (self._route_filter_cb) ANTES de
+        chamar este metodo, pois ele roda na IO thread.
+        """
         self._session_tracker.touch()
-        label_to_key = {v: k for k, v in ROUTE_FILTER_LABELS.items()}
-        fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
+        assert fkey, "_fetch_route: fkey must be extracted in UI thread before calling"
         if fkey == "routing":
-            entries = self._drv.get_routing_table()
+            try:
+                entries = self._drv.get_routing_table()
+            except RuntimeError:
+                self._sb.invalidate_connection()
+                return
             buf = io.StringIO()
             buf.write(f"{'Destino/Mask':<22} {'Proto':<10} {'Pre':>4} {'Custo':>6}  {'NextHop':<16} {'Interface'}\n")
             buf.write(f"{'-' * 72}\n")
@@ -166,14 +176,23 @@ class EventHandlers:
         else:
             cmd = CLI_FILTERS.get(fkey, "display ip routing-table")
             self._loading(self.out_route, f"Executando: {cmd}\u2026")
-            self._write(self.out_route, self._sb.send_command(cmd or ""))
+            try:
+                route_out = self._sb.send_command(cmd or "")
+            except RuntimeError:
+                self._sb.invalidate_connection()
+                return
+            self._write(self.out_route, route_out)
             self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
                                         source="fetch", data={"command": cmd or ""}))
 
     def _fetch_arp(self) -> None:
         """Busca a tabela ARP do roteador."""
         self._session_tracker.touch()
-        entries = self._drv.get_arp_table()
+        try:
+            entries = self._drv.get_arp_table()
+        except RuntimeError:
+            self._sb.invalidate_connection()
+            return
         buf = io.StringIO()
         buf.write(f"{'IP Address':<18} {'MAC Address':<20} {'Tipo':<6} {'Interface'}\n")
         buf.write(f"{'-' * 60}\n")
@@ -196,10 +215,14 @@ class EventHandlers:
             ("Memoria", "display memory-usage"),
             ("LLDP", "display lldp neighbor brief"),
         ]
-        for title, cmd in commands:
-            buf.write(f"{'=' * 70}\n\u25b6  {title}\n{'-' * 70}\n")
-            buf.write(self._sb.send_command(cmd or ""))
-            buf.write("\n\n")
+        try:
+            for title, cmd in commands:
+                buf.write(f"{'=' * 70}\n\u25b6  {title}\n{'-' * 70}\n")
+                buf.write(self._sb.send_command(cmd or ""))
+                buf.write("\n\n")
+        except RuntimeError:
+            self._sb.invalidate_connection()
+            return
         buf.write(f"{'=' * 70}\n\u25b6  Interfaces\n{'-' * 70}\n")
         intf_entries = self._drv.get_interfaces()
         if intf_entries:
@@ -221,10 +244,13 @@ class EventHandlers:
         """Retorna o texto atual do editor de comandos."""
         return self._cmd_editor.toPlainText().strip()
 
-    def _exec_cmd(self) -> None:
-        """Executa o comando do editor, opcionalmente dentro de system-view."""
+    def _exec_cmd(self, cmd: str = "") -> None:
+        """Executa o comando do editor, opcionalmente dentro de system-view.
+
+        cmd deve ser extraido do editor ANTES de chamar este metodo
+        (roda na IO thread).
+        """
         self._session_tracker.touch()
-        cmd = self._get_editor_cmd()
         if not cmd:
             self._write(self.out_cmd, "\u2718  Editor vazio \u2014 digite um comando")
             return
@@ -237,18 +263,29 @@ class EventHandlers:
         if self._sysview_var:
             self._loading(self.out_cmd,
                           "system-view \u2192 " + cmd.splitlines()[0] + " \u2192 quit\u2026")
-            _ok, result = self._sb.send_config(cmd.strip().splitlines())
+            try:
+                _ok, result = self._sb.send_config(cmd.strip().splitlines())
+            except RuntimeError:
+                self._sb.invalidate_connection()
+                return
         else:
             self._loading(self.out_cmd, f"Executando: {cmd}\u2026")
-            result = self._sb.send_command(cmd or "")
+            try:
+                result = self._sb.send_command(cmd or "")
+            except RuntimeError:
+                self._sb.invalidate_connection()
+                return
         self._write(self.out_cmd, result)
         self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
                                     source="editor", data={"command": cmd.splitlines()[0], "mode": "exec"}))
 
-    def _exec_config(self) -> None:
-        """Envia comandos de configuracao do editor via send_config."""
+    def _exec_config(self, cmd: str = "") -> None:
+        """Envia comandos de configuracao do editor via send_config.
+
+        cmd deve ser extraido do editor ANTES de chamar este metodo
+        (roda na IO thread).
+        """
         self._session_tracker.touch()
-        cmd = self._get_editor_cmd()
         if not cmd:
             self._write(self.out_cmd,
                          "\u2718  Editor vazio \u2014 digite os comandos de configuracao")
@@ -275,11 +312,12 @@ class EventHandlers:
                     self._write(self.out_cmd, "\u2139  Nenhuma alteracao detectada em relacao a config atual.")
                     return
             except Exception:
-                pass
+                log.exception("Dry-run falhou — aplicando config sem preview")
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
         try:
             ok, msg = self._sb.send_config(cmd.strip().splitlines())
         except RuntimeError:
+            self._sb.invalidate_connection()
             self._write(self.out_cmd, "\u2718  Sessao SSH inativa. Conecte-se primeiro.")
             return
         self._write(self.out_cmd, msg)
@@ -289,15 +327,24 @@ class EventHandlers:
     # ══════════════════════════════════════════════════════════════════
     #  BACKUP
     # ══════════════════════════════════════════════════════════════════
-    def _do_backup(self) -> None:
-        """Salva a running-config em arquivo TXT e registra na auditoria."""
+    def _do_backup(self, fmt: str = "") -> None:
+        """Salva a running-config em arquivo TXT e registra na auditoria.
+
+        fmt deve ser extraido da UI (self._backup_fmt_cb) ANTES de
+        chamar este metodo (roda na IO thread).
+        """
         self._session_tracker.touch()
-        fmt = self._backup_fmt_cb.currentText()
+        assert fmt, "_do_backup: fmt must be extracted from UI before calling"
         self._loading(self.out_backup, "Coletando configuracao para backup\u2026")
-        conteudo = self._sb.send_command("display current-configuration")
+        try:
+            conteudo = self._sb.send_command("display current-configuration")
+        except RuntimeError:
+            self._sb.invalidate_connection()
+            return
+        import re
         ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         ext  = "txt"
-        host = self.session._host
+        host = re.sub(r'[^a-zA-Z0-9._-]', '_', self.session._host)
         nome = f"backup_{host}_{ts}.{ext}"
         pasta = self.backup_path or os.path.expanduser("~")
         path  = os.path.join(pasta, nome)
@@ -382,8 +429,11 @@ class EventHandlers:
                 return
 
             if mode == "cli":
-                result = execute_service(final_svc, session_type="cli",
-                                         session=self.session._conn)
+                result = self._sb.send_service_commands(
+                    final_svc.cli_commands,
+                    config_mode=final_svc.config_mode,
+                    requires_privilege=final_svc.requires_privilege,
+                )
                 self._write(self._svc_output, result)
                 self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
                                             source="service", data={"name": svc.name, "mode": "cli"}))
@@ -647,7 +697,9 @@ class EventHandlers:
                 )
                 vnfs.append(new_vnf)
 
-            save_vnf_inventory(vnfs, _INVENTORY_PATH)
+            with self._vnfs_lock:
+                save_vnf_inventory(vnfs, _INVENTORY_PATH)
+                self._vnfs_gen += 1
             win.accept()
             self._spawn_io(self._refresh_vnfs)
 
@@ -675,8 +727,9 @@ class EventHandlers:
             return
         vnfs = load_vnf_inventory(_INVENTORY_PATH)
         vnfs = [v for v in vnfs if v.id != vnf.id]
-        save_vnf_inventory(vnfs, _INVENTORY_PATH)
-        self._vnfs_gen += 1
+        with self._vnfs_lock:
+            save_vnf_inventory(vnfs, _INVENTORY_PATH)
+            self._vnfs_gen += 1
         if self._target_vnf and self._target_vnf.id == vnf.id:
             self._clear_vnf_target()
         self._spawn_io(self._refresh_vnfs)
