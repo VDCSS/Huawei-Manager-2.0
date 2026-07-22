@@ -10,7 +10,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QBoxLayout,
     QFrame,
@@ -28,6 +28,9 @@ import huawei_manager.constants as C
 from huawei_manager._app import apply_theme
 from huawei_manager._config import PROJECT_ROOT, _secrets, audit
 from huawei_manager.agents.watcher import Watcher
+from huawei_manager.app_notify import NotifyMixin
+from huawei_manager.app_shortcuts import ShortcutsMixin
+from huawei_manager.app_state import AppStateMixin
 from huawei_manager.app_threading import ThreadingMixin
 from huawei_manager.constants import set_theme
 from huawei_manager.handlers import EventHandlers
@@ -442,38 +445,6 @@ class AppCore(QMainWindow, ThreadingMixin):
         self.clock_lbl.setText(
             datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
 
-    def _tick_dashboard(self) -> None:
-        if self._current_page == "home":
-            self._refresh_dashboard()
-
-    def _tick_vnfs(self) -> None:
-        if self._current_page in ("home", "topology"):
-            self._spawn_io(self._refresh_vnfs)
-
-    def _check_session_timeout(self) -> None:
-        """Verifica timeout da sessao e faz downgrade se inativo."""
-        if self._access_level == "user":
-            return
-        new_role = self._session_tracker.current_role
-        if new_role.value != self._access_level:
-            self._access_level = new_role.value
-            self._mock_mode = False
-            self._watcher.stop()
-            self._rebuild_page("topology")
-            log.info("Acesso: timeout de sessao — resetado para user")
-
-    def _set_status(self, text: str, color: str) -> None:
-        self.status_dot.setStyleSheet(
-            f"color: {color}; background: {C.BG_BASE}; font: 16px 'Inter';")
-        self.status_lbl.setText(text)
-
-    def _set_conn_btn(self, text: str = "  CONECTAR  ", disabled: bool = False) -> None:
-        btn = self.conn_btn
-        self._dispatch(lambda: (
-            btn.setText(text),
-            btn.setEnabled(not disabled),
-        ))
-
     # ── Tema ──────────────────────────────────────────────────────────
     def _toggle_theme(self) -> None:
         if self._theme_toggling:
@@ -531,134 +502,5 @@ class AppCore(QMainWindow, ThreadingMixin):
         if self._watcher.is_active:
             self._watcher.start()
 
-    # ── Atalhos de teclado ─────────────────────────────────────────────
-    def _setup_bindings(self) -> None:
-        QShortcut(QKeySequence("Return"), self).activated.connect(self._on_enter)
-        QShortcut(QKeySequence("Ctrl+Shift+Return"), self).activated.connect(
-            self._on_ctrl_shift_enter)
-        QShortcut(QKeySequence("Ctrl+D"), self).activated.connect(self._on_ctrl_d)
-        QShortcut(QKeySequence("Ctrl+L"), self).activated.connect(self._on_ctrl_l)
-        QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self._on_ctrl_q)
-        QShortcut(QKeySequence("Ctrl+Shift+A"), self).activated.connect(
-            self._on_ctrl_shift_a)
-        QShortcut(QKeySequence("F5"), self).activated.connect(self._on_f5)
-        QShortcut(QKeySequence("Ctrl+Tab"), self).activated.connect(self._on_ctrl_tab)
-        QShortcut(QKeySequence("Ctrl+Shift+Tab"), self).activated.connect(
-            self._on_ctrl_shift_tab)
-        QShortcut(QKeySequence("Escape"), self).activated.connect(self._on_escape)
-        for i, key in enumerate(self._PAGE_KEYS[:9], 1):
-            QShortcut(QKeySequence(f"Ctrl+{i}"), self).activated.connect(
-                lambda _chk, k=key: self._show_page(k))
-
-    def _on_enter(self) -> None:
-        focus = self.focusWidget()
-        if isinstance(focus, QTextEdit):
-            return
-        page = self._current_page
-        if page == "config":
-            self._run(self._fetch_config)
-        elif page == "route":
-            label_to_key = {v: k for k, v in C.ROUTE_FILTER_LABELS.items()}
-            fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
-            self._run(lambda: self._fetch_route(fkey))
-        elif page == "arp":
-            self._run(self._fetch_arp)
-        elif page == "info":
-            self._run(self._fetch_info)
-        elif page == "cmd":
-            cmd = self._get_editor_cmd()
-            if cmd:
-                self._run(lambda: self._exec_cmd(cmd))
-        elif page == "backup":
-            fmt = self._backup_fmt_cb.currentText()
-            self._run(lambda: self._do_backup(fmt))
-
-    def _on_ctrl_shift_enter(self) -> None:
-        if self._current_page == "cmd":
-            cmd = self._get_editor_cmd()
-            if cmd:
-                self._run(lambda: self._exec_config(cmd))
-
-    def _on_ctrl_d(self) -> None:
-        self._toggle_connect()
-
-    def _on_ctrl_l(self) -> None:
-        page = self._current_page
-        if page == "config" and self.out_config is not None:
-            self._write(self.out_config, "")
-        elif page == "route" and self.out_route is not None:
-            self._write(self.out_route, "")
-        elif page == "arp" and self.out_arp is not None:
-            self._write(self.out_arp, "")
-        elif page == "info" and self.out_info is not None:
-            self._write(self.out_info, "")
-        elif page == "cmd" and self.out_cmd is not None:
-            self._write(self.out_cmd, "")
-        elif page == "backup" and self.out_backup is not None:
-            self._write(self.out_backup, "")
-        elif page == "services" and self._svc_output is not None:
-            self._write(self._svc_output, "")
-
-    def _on_ctrl_q(self) -> None:
-        self._on_close()
-
-    def _on_ctrl_shift_a(self) -> None:
-        self._show_auth_dialog()
-
-    def _on_f5(self) -> None:
-        page = self._current_page
-        if page == "topology":
-            self._spawn_io(self._refresh_vnfs)
-        elif page == "services":
-            self._refresh_service_list()
-        else:
-            self._on_enter()
-
-    def _on_ctrl_tab(self) -> None:
-        if not self._current_page:
-            return
-        try:
-            idx = self._PAGE_KEYS.index(self._current_page)
-            self._show_page(self._PAGE_KEYS[(idx + 1) % len(self._PAGE_KEYS)])
-        except ValueError:
-            self._show_page(self._PAGE_KEYS[0])
-
-    def _on_ctrl_shift_tab(self) -> None:
-        if not self._current_page:
-            return
-        try:
-            idx = self._PAGE_KEYS.index(self._current_page)
-            self._show_page(self._PAGE_KEYS[(idx - 1) % len(self._PAGE_KEYS)])
-        except ValueError:
-            self._show_page(self._PAGE_KEYS[0])
-
-    def _on_escape(self) -> None:
-        self._on_ctrl_l()
-
-    def _on_watcher_update(self, results) -> None:
-        self._watcher_results = results
-        self._dispatch(self._rebuild_manutencao_if_active)
-
-    def _rebuild_manutencao_if_active(self) -> None:
-        if self._current_page == "manutencao":
-            self._rebuild_page("manutencao")
-
-    # ── Cleanup ───────────────────────────────────────────────────────
-    def _cleanup_executors(self) -> None:
-        """Desliga ambos os pools com timeout de 5s cada."""
-        for pool in (self._io_executor, self._cpu_executor):
-            if pool is not None:
-                pool.shutdown(wait=True, timeout=5)
-
-    def _on_close(self) -> None:
-        self._watcher.shutdown()
-        self._sb.disconnect()
-        self._cleanup_executors()
-
-    def closeEvent(self, event) -> None:
-        self._on_close()
-        super().closeEvent(event)
-
-
-class HuaweiRouterApp(AppCore, PageBuilder, EventHandlers):
+class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, NotifyMixin, AppCore, PageBuilder, EventHandlers):
     """Classe final que combina os mixins AppCore, PageBuilder e EventHandlers."""
