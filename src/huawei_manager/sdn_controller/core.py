@@ -15,7 +15,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from huawei_manager.sdn_controller.bus import IEventBus
 from huawei_manager.sdn_controller.event_queue import Event, EventType
+from huawei_manager.sdn_controller.events import (
+    DeviceConnectedPayload,
+    DeviceErrorPayload,
+    VnfStatusChangedPayload,
+)
 
 log = logging.getLogger("huawei.sdn.core")
 
@@ -91,7 +97,7 @@ class ControllerCore:
 
     def __init__(
         self,
-        event_queue: Any | None = None,
+        event_queue: IEventBus | None = None,
         dump_path: str | None = None,
         dump_interval: float = 60,
     ) -> None:
@@ -137,7 +143,8 @@ class ControllerCore:
 
         if self._event_queue is not None:
             self._event_queue.put(
-                Event(type=EventType.DEVICE_CONNECTED, source=device_id, data={"host": host})
+                Event(type=EventType.DEVICE_CONNECTED, source=device_id,
+                      payload=DeviceConnectedPayload(host=host))
             )
         return state
 
@@ -205,7 +212,7 @@ class ControllerCore:
         * ``DEVICE_DISCONNECTED`` — status → ``offline``.
         * ``DEVICE_ERROR`` — status → ``error``, metadata guarda o erro.
         * ``CONFIG_CHANGED`` — metadata registra ``last_config_change``.
-        * ``VNF_STATUS_CHANGED`` — status extraido de ``event.data["status"]``.
+        * ``VNF_STATUS_CHANGED`` — status extraido de ``event.payload.status``.
 
         Eventos para dispositivos nao registrados sao ignorados.
         """
@@ -219,12 +226,17 @@ class ControllerCore:
             with self._lock:
                 state.status = _EVENT_TO_STATUS[event.type]
                 state.last_seen = now
-            if event.type == EventType.DEVICE_ERROR and event.data:
+            if event.type == EventType.DEVICE_ERROR:
+                error_msg = "unknown"
+                if isinstance(event.payload, DeviceErrorPayload) and event.payload.error:
+                    error_msg = event.payload.error
                 with self._lock:
-                    state.metadata["last_error"] = event.data.get("error", "unknown")
+                    state.metadata["last_error"] = error_msg
 
-        elif event.type == EventType.VNF_STATUS_CHANGED and event.data:
-            new_status = event.data.get("status")
+        elif event.type == EventType.VNF_STATUS_CHANGED:
+            new_status: str | None = None
+            if isinstance(event.payload, VnfStatusChangedPayload):
+                new_status = event.payload.status
             if new_status:
                 with self._lock:
                     state.status = new_status
@@ -300,21 +312,21 @@ class ControllerCore:
             publish_events: Se False, evita publicar eventos durante o sync
                 para nao gerar feedback loop no drain queue.
         """
-        for v in vnfs:
-            if v.id not in self._devices:
+        for vnf in vnfs:
+            if vnf.id not in self._devices:
                 state = DeviceState(
-                    device_id=v.id,
-                    host=v.host,
-                    port=v.port,
-                    device_type=v.type or "unknown",
+                    device_id=vnf.id,
+                    host=vnf.host,
+                    port=vnf.port,
+                    device_type=vnf.type or "unknown",
                     status="unknown",
                 )
                 with self._lock:
-                    self._devices[v.id] = state
+                    self._devices[vnf.id] = state
                 if publish_events and self._event_queue is not None:
                     self._event_queue.put(
-                        Event(type=EventType.VNF_STATUS_CHANGED, source=v.id,
-                              data={"status": "unknown"})
+                        Event(type=EventType.VNF_STATUS_CHANGED, source=vnf.id,
+                              payload=VnfStatusChangedPayload(status="unknown"))
                     )
 
     def start(self) -> None:

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 from __future__ import annotations
 
 import atexit
@@ -19,7 +18,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
-    QMessageBox,
     QStackedWidget,
     QTextEdit,
     QVBoxLayout,
@@ -30,6 +28,7 @@ import huawei_manager.constants as C
 from huawei_manager._app import apply_theme
 from huawei_manager._config import PROJECT_ROOT, _secrets, audit
 from huawei_manager.agents.watcher import Watcher
+from huawei_manager.app_threading import ThreadingMixin
 from huawei_manager.constants import set_theme
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.pages import PageBuilder
@@ -40,15 +39,15 @@ from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import EventQueue
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.sdn_controller.validator import CommandValidator
+from huawei_manager.services.vnf_service import VnfService
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vnf_models import VNF
-from huawei_manager.widgets import ActionButton, NeonButton, action_button, neon_button
+from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button, neon_button
 
 log = logging.getLogger("huawei_manager")
-_app_log = logging.getLogger("huawei.app")
 
 
-class AppCore(QMainWindow):
+class AppCore(QMainWindow, ThreadingMixin):
     """Mixin principal Qt — inicializa janela, layout, navegação e helpers de threading."""
 
     def __init__(self) -> None:
@@ -75,6 +74,9 @@ class AppCore(QMainWindow):
         self._cmd_validator = CommandValidator()
         self._dry_run = DryRunEngine()
         self._controller = ControllerCore(event_queue=self._event_queue)
+        self._vnf_service = VnfService(
+            inventory_path=str(PROJECT_ROOT / "data" / "vnf_inventory.json")
+        )
         self._drv = RouterDriver(southbound=self._sb, event_queue=self._event_queue)
         self._session_tracker = SessionTracker(timeout_secs=300)
         self._active_btn: NeonButton | None = None
@@ -632,56 +634,6 @@ class AppCore(QMainWindow):
 
     def _on_escape(self) -> None:
         self._on_ctrl_l()
-
-    # ── Helpers de threading ──────────────────────────────────────────
-    def _dispatch(self, fn) -> None:
-        maxlen = self._ui_queue.maxlen
-        if maxlen is not None and len(self._ui_queue) >= maxlen:
-            _app_log.warning("UI queue overflow (%d), descartando callback", len(self._ui_queue))
-            return
-        self._ui_queue.append(fn)
-
-    def _poll_queue(self) -> None:
-        for _ in range(500):
-            try:
-                fn = self._ui_queue.popleft()
-            except IndexError:
-                break
-            try:
-                fn()
-            except Exception:
-                _app_log.exception("_poll_queue: callback %r falhou", fn)
-        # Drenar event_queue (PriorityQueue cresce sem consumidor)
-        drained = 0
-        while True:
-            ev = self._event_queue.get(block=False)
-            if ev is None:
-                break
-            drained += 1
-        if drained > 0:
-            _app_log.debug("Drained %d SDN events from queue", drained)
-
-    def _spawn_io(self, fn, *args) -> None:
-        future = self._io_executor.submit(fn, *args)
-        future.add_done_callback(lambda f: f.exception() and
-            _app_log.error("Task %s falhou: %s", fn.__name__, f.exception()))
-
-    def _spawn_cpu(self, fn, *args) -> None:
-        future = self._cpu_executor.submit(fn, *args)
-        future.add_done_callback(lambda f: f.exception() and
-            _app_log.error("CPU task %s falhou: %s", fn.__name__, f.exception()))
-
-    def _run(self, func) -> None:
-        if not self._sb.is_alive():
-            QMessageBox.warning(self, "Aviso", "Conecte ao roteador primeiro.")
-            return
-        self._spawn_io(func)
-
-    def _write(self, widget, text: str) -> None:
-        self._dispatch(lambda w=widget, t=text: (w.clear(), w.setPlainText(t)))
-
-    def _loading(self, widget, msg: str) -> None:
-        self._dispatch(lambda w=widget, m=msg: (w.clear(), w.setPlainText(f"\u23f3  {m}\n")))
 
     def _on_watcher_update(self, results) -> None:
         self._watcher_results = results

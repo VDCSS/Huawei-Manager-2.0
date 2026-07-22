@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from huawei_manager.sdn_controller.event_queue import EventQueue
+from huawei_manager.sdn_controller.bus import IEventBus
 from huawei_manager.sdn_controller.normalizer import (
     ArpEntry,
     InterfaceEntry,
@@ -24,13 +24,13 @@ class BaseDriver(ABC):
 
     Args:
         southbound: Instancia de ``SouthboundProtocol`` para comunicacao.
-        event_queue: Instancia de ``EventQueue`` para eventos do driver.
+        event_queue: Instancia de ``IEventBus`` para eventos do driver.
     """
 
     def __init__(
         self,
         southbound: SouthboundProtocol,
-        event_queue: EventQueue,
+        event_queue: IEventBus,
     ) -> None:
         self._sb = southbound
         self._eq = event_queue

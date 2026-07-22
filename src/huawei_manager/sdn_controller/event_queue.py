@@ -3,6 +3,7 @@
 Fornece a infraestrutura de eventos assincronos para o ControllerCore.
 Usa ``queue.PriorityQueue`` internamente para ordenar eventos por
 prioridade (0 = crítica, 10 = normal, 20 = baixa).
+Implementa ``IEventBus``.
 """
 from __future__ import annotations
 
@@ -15,6 +16,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 
+from huawei_manager.sdn_controller.bus import IEventBus
+from huawei_manager.sdn_controller.events import BaseEventPayload
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -25,11 +29,11 @@ class EventType(Enum):
     DEVICE_DISCONNECTED = auto()
     DEVICE_ERROR = auto()
     CONFIG_CHANGED = auto()
-    TOPOLOGY_CHANGED = auto()
+    TOPOLOGY_CHANGED = auto()   # 🔶 Deprecated — não usado em produção
     COMMAND_EXECUTED = auto()
     VNF_STATUS_CHANGED = auto()
     ALERT = auto()
-    AN_TRIGGER = auto()
+    AN_TRIGGER = auto()         # 🔶 Deprecated — não usado em produção
 
 
 @dataclass
@@ -39,14 +43,14 @@ class Event:
     Attributes:
         type: Categoria do evento.
         source: Identificador do dispositivo ou módulo origem.
-        data: Payload opcional do evento (dict).
+        payload: Payload opcional do evento (dataclass tipada).
         priority: Prioridade (0=crítica, 10=normal, 20=baixa).
         timestamp: Instante de criação do evento.
     """
 
     type: EventType
     source: str
-    data: dict | None = None
+    payload: BaseEventPayload | None = None
     priority: int = 10
     timestamp: datetime = field(default_factory=datetime.now)
 
@@ -55,7 +59,7 @@ class Event:
 _PQueueItem = tuple[int, int, Event]
 
 
-class EventQueue:
+class EventQueue(IEventBus):
     """Fila de eventos priorizados thread-safe com padrão pub/sub.
 
     Eventos com prioridade mais baixa (0 = crítica) saem primeiro.

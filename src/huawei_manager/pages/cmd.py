@@ -1,0 +1,182 @@
+"""PageBuilder mixin — Command Editor page (_build_cmd_page)."""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+import huawei_manager.constants as C
+from huawei_manager._protocols import AppCoreProtocol
+from huawei_manager.constants import BUILTIN_CMDS, CMD_TEMPLATES
+from huawei_manager.services import get_all_show_commands
+from huawei_manager.widgets.neon_button import action_button
+from huawei_manager.widgets.neon_entry import output_text, styled_text
+
+
+class _CmdReturnFilter(QObject):
+    """Event filter for cmd_editor: Enter runs command, Shift+Enter inserts newline."""
+
+    def __init__(self, app_ref: object) -> None:
+        super().__init__()
+        self.app = app_ref
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.KeyPress:
+            from PySide6.QtCore import Qt as _Qt
+
+            if event.key() == _Qt.Key.Key_Return or event.key() == _Qt.Key.Key_Enter:
+                if event.modifiers() & _Qt.KeyboardModifier.ShiftModifier:
+                    cursor = obj.textCursor() if hasattr(obj, "textCursor") else None
+                    if cursor:
+                        cursor.insertText("\n")
+                    return True
+                else:
+                    self.app._run(lambda cmd=self.app._get_editor_cmd(): self.app._exec_cmd(cmd))
+                    return True
+        return super().eventFilter(obj, event)
+
+
+class PageBuilderCmdMixin:
+    """Mixin — Command Editor page builder."""
+
+    def _build_cmd_page(self: AppCoreProtocol) -> None:
+        """Constrói a página do Editor de Comandos."""
+        p = self._make_page("cmd")
+        self._page_title(p, "Editor de Comandos", C.NEON_MAG, "")
+
+        card = QFrame(p)
+        card.setStyleSheet(f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 8, 12, 8)
+        self._page_layout(p).addWidget(card, stretch=1)
+        self._page_layout(p).addSpacing(8)
+
+        split_w = QWidget(card)
+        split_layout = QHBoxLayout(split_w)
+        split_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.addWidget(split_w, stretch=1)
+
+        # Left: template list
+        left = QWidget(split_w)
+        left.setFixedWidth(260)
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left.setStyleSheet(f"background: {C.BG_INPUT};")
+        split_layout.addWidget(left)
+        split_layout.addSpacing(10)
+
+        tpl_header = QLabel("COMANDOS DISPONIVEIS", left)
+        tpl_header.setStyleSheet(self._css_label(C.FG_DIM, C.BG_INPUT, 10, True))
+        left_layout.addWidget(tpl_header)
+
+        scroll = QScrollArea(left)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet(f"background: {C.BG_INPUT}; border: none;")
+        left_layout.addWidget(scroll, stretch=1)
+
+        tpl_inner = QWidget()
+        tpl_inner.setStyleSheet(f"background: {C.BG_INPUT};")
+        tpl_inner_layout = QVBoxLayout(tpl_inner)
+        tpl_inner_layout.setContentsMargins(0, 0, 0, 0)
+        tpl_inner_layout.setSpacing(0)
+        scroll.setWidget(tpl_inner)
+
+        self._tpl_selected: QLabel | None = None
+
+        def _on_tpl_click(name: str, cmd: str) -> None:
+            if self._tpl_selected is not None:
+                self._tpl_selected.setStyleSheet(
+                    self._css_label(C.NEON_CYAN, C.BG_INPUT, 12))
+            for child in tpl_inner.findChildren(QLabel):
+                if child.text() == name:
+                    self._tpl_selected = child
+                    child.setStyleSheet(
+                        f"color: white; background: {C.NEON_PURP}; "
+                        f"padding: 2px 8px; font: bold 12px 'Inter';")
+                    break
+            self._cmd_editor.setPlainText(cmd)
+
+        self._tpl_cmd_map: dict[str, str] = {}
+        for name in CMD_TEMPLATES:
+            cmd = CMD_TEMPLATES[name]
+            if cmd and cmd not in BUILTIN_CMDS:
+                self._tpl_cmd_map[name] = cmd
+
+        existing_cmds = set(self._tpl_cmd_map.values())
+        show_cmds = get_all_show_commands()
+        for svc_name, cmd in show_cmds:
+            if cmd not in existing_cmds and cmd not in BUILTIN_CMDS:
+                existing_cmds.add(cmd)
+                self._tpl_cmd_map[svc_name] = cmd
+
+        for name in sorted(self._tpl_cmd_map.keys()):
+            lbl = QLabel(name, tpl_inner)
+            lbl.setStyleSheet(self._css_label(C.NEON_CYAN, C.BG_INPUT, 12))
+            lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+            lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            tpl_inner_layout.addWidget(lbl)
+            cmd = self._tpl_cmd_map[name]
+            lbl.mousePressEvent = lambda _e, _n=name, _c=cmd: _on_tpl_click(_n, _c)
+
+        tpl_inner_layout.addStretch()
+
+        # Right: editor + output
+        right = QWidget(split_w)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right.setStyleSheet(f"background: {C.BG_INPUT};")
+        split_layout.addWidget(right, stretch=1)
+
+        self._cmd_editor = styled_text(right)
+        self._cmd_editor.setMinimumHeight(150)
+        self._cmd_editor.setPlainText("display ip interface brief")
+        right_layout.addWidget(self._cmd_editor)
+        right_layout.addSpacing(6)
+
+        cmd_filter = _CmdReturnFilter(self)
+        self._cmd_editor.installEventFilter(cmd_filter)
+
+        abar = QWidget(right)
+        abar_layout = QHBoxLayout(abar)
+        abar_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(abar)
+        right_layout.addSpacing(6)
+
+        btn_exec = action_button(abar, "\u25b6 Executar",
+                                 lambda: self._run(
+                                     lambda cmd=self._get_editor_cmd(): self._exec_cmd(cmd)), C.NEON_CYAN)
+        abar_layout.addWidget(btn_exec)
+        abar_layout.addSpacing(6)
+        btn_cfg = action_button(abar, "\u2699 Enviar Config",
+                                lambda: self._run(
+                                    lambda cmd=self._get_editor_cmd(): self._exec_config(cmd)), C.NEON_AMBER)
+        abar_layout.addWidget(btn_cfg)
+
+        self._sysview_var = False
+        sysview_cb = QCheckBox("system-view", abar)
+        sysview_cb.setStyleSheet(f"""
+            QCheckBox {{ color: {C.FG_DIM}; background: {C.BG_INPUT}; font: 11px 'Inter'; }}
+            QCheckBox::indicator {{ width: 14px; height: 14px; }}
+        """)
+        sysview_cb.stateChanged.connect(lambda s: setattr(self, '_sysview_var', bool(s)))
+        abar_layout.addSpacing(12)
+        abar_layout.addWidget(sysview_cb)
+        abar_layout.addStretch()
+
+        warn_lbl = QLabel("\u26a0  Todas as operacoes sao registradas em huawei_audit_structured.jsonl", right)
+        warn_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_INPUT, 10))
+        right_layout.addWidget(warn_lbl)
+        right_layout.addSpacing(4)
+
+        self.out_cmd = output_text(right)
+        right_layout.addWidget(self.out_cmd, stretch=1)

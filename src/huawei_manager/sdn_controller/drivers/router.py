@@ -1,8 +1,8 @@
 """RouterDriver — driver para roteadores Huawei VRP."""
 from __future__ import annotations
 
+from huawei_manager.sdn_controller.bus import IEventBus
 from huawei_manager.sdn_controller.drivers.base import BaseDriver
-from huawei_manager.sdn_controller.event_queue import EventQueue
 from huawei_manager.sdn_controller.normalizer import (
     ArpEntry,
     InterfaceEntry,
@@ -27,7 +27,7 @@ class RouterDriver(BaseDriver):
     def __init__(
         self,
         southbound: SouthboundProtocol,
-        event_queue: EventQueue,
+        event_queue: IEventBus,
     ) -> None:
         super().__init__(southbound, event_queue)
 

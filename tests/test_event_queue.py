@@ -1,16 +1,17 @@
 """Tests for EventQueue (thread-safe event bus with pub/sub)."""
 from __future__ import annotations
 
-import queue
 import threading
 from datetime import datetime
-
-import pytest
 
 from huawei_manager.sdn_controller.event_queue import (
     Event,
     EventQueue,
     EventType,
+)
+from huawei_manager.sdn_controller.events import (
+    ConfigChangedPayload,
+    DeviceConnectedPayload,
 )
 
 
@@ -40,22 +41,34 @@ class TestEventDataclass:
         ev = Event(type=EventType.DEVICE_CONNECTED, source="gw-01")
         assert ev.type == EventType.DEVICE_CONNECTED
         assert ev.source == "gw-01"
-        assert ev.data is None
+        assert ev.payload is None
         assert isinstance(ev.timestamp, datetime)
 
     def test_creates_with_data(self):
         ev = Event(
             type=EventType.CONFIG_CHANGED,
             source="gw-01",
-            data={"cmd": "vlan 10", "status": "ok"},
+            payload=ConfigChangedPayload(commands=["vlan 10"], status="ok"),
         )
-        assert ev.data == {"cmd": "vlan 10", "status": "ok"}
+        assert isinstance(ev.payload, ConfigChangedPayload)
+        assert ev.payload.commands == ["vlan 10"]
+        assert ev.payload.status == "ok"
 
     def test_timestamp_is_set_on_creation(self):
         before = datetime.now()
         ev = Event(type=EventType.DEVICE_ERROR, source="test")
         after = datetime.now()
         assert before <= ev.timestamp <= after
+
+    def test_creates_with_payload(self):
+        payload = DeviceConnectedPayload(host="10.0.0.1", session_id="sess-01")
+        ev = Event(
+            type=EventType.DEVICE_CONNECTED,
+            source="gw-01",
+            payload=payload,
+        )
+        assert ev.payload is payload
+        assert ev.payload.host == "10.0.0.1"
 
 
 class TestEventQueuePutGet:

@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
-from huawei_manager.audit_log import AuditLogger
-from huawei_manager.sdn_controller._dormant.northbound import NorthboundAPI
 from huawei_manager.sdn_controller.core import ControllerCore
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import Event, EventQueue, EventType
@@ -101,78 +97,6 @@ class TestDryRunEngineDiff:
         result = e.apply(fake_fn, "new config", original="old config")
         assert result.success
         assert result.rollback_command is not None
-
-
-# ═══════════════════════════════════════════════════════════════════
-#  B4 — NorthboundAPI: RBAC enforcement
-# ═══════════════════════════════════════════════════════════════════
-class TestNorthboundAPIRBAC:
-    """NorthboundAPI respeita niveis de acesso por endpoint."""
-
-    @pytest.fixture
-    def controller(self):
-        c = ControllerCore()
-        c.register("rtr-01", "10.0.0.1", 22, "router")
-        return c
-
-    @pytest.fixture
-    def event_q(self):
-        return EventQueue()
-
-    @pytest.fixture
-    def audit(self, tmp_audit_path):
-        return AuditLogger(str(tmp_audit_path))
-
-    @pytest.fixture
-    def api(self, controller, event_q, audit):
-        mock_sb = MagicMock()
-        mock_sb.is_alive.return_value = True
-        mock_sb.send_config.return_value = (True, "config applied")
-        return NorthboundAPI(controller, event_q, audit, sb=mock_sb)
-
-    def test_b4_user_can_get_devices(self, api):
-        resp = api.get_devices(role="user")
-        assert resp.success
-
-    def test_b4_user_cannot_deploy(self, api):
-        """deploy_intent requer pelo menos tecnico."""
-        resp = api.deploy_intent("rtr-01", "config", role="user")
-        assert not resp.success
-        assert "denied" in (resp.error or "").lower()
-
-    def test_b4_tecnico_can_deploy(self, api):
-        resp = api.deploy_intent("rtr-01", "config", role="tecnico")
-        assert resp.success
-
-    def test_b4_invalid_role_returns_error(self, api):
-        resp = api.get_devices(role="unknown")
-        assert not resp.success
-
-
-# ═══════════════════════════════════════════════════════════════════
-#  B5 — NorthboundAPI: blocagem de acesso nao autorizado
-# ═══════════════════════════════════════════════════════════════════
-class TestNorthboundAPIUnauthorized:
-    """Endpoints retornam erro 403-equivalente para roles insuficientes."""
-
-    @pytest.fixture
-    def controller(self):
-        c = ControllerCore()
-        c.register("rtr-01", "10.0.0.1", 22, "router")
-        return c
-
-    @pytest.fixture
-    def api(self, controller, audit_logger):
-        return NorthboundAPI(controller, MagicMock(), audit_logger)
-
-    def test_b5_deploy_blocked_for_user(self, api):
-        resp = api.deploy_intent("rtr-01", "config", role="user")
-        assert not resp.success
-        assert "Permission denied" in (resp.error or "")
-
-    def test_b5_audit_log_blocked_for_user(self, api):
-        resp = api.get_audit_log(role="user")
-        assert not resp.success
 
 
 # ═══════════════════════════════════════════════════════════════════

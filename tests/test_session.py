@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from huawei_manager.audit_log import AuditLogger
+from huawei_manager.exceptions import SdnConnectionError, SdnValidationError
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import EnvBackend
 
@@ -26,12 +27,12 @@ class TestInit:
 class TestValidateCredentials:
     def test_empty_host_raises(self, session):
         with patch.object(type(session), "_host", new_callable=PropertyMock, return_value=""):
-            with pytest.raises(ValueError, match="ROUTER_HOST"):
+            with pytest.raises(SdnValidationError, match="ROUTER_HOST"):
                 session._validate_credentials()
 
     def test_empty_user_raises(self, session):
         with patch.object(type(session), "_user", new_callable=PropertyMock, return_value=""):
-            with pytest.raises(ValueError, match="ROUTER_USERNAME"):
+            with pytest.raises(SdnValidationError, match="ROUTER_USERNAME"):
                 session._validate_credentials()
 
     def test_ok(self, session):
@@ -49,7 +50,7 @@ class TestValidateCredentials:
             patch.object(type(session), "_pass", new_callable=PropertyMock, return_value=""),
             patch.object(type(session), "_ssh_key", new_callable=PropertyMock, return_value=None),
         ):
-            with pytest.raises(ValueError, match="ROUTER_PASSWORD"):
+            with pytest.raises(SdnValidationError, match="ROUTER_PASSWORD"):
                 session._validate_credentials()
 
 
@@ -426,5 +427,5 @@ class TestHostKeyVerify:
             patch.object(type(session), "_hk_verify", new_callable=PropertyMock, return_value="tofu"),
             patch.object(session, "_load_host_key", return_value="ssh-rsa CACHEDKEYBASE64"),
         ):
-            with pytest.raises(ValueError, match="Host key mismatch"):
+            with pytest.raises(SdnConnectionError, match="Host key mismatch"):
                 session.connect()

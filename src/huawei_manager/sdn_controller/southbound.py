@@ -13,6 +13,7 @@ import time
 from abc import ABC, abstractmethod
 
 from huawei_manager.audit_log import AuditLogger
+from huawei_manager.exceptions import SdnAuthError, SdnCommandError, SdnConnectionError
 from huawei_manager.sdn_controller.validator import CommandValidator, ValidationResult
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import SecretsBackend
@@ -108,10 +109,10 @@ class SSHSouthbound(SouthboundProtocol):
                     time.sleep(1.0 * attempt)  # backoff simples
         msg = f"After {self._max_retries} retries, connect failed"
         if last_exc:
-            raise RuntimeError(
+            raise SdnConnectionError(
                 f"{msg}: {_sanitize(str(last_exc))}"
             ) from last_exc
-        raise RuntimeError(msg)
+        raise SdnConnectionError(msg)
 
     def disconnect(self) -> None:
         """Encerra a sessao SSH."""
@@ -158,19 +159,19 @@ class SSHSouthbound(SouthboundProtocol):
         de executar. Comandos negados disparam ``RuntimeError``.
         """
         if not self._connected:
-            raise RuntimeError("Not connected")
+            raise SdnConnectionError("Not connected")
         if self._validator is not None:
             vr: ValidationResult = self._validator.validate(command, self._access_role)
             if not vr.allowed:
                 msg = f"Command denied by policy: {vr.reason}"
                 log.warning("send_command blocked: %s — %s", command[:60], vr.reason)
-                raise RuntimeError(msg)
+                raise SdnAuthError(msg)
         try:
             return self._session.run_cli_rpc(command)
         except Exception as exc:
             sanitized = _sanitize(str(exc))
             log.error("send_command failed: %s", sanitized)
-            raise RuntimeError(sanitized) from exc
+            raise SdnCommandError(sanitized) from exc
 
     def send_config(
         self, commands: list[str]
@@ -182,14 +183,14 @@ class SSHSouthbound(SouthboundProtocol):
         A validacao e feita no comando completo (join por newline).
         """
         if not self._connected:
-            raise RuntimeError("Not connected")
+            raise SdnConnectionError("Not connected")
         if self._validator is not None:
             full_cmd = "\n".join(commands)
             vr = self._validator.validate(full_cmd, self._access_role)
             if not vr.allowed:
                 msg = f"Config denied by policy: {vr.reason}"
                 log.warning("send_config blocked: %s — %s", full_cmd[:60], vr.reason)
-                raise RuntimeError(msg)
+                raise SdnAuthError(msg)
         config_text = "\n".join(commands)
         try:
             ok, msg = self._session.edit_config(config_text, target="running")
@@ -217,7 +218,7 @@ class SSHSouthbound(SouthboundProtocol):
             Output concatenado dos comandos executados.
         """
         if not self._connected:
-            raise RuntimeError("Not connected")
+            raise SdnConnectionError("Not connected")
         need_sysview = config_mode or requires_privilege
 
         if need_sysview:

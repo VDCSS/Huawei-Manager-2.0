@@ -3,14 +3,9 @@ import json
 
 from cryptography.fernet import Fernet
 
-from huawei_manager.vnf_models import (
-    VNF,
-    _check_vnf,
-    _normalize_status,
-    load_vnf_inventory,
-    probe_vnfs,
-    save_vnf_inventory,
-)
+from huawei_manager.vnf_inventory import load_vnf_inventory, save_vnf_inventory
+from huawei_manager.vnf_models import VNF
+from huawei_manager.vnf_probe import _check_vnf, _normalize_status, probe_vnfs
 
 
 class TestVNF:

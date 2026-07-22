@@ -13,7 +13,7 @@ import logging
 from collections.abc import Callable
 
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsEllipseItem,
@@ -27,113 +27,17 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as C
+from huawei_manager.topology_items import (
+    ITEM_DATA_KEY,
+    _build_tooltip_text,
+    _color_for,
+    _status_color,
+    _to_qfont,
+)
+from huawei_manager.topology_nodes import _VNFNodeRect
 from huawei_manager.vnf_models import VNF
 
 log = logging.getLogger("huawei.topology")
-
-ITEM_DATA_KEY = 0  # item.setData(ITEM_DATA_KEY, vnf_id)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  HELPERS
-# ═══════════════════════════════════════════════════════════════════════
-
-def _to_qfont(tk_font: tuple) -> QFont:
-    """Converte tupla de fonte (family, size, [bold]) → QFont."""
-    family = tk_font[0] if len(tk_font) > 0 else "Consolas"
-    size   = tk_font[1] if len(tk_font) > 1 else 11
-    bold   = len(tk_font) > 2 and tk_font[2] == "bold"
-    qf = QFont(family, size)
-    qf.setBold(bold)
-    return qf
-
-
-def _build_tooltip_text(vnf: VNF, admin: bool = False) -> str:
-    """Constrói o texto do tooltip com informações do VNF."""
-    lines = [
-        f"  {vnf.name}",
-        f"  IP: {vnf.host}",
-        f"  Tipo: {vnf.type}",
-        f"  Status: {vnf.status}",
-    ]
-    if admin:
-        lines += [
-            f"  Porta: {vnf.port}",
-            f"  Usuário: {vnf.username or '(padrão .env)'}",
-            f"  Senha: {'****' if vnf.password else '(padrão .env)'}",
-            f"  Chave SSH: {vnf.ssh_key or '(padrão .env)'}",
-        ]
-        if vnf.location:
-            lines.append(f"  Local: {vnf.location}")
-        if vnf.version:
-            lines.append(f"  Versão: {vnf.version}")
-    return "\n".join(lines)
-
-
-_TYPE_COLORS: dict[str, str] = {
-    "ROUTER":        C.NEON_CYAN,
-    "SWITCH":        C.NEON_MAG,
-    "FIREWALL":      "#ff4d4d",
-    "LOAD-BALANCER": C.NEON_AMBER,
-    "WAN-ACCEL":     "#00e676",
-    "SDN-CONTROLLER": C.NEON_PURP,
-    "AP":            "#ff9100",
-    "unknown":       C.FG_DIM,
-}
-
-
-def _color_for(vnf: VNF) -> str:
-    return _TYPE_COLORS.get(vnf.type, _TYPE_COLORS["unknown"])
-
-
-def _status_color(vnf: VNF, type_color: str) -> str:
-    return {
-        "online":  type_color,
-        "offline": "#ff4d4d",
-        "unknown": C.NEON_AMBER,
-    }.get(vnf.status, C.NEON_AMBER)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  CUSTOM GRAPHICS ITEM — NÓ VNF
-# ═══════════════════════════════════════════════════════════════════════
-
-class _VNFNodeRect(QGraphicsRectItem):
-    """Rectângulo principal do nó VNF — trata clique e hover visual."""
-
-    def __init__(
-        self,
-        x: float, y: float, w: float, h: float,
-        vnf: VNF,
-        canvas: TopologyCanvas,
-        normal_brush: QBrush,
-        hover_brush: QBrush,
-    ) -> None:
-        super().__init__(x, y, w, h)
-        self._vnf = vnf
-        self._canvas = canvas
-        self._normal_brush = normal_brush
-        self._hover_brush = hover_brush
-        self.setAcceptHoverEvents(True)
-        self.setBrush(normal_brush)
-        self.setData(ITEM_DATA_KEY, vnf.id)
-
-    def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._canvas._on_click(self._vnf)
-            event.accept()
-        else:
-            super().mousePressEvent(event)
-
-    def hoverEnterEvent(self, event) -> None:
-        self.setBrush(self._hover_brush)
-        self._canvas._on_hover_enter(self._vnf)
-        super().hoverEnterEvent(event)
-
-    def hoverLeaveEvent(self, event) -> None:
-        self.setBrush(self._normal_brush)
-        self._canvas._on_hover_leave()
-        super().hoverLeaveEvent(event)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -310,30 +214,30 @@ class TopologyCanvas(QWidget):
         self._scene.addItem(bg_rect)
 
         # Símbolo
-        sym = QGraphicsSimpleTextItem("\u2b61")  # ⬡
-        sym.setBrush(QBrush(QColor(C.NEON_PURP)))
-        sym.setFont(_to_qfont(C.FONT_H1))
-        sr = sym.boundingRect()
-        sym.setPos(bar_x + 20, bar_y + bar_h / 2 - sr.height() / 2)
-        self._scene.addItem(sym)
+        symbol_text = QGraphicsSimpleTextItem("\u2b61")  # ⬡
+        symbol_text.setBrush(QBrush(QColor(C.NEON_PURP)))
+        symbol_text.setFont(_to_qfont(C.FONT_H1))
+        symbol_rect = symbol_text.boundingRect()
+        symbol_text.setPos(bar_x + 20, bar_y + bar_h / 2 - symbol_rect.height() / 2)
+        self._scene.addItem(symbol_text)
 
         # Label
-        lbl = QGraphicsSimpleTextItem("SDN CONTROLLER")
-        lbl.setBrush(QBrush(QColor(C.NEON_PURP)))
-        lbl.setFont(_to_qfont(C.FONT_LARGE_B))
-        lr = lbl.boundingRect()
-        lbl.setPos(bar_x + 44, bar_y + bar_h / 2 - lr.height() / 2)
-        self._scene.addItem(lbl)
+        title_text = QGraphicsSimpleTextItem("SDN CONTROLLER")
+        title_text.setBrush(QBrush(QColor(C.NEON_PURP)))
+        title_text.setFont(_to_qfont(C.FONT_LARGE_B))
+        title_rect = title_text.boundingRect()
+        title_text.setPos(bar_x + 44, bar_y + bar_h / 2 - title_rect.height() / 2)
+        self._scene.addItem(title_text)
 
         # Contador
-        cnt = QGraphicsSimpleTextItem(
+        counter_text = QGraphicsSimpleTextItem(
             f"{len(self._vnfs)} dispositivo(s) gerenciado(s)")
-        cnt.setBrush(QBrush(QColor(C.FG_DIM)))
-        cnt.setFont(_to_qfont(C.FONT_BODY))
-        cr = cnt.boundingRect()
-        cnt.setPos(bar_x + bar_w - 20 - cr.width(),
-                   bar_y + bar_h / 2 - cr.height() / 2)
-        self._scene.addItem(cnt)
+        counter_text.setBrush(QBrush(QColor(C.FG_DIM)))
+        counter_text.setFont(_to_qfont(C.FONT_BODY))
+        counter_rect = counter_text.boundingRect()
+        counter_text.setPos(bar_x + bar_w - 20 - counter_rect.width(),
+                            bar_y + bar_h / 2 - counter_rect.height() / 2)
+        self._scene.addItem(counter_text)
 
     def _draw_vnf_node(self, vnf: VNF, x: float, y: float) -> None:
         """Desenha um nó VNF no scene com cor, status e tooltip."""
@@ -373,7 +277,7 @@ class TopologyCanvas(QWidget):
         self._scene.addItem(rect)
 
         # Tooltip
-        rect.setToolTip(_build_tooltip_text(vnf, admin=admin))
+        rect.setToolTip(_build_tooltip_text(vnf, show_admin_info=admin))
 
         # Status dot (canto superior esquerdo)
         dot = QGraphicsEllipseItem(x - nw / 2 + 4, y - nh / 2 + 4, 10, 10)
@@ -386,8 +290,8 @@ class TopologyCanvas(QWidget):
         name_item = QGraphicsSimpleTextItem(vnf.label())
         name_item.setBrush(QBrush(st_color_q))
         name_item.setFont(_to_qfont(C.FONT_MEDIUM_B))
-        nr = name_item.boundingRect()
-        name_item.setPos(x - nr.width() / 2, y - 18 - nr.height() / 2)
+        name_rect = name_item.boundingRect()
+        name_item.setPos(x - name_rect.width() / 2, y - 18 - name_rect.height() / 2)
         name_item.setData(ITEM_DATA_KEY, vnf.id)
         self._scene.addItem(name_item)
 
@@ -396,8 +300,8 @@ class TopologyCanvas(QWidget):
         addr_item = QGraphicsSimpleTextItem(addr)
         addr_item.setBrush(QBrush(QColor(C.FG_DIM)))
         addr_item.setFont(_to_qfont(C.FONT_BODY))
-        ar = addr_item.boundingRect()
-        addr_item.setPos(x - ar.width() / 2, y + 2 - ar.height() / 2)
+        address_rect = addr_item.boundingRect()
+        addr_item.setPos(x - address_rect.width() / 2, y + 2 - address_rect.height() / 2)
         addr_item.setData(ITEM_DATA_KEY, vnf.id)
         self._scene.addItem(addr_item)
 
@@ -406,10 +310,10 @@ class TopologyCanvas(QWidget):
         type_item = QGraphicsSimpleTextItem(type_label)
         type_item.setBrush(QBrush(QColor(type_color_str)))
         type_item.setFont(_to_qfont(C.FONT_XSMALL))
-        tr = type_item.boundingRect()
+        type_rect = type_item.boundingRect()
         type_item.setPos(
-            x + nw / 2 - 8 - tr.width(),
-            y + nh / 2 - 8 - tr.height(),
+            x + nw / 2 - 8 - type_rect.width(),
+            y + nh / 2 - 8 - type_rect.height(),
         )
         type_item.setData(ITEM_DATA_KEY, vnf.id)
         self._scene.addItem(type_item)

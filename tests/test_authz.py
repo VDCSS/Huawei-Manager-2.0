@@ -5,11 +5,13 @@ import time
 
 import pytest
 
+from huawei_manager.exceptions import SdnAuthError, SdnValidationError
 from huawei_manager.sdn_controller.authz import (
     Role,
     SessionTracker,
     require_role,
 )
+from tests.helpers import wait_until
 
 # ── Test Role enum ───────────────────────────────────────────────────────────
 
@@ -32,7 +34,7 @@ class TestRoleEnum:
         assert Role.from_string("tecnico") is Role.TECNICO
 
     def test_from_string_unknown(self) -> None:
-        with pytest.raises(ValueError, match="Unknown role: 'root'"):
+        with pytest.raises(SdnValidationError, match="Unknown role: 'root'"):
             Role.from_string("root")
 
 
@@ -55,7 +57,7 @@ class TestRequireRole:
         def configure_device(role: str = "user") -> str:
             return "configured"
 
-        with pytest.raises(PermissionError, match="requires admin"):
+        with pytest.raises(SdnAuthError, match="requires admin"):
             configure_device(role="user")
 
     def test_admin_can_configure(self) -> None:
@@ -88,7 +90,7 @@ class TestRequireRole:
         def destroy_device(role: str = "user") -> str:
             return "destroyed"
 
-        with pytest.raises(PermissionError, match="requires tecnico"):
+        with pytest.raises(SdnAuthError, match="requires tecnico"):
             destroy_device(role="user")
 
     def test_tecnico_cannot_configure_some_operations(self) -> None:
@@ -97,7 +99,7 @@ class TestRequireRole:
         def delete_device(role: str = "user") -> str:
             return "deleted"
 
-        with pytest.raises(PermissionError, match="requires admin"):
+        with pytest.raises(SdnAuthError, match="requires admin"):
             delete_device(role="tecnico")
 
     def test_default_role_user(self) -> None:
@@ -114,7 +116,7 @@ class TestRequireRole:
         def read_device(role: str = "user") -> str:
             return "data"
 
-        with pytest.raises(ValueError, match="Unknown role: 'hacker'"):
+        with pytest.raises(SdnValidationError, match="Unknown role: 'hacker'"):
             read_device(role="hacker")
 
     def test_preserves_function_metadata(self) -> None:
@@ -134,7 +136,7 @@ class TestRequireRole:
             return "configured"
 
         assert configure(role="admin") == "configured"
-        with pytest.raises(PermissionError):
+        with pytest.raises(SdnAuthError):
             configure(role="user")
 
 
@@ -164,8 +166,7 @@ class TestSessionTracker:
         st = SessionTracker(timeout_secs=0.05)  # 50ms timeout
         st.set_role(Role.ADMIN)
         assert st.current_role is Role.ADMIN
-        time.sleep(0.1)
-        assert st.current_role is Role.USER
+        wait_until(lambda: st.current_role is Role.USER, timeout=1.0)
 
     def test_touch_prevents_timeout(self) -> None:
         """Tocar dentro do timeout impede reset."""
@@ -180,8 +181,7 @@ class TestSessionTracker:
         """Nao tocar por mais que timeout reseta para USER."""
         st = SessionTracker(timeout_secs=0.05)
         st.set_role(Role.TECNICO)
-        time.sleep(0.1)
-        assert st.current_role is Role.USER
+        wait_until(lambda: st.current_role is Role.USER, timeout=2.0)
 
     def test_set_role_touches(self) -> None:
         """set_role() faz touch automatico."""
@@ -201,8 +201,7 @@ class TestSessionTracker:
     def test_is_active_after_timeout(self) -> None:
         st = SessionTracker(timeout_secs=0.05)
         st.set_role(Role.ADMIN)
-        time.sleep(0.1)
-        assert not st.is_active
+        wait_until(lambda: not st.is_active, timeout=2.0)
 
     def test_timeout_zero_disabled(self) -> None:
         """timeout_secs=0 significa sem timeout."""
@@ -216,5 +215,4 @@ class TestSessionTracker:
         st = SessionTracker(timeout_secs=0.05)
         st.set_role(Role.ADMIN)
         # Nao chama touch — timeout deve ocorrer
-        time.sleep(0.1)
-        assert st.current_role is Role.USER
+        wait_until(lambda: st.current_role is Role.USER, timeout=2.0)

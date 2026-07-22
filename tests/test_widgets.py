@@ -7,7 +7,8 @@ from unittest.mock import MagicMock
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QPushButton, QWidget
 
-from huawei_manager.widgets import ActionButton, NeonButton, _css_font, action_button
+from huawei_manager.widgets.helpers import _css_font
+from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button
 
 
 class TestCssFont:

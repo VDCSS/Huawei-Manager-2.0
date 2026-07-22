@@ -14,6 +14,12 @@ from huawei_manager.sdn_controller.event_queue import (
     EventQueue,
     EventType,
 )
+from huawei_manager.sdn_controller.events import (
+    ConfigChangedPayload,
+    DeviceErrorPayload,
+    VnfStatusChangedPayload,
+)
+from tests.helpers import wait_until
 
 
 @pytest.fixture
@@ -209,7 +215,7 @@ class TestControllerCoreEventsChangeState:
         ev = Event(
             type=EventType.DEVICE_ERROR,
             source="gw-01",
-            data={"error": "Connection timeout"},
+            payload=DeviceErrorPayload(error="Connection timeout"),
         )
         cc.process_event(ev)
         state = cc.get_state("gw-01")
@@ -233,7 +239,7 @@ class TestControllerCoreEventsChangeState:
         ev = Event(
             type=EventType.CONFIG_CHANGED,
             source="gw-01",
-            data={"changes": 3},
+            payload=ConfigChangedPayload(),
         )
         cc.process_event(ev)
         state = cc.get_state("gw-01")
@@ -248,7 +254,7 @@ class TestControllerCoreEventsChangeState:
         ev = Event(
             type=EventType.VNF_STATUS_CHANGED,
             source="gw-01",
-            data={"status": "degraded"},
+            payload=VnfStatusChangedPayload(status="degraded"),
         )
         cc.process_event(ev)
         state = cc.get_state("gw-01")
@@ -434,10 +440,8 @@ class TestControllerCorePeriodicDump:
         cc = ControllerCore(event_queue=event_queue, dump_path=dump_path, dump_interval=0.1)
         cc.register("gw-01", "10.0.0.1", 22, "router")
         cc.start()
-        time.sleep(0.25)  # At least 2 dump cycles
+        wait_until(lambda: Path(dump_path).exists(), timeout=2.0)
         cc.stop()
-
-        assert Path(dump_path).exists()
         with open(dump_path) as f:
             data = json.load(f)
         assert "gw-01" in data

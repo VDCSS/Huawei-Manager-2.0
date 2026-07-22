@@ -59,21 +59,45 @@ Execução em dois modos: **mock** (lab/simulação) ou **cli** (Netmiko real).
 
 ```
 src/huawei_manager/
-├── app.py              # QMainWindow — sidebar, header, timers, threading
-├── pages.py            # Mixin PageBuilder — 8 abas da interface
-├── handlers.py         # Mixin EventHandlers — SSH, auth, VNFs, serviços
-├── widgets.py          # ActionButton, NeonButton, helpers de widget
+├── app.py              # QMainWindow — app core + mixin inheritance
+├── app_threading.py    # ThreadingMixin — dispatch, spawn_io, poll queue
+├── _protocols.py       # AppCoreProtocol — type contract for 11 mixins
+├── widgets/            # ActionButton, NeonButton, helpers de widget
 ├── _app.py             # QSS dark/light themes, apply_theme(), get_qt_app()
 ├── _config.py          # Lazy init: logging, secrets backend, audit logger
 ├── constants.py        # Cores, fontes (Inter/Consolas), filtros CLI
+├── exceptions.py       # Custom exceptions (Sócrates session)
+│
+├── pages/              # PageBuilder — 8 abas da interface
+│   ├── __init__.py     # Re-exporta PageBuilder
+│   ├── builder.py      # _build_*_page methods + PageBuilder class
+│   ├── cmd.py          # PageBuilder mixin — Command Editor page
+│   ├── manutencao.py   # PageBuilderManutencaoMixin
+│   └── services.py     # PageBuilderServicesMixin
+│
+├── handlers/           # EventHandlers — SSH, auth, VNFs, serviços
+│   ├── __init__.py     # EventHandlers composite class
+│   ├── auth.py         # AuthMixin — dialogs, RBAC, lockout
+│   ├── commands.py     # CommandsMixin — editor, backup
+│   ├── dashboard.py    # DashboardMixin — refresh dashboard
+│   ├── fetch.py        # FetchMixin — config, route, arp, info
+│   ├── services.py     # ServicesMixin — service execution
+│   ├── ssh.py          # SshMixin — connect, disconnect, VNF target
+│   └── vnfs.py         # VnfsMixin — topology, inventory CRUD
 │
 ├── session.py          # NetmikoSession — connect, run_cli_rpc, edit_config
 ├── vault.py            # SecretsBackend + 5 backends + rotate_ssh_key()
 ├── audit_log.py        # AuditLogger (JSON Lines + HMAC + hash chain)
 ├── topology.py         # TopologyCanvas (QGraphicsView) + VNFNodeRect
-├── vnf_models.py       # VNF dataclass, probe_vnfs, load/save inventory
+├── vnf_models.py       # VNF dataclass
+├── vnf_crypto.py       # Funções de criptografia de VNF
+├── vnf_inventory.py    # load/save vnf_inventory.json
+├── vnf_probe.py        # probe_vnfs, simulate_status
 │
-├── services.py         # Execução de serviços por tipo de VNF
+├── services/           # Catálogo de serviços
+│   ├── __init__.py     # Re-exports do catálogo legado
+│   ├── catalog.py      # ServiceDef, execute_service, get_all_show_commands
+│   └── vnf_service.py  # VnfService class
 ├── services_data.py    # 144 ServiceDef — definições do catálogo
 ├── utils.py            # ANSI cleanup, sanitize
 │
@@ -85,16 +109,26 @@ src/huawei_manager/
 │   ├── authz.py        # Role enum, @require_role, SessionTracker
 │   ├── validator.py    # Validação de parâmetros de comandos
 │   ├── dryrun.py       # Modo dry-run (simula sem enviar ao dispositivo)
+│   ├── events.py       # BaseEventPayload + 7 payloads tipados
+│   ├── bus.py          # IEventBus + IEventConsumer protocols
 │   ├── security_events.py  # Eventos de segurança (AN triggers)
 │   └── drivers/        # BaseDriver + Router, Switch, Firewall
 │
-└── agents/
-    ├── runner.py       # Orquestrador de scans com timeout e isolamento
-    ├── watcher.py      # Watcher Qt (QTimer + ThreadPoolExecutor)
-    └── scans/          # Módulos de scan individuais
+├── agents/
+│   ├── __init__.py
+│   ├── runner.py       # Orquestrador de scans com timeout e isolamento
+│   ├── watcher.py      # Watcher Qt (QTimer + ThreadPoolExecutor)
+│   └── scans/          # Módulos de scan individuais
+│       ├── __init__.py
+│       ├── cross_ref.py
+│       ├── dead_code.py
+│       ├── deps.py
+│       ├── security.py
+│       ├── structure.py
+│       └── style.py
 
 agents/                 # Scans externos (raiz do projeto)
-tests/                  # 139 testes pytest (headless, QT_QPA_PLATFORM=offscreen)
+tests/                  # 549 testes pytest (headless, QT_QPA_PLATFORM=offscreen)
 .github/workflows/      # CI: ruff → pytest → pyright
 Makefile                # install, run, test, lint, typecheck, coverage
 ```

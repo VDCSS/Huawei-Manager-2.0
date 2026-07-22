@@ -7,11 +7,8 @@ from huawei_manager.vault import EnvBackend, SopsBackend, get_backend
 
 
 class TestEnvBackend:
-    @classmethod
-    def setup_class(cls):
-        os.environ["TEST_VAULT_KEY"] = "test_value_123"
-
-    def test_get_existing_key(self):
+    def test_get_existing_key(self, monkeypatch):
+        monkeypatch.setenv("TEST_VAULT_KEY", "test_value_123")
         backend = EnvBackend()
         assert backend.get("TEST_VAULT_KEY") == "test_value_123"
 

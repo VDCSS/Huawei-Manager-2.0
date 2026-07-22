@@ -10,6 +10,7 @@ NEON_CYAN  = "#00e5ff"
 NEON_MAG   = "#e040fb"
 NEON_PURP  = "#7c4dff"
 NEON_AMBER = "#ffab00"
+NEON_RED   = "#ff4d4d"
 
 FG_MAIN    = "#e0e0ff"
 FG_DIM     = "#6a6a9a"
@@ -137,6 +138,19 @@ SERVICE_CAT_LABELS: dict[str, str] = {
     "config-vlan":     "VLAN",
 }
 
+
+# Comandos gerenciados por abas dedicadas — não duplicar no editor de templates
+BUILTIN_CMDS: frozenset[str] = frozenset({
+    "display current-configuration",
+    "display version", "display device", "display license",
+    "display cpu-usage", "display memory-usage",
+    "display interface brief", "display lldp neighbor brief",
+    "display arp",
+    "display interface", "display counters interface",
+    "display ip routing-table", "display bgp peer",
+    "display ip vpn-instance", "display ospf peer",
+    "display qos policy", "display mpls ldp peer",
+})
 
 CMD_TEMPLATES: dict[str, str] = {
     "(vazio — digite um comando)": "",

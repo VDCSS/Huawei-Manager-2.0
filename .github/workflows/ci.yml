@@ -26,4 +26,4 @@ jobs:
       - name: Test + Coverage (pytest)
         run: pytest tests/ -q --cov=src/huawei_manager --cov-report=term --cov-fail-under=45
       - name: Typecheck (pyright — core modules)
-        run: pyright src/huawei_manager/app.py src/huawei_manager/pages.py src/huawei_manager/handlers.py src/huawei_manager/widgets.py src/huawei_manager/session.py src/huawei_manager/services.py
+        run: pyright src/huawei_manager/app.py src/huawei_manager/app_threading.py src/huawei_manager/pages/ src/huawei_manager/handlers/ src/huawei_manager/widgets.py src/huawei_manager/session.py src/huawei_manager/services.py src/huawei_manager/vnf_models.py src/huawei_manager/vnf_crypto.py src/huawei_manager/vnf_probe.py src/huawei_manager/vnf_inventory.py

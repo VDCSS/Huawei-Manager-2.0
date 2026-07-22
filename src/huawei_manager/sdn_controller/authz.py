@@ -12,6 +12,8 @@ import time
 from collections.abc import Callable
 from typing import ParamSpec, TypeVar
 
+from huawei_manager.exceptions import SdnAuthError, SdnValidationError
+
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -40,12 +42,12 @@ class Role(enum.Enum):
 
     @staticmethod
     def from_string(level: str) -> Role:
-        """Converte string para Role. Levanta ``ValueError`` se invalido."""
+        """Converte string para Role. Levanta ``SdnValidationError`` se invalido."""
         try:
             return Role(level)
         except ValueError:
             valid = ", ".join(r.value for r in Role)
-            raise ValueError(
+            raise SdnValidationError(
                 f"Unknown role: {level!r}. Valid roles: {valid}"
             )
 
@@ -77,7 +79,7 @@ def require_role(
             caller_enum = Role.from_string(role_str)
             caller_level = _ROLE_EQUIV[caller_enum]
             if caller_level < min_level:
-                raise PermissionError(
+                raise SdnAuthError(
                     f"Role '{role_str}' insufficient for '{func.__name__}'; "
                     f"requires {min_enum.value}"
                 )
@@ -96,7 +98,7 @@ class SessionTracker:
             ``Role.USER``. ``0`` desabilita o timeout.
     """
 
-    def __init__(self, timeout_secs: int = 300) -> None:
+    def __init__(self, timeout_secs: int | float = 300) -> None:
         self._timeout_secs = timeout_secs
         self._role: Role = Role.USER
         self._last_activity: float = time.time()

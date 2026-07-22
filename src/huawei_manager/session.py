@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -11,10 +12,38 @@ from netmiko.base_connection import BaseConnection as NetmikoConnection
 
 from huawei_manager._config import PROJECT_ROOT
 from huawei_manager.audit_log import AuditLogger
+from huawei_manager.exceptions import SdnConnectionError, SdnValidationError
 from huawei_manager.utils import clean_output, sanitize_command
 from huawei_manager.vault import SecretsBackend
 
 log = logging.getLogger("huawei.session")
+
+
+@dataclass
+class ConnectionConfig:
+    """Parâmetros tipados para conexão SSH via Netmiko.
+
+    Attributes:
+        device_type: Tipo do dispositivo (padrão ``"huawei_vrp"``).
+        host: Endereço IP ou hostname.
+        port: Porta SSH.
+        username: Nome de usuário.
+        password: Senha (opcional se usar chave).
+        ssh_key: Caminho da chave privada (opcional).
+        timeout: Timeout de conexão em segundos.
+        ssh_strict: Validação rigorosa de host key.
+        session_log: Caminho para o arquivo de log da sessão.
+    """
+
+    device_type: str = "huawei_vrp"
+    host: str = ""
+    port: int = 2222
+    username: str = ""
+    password: str = ""
+    ssh_key: str | None = None
+    timeout: int = 30
+    ssh_strict: bool = True
+    session_log: str = ""
 
 
 class NetmikoSession:
@@ -143,7 +172,7 @@ class NetmikoSession:
         if not pw and not key:
             missing.append("ROUTER_PASSWORD ou ROUTER_SSH_KEY")
         if missing:
-            raise ValueError(
+            raise SdnValidationError(
                 "Credenciais incompletas — verifique secrets backend: "
                 + ", ".join(missing)
             )
@@ -169,36 +198,44 @@ class NetmikoSession:
         mode = self._hk_verify
         ssh_strict = mode == "strict"
 
-        kwargs = dict(
-            device_type="huawei_vrp",
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sess_dir = PROJECT_ROOT / "sessions"
+        sess_log_path = ""
+        try:
+            sess_dir.mkdir(parents=True, exist_ok=True)
+            sess_log_path = str(sess_dir / f"{self._host}_{self._port}_{ts}.log")
+            log.debug("Session log: %s", sess_log_path)
+        except OSError:
+            log.warning("Nao foi possivel criar %s — session log desabilitado", sess_dir)
+
+        cfg = ConnectionConfig(
             host=self._host,
             port=self._port,
             username=self._user,
             password=self._pass,
             timeout=timeout,
             ssh_strict=ssh_strict,
+            session_log=sess_log_path,
         )
 
         key = self._ssh_key
         if key:
-            kwargs["use_keys"] = True
-            kwargs["ssh_private_key_file"] = key
+            cfg.ssh_key = key
             log.debug("Auth com chave SSH: %s", key)
 
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        sess_dir = PROJECT_ROOT / "sessions"
-        try:
-            sess_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            log.warning("Nao foi possivel criar %s — session log desabilitado", sess_dir)
-            sess_log_path = ""
-        else:
-            sess_log_path = str(sess_dir / f"{self._host}_{self._port}_{ts}.log")
-            log.debug("Session log: %s", sess_log_path)
-        if sess_log_path:
-            kwargs["session_log"] = sess_log_path
-
         with self._audit.timed("connect", user=self._user, host=self._host) as ctx:
+            kwargs = {k: v for k, v in {
+                "device_type": cfg.device_type,
+                "host": cfg.host,
+                "port": cfg.port,
+                "username": cfg.username,
+                "password": cfg.password,
+                "timeout": cfg.timeout,
+                "ssh_strict": cfg.ssh_strict,
+                "use_keys": True if cfg.ssh_key else None,
+                "ssh_private_key_file": cfg.ssh_key,
+                "session_log": cfg.session_log or None,
+            }.items() if v is not None}
             self._conn = ConnectHandler(**kwargs)
             ctx.set_status("ok")
 
@@ -209,7 +246,7 @@ class NetmikoSession:
             cached = self._load_host_key(self._host)
             if cached and cached != remote_key:
                 self.disconnect()
-                raise ValueError(
+                raise SdnConnectionError(
                     f"Host key mismatch for {self._host} — "
                     "possible MITM attack"
                 )
