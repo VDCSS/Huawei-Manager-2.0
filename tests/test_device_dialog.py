@@ -73,12 +73,12 @@ class TestGetData:
     def test_get_data_after_accept(self, dialog: DeviceDialog, qtbot):
         """Preenche campos e aceita — get_data retorna dict."""
         dialog._name_entry.setText("test-device")
-        dialog._entries["host"].setText("10.0.0.1")
-        dialog._entries["port"].setText("22")
-        dialog._entries["username"].setText("admin")
-        dialog._entries["password"].setText("secret")
-        dialog._entries["ssh_key"].setText("")
-        dialog._entries["location"].setText("lab")
+        dialog._form_fields["host"].setText("10.0.0.1")
+        dialog._form_fields["port"].setText("22")
+        dialog._form_fields["username"].setText("admin")
+        dialog._form_fields["password"].setText("secret")
+        dialog._form_fields["ssh_key"].setText("")
+        dialog._form_fields["location"].setText("lab")
         if dialog._type_cb is not None:
             dialog._type_cb.setCurrentText("SWITCH")
 
@@ -106,22 +106,22 @@ class TestValidation:
     def test_empty_name_rejected(self, dialog: DeviceDialog, qtbot):
         """Nome vazio deve impedir aceitação."""
         dialog._name_entry.setText("")
-        dialog._entries["host"].setText("10.0.0.1")
+        dialog._form_fields["host"].setText("10.0.0.1")
         dialog._on_save()
         assert dialog.result() != QDialog.DialogCode.Accepted
 
     def test_empty_host_rejected(self, dialog: DeviceDialog, qtbot):
         """Host vazio deve impedir aceitação."""
         dialog._name_entry.setText("test-device")
-        dialog._entries["host"].setText("")
+        dialog._form_fields["host"].setText("")
         dialog._on_save()
         assert dialog.result() != QDialog.DialogCode.Accepted
 
     def test_invalid_port_falls_back_to_22(self, dialog: DeviceDialog, qtbot):
         """Porta inválida deve usar 22 como fallback."""
         dialog._name_entry.setText("test-device")
-        dialog._entries["host"].setText("10.0.0.1")
-        dialog._entries["port"].setText("invalid")
+        dialog._form_fields["host"].setText("10.0.0.1")
+        dialog._form_fields["port"].setText("invalid")
         dialog._on_save()
         assert dialog.result() == QDialog.DialogCode.Accepted
         # Fallback para 22
@@ -137,9 +137,9 @@ class TestEditMode:
     def test_populated_fields(self, edit_dialog: DeviceDialog):
         """Campos devem estar preenchidos no modo edição."""
         assert edit_dialog._name_entry.text() == "gw-01"
-        assert edit_dialog._entries["host"].text() == "10.0.0.1"
-        assert edit_dialog._entries["port"].text() == "22"
-        assert edit_dialog._entries["username"].text() == "admin"
-        assert edit_dialog._entries["password"].text() == "secret"
+        assert edit_dialog._form_fields["host"].text() == "10.0.0.1"
+        assert edit_dialog._form_fields["port"].text() == "22"
+        assert edit_dialog._form_fields["username"].text() == "admin"
+        assert edit_dialog._form_fields["password"].text() == "secret"
         if edit_dialog._type_cb is not None:
             assert edit_dialog._type_cb.currentText() == "ROUTER"
