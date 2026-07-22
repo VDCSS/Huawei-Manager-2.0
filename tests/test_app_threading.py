@@ -6,20 +6,11 @@ Tests are headless — no Qt dependency.  Uses a minimal
 
 from __future__ import annotations
 
-import sys as _sys
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 import pytest
-
-_mock_qtw = MagicMock()
-_mock_msgbox = MagicMock()
-_mock_msgbox.warning = MagicMock()
-_mock_qtw.QMessageBox = _mock_msgbox
-_sys.modules["PySide6"] = MagicMock()
-_sys.modules["PySide6.QtWidgets"] = _mock_qtw
-_sys.modules["PySide6.QtCore"] = MagicMock()
 
 from huawei_manager.app_threading import ThreadingMixin  # noqa: E402
 from huawei_manager.sdn_controller.event_queue import Event, EventType  # noqa: E402
@@ -218,7 +209,7 @@ class TestLoading:
 # ═══════════════════════════════════════════════════════════════════
 
 class TestRun:
-    def test_run_spawns_io_when_alive(self, app: _FakeApp) -> None:
+    def test_run_spawns_io_when_alive(self, app: _FakeApp, monkeypatch) -> None:
         results: list[int] = []
 
         def fn() -> None:
@@ -228,7 +219,8 @@ class TestRun:
         app._io_executor.shutdown(wait=True)
         assert results == [7]
 
-    def test_run_returns_when_not_alive(self, app: _FakeApp) -> None:
+    def test_run_returns_when_not_alive(self, app: _FakeApp, monkeypatch) -> None:
+        monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.warning", MagicMock())
         app._sb.is_alive.return_value = False
         results: list[int] = []
 
@@ -239,7 +231,8 @@ class TestRun:
         app._io_executor.shutdown(wait=True)
         assert results == []  # fn was NOT spawned
 
-    def test_run_handles_is_alive_exception(self, app: _FakeApp) -> None:
+    def test_run_handles_is_alive_exception(self, app: _FakeApp, monkeypatch) -> None:
+        monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.warning", MagicMock())
         app._sb.is_alive.side_effect = RuntimeError("boom")
 
         def fn() -> None:

@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QMessageBox
-
 from huawei_manager._protocols import AppCoreProtocol
 
 _app_log = logging.getLogger("huawei.app")
@@ -60,9 +58,13 @@ class ThreadingMixin:
     def _run(self: AppCoreProtocol, func) -> None:
         try:
             if self._sb is None or not self._sb.is_alive():
+                from PySide6.QtWidgets import QMessageBox
+
                 QMessageBox.warning(None, "Aviso", "Conecte ao roteador primeiro.")
                 return
         except Exception:
+            from PySide6.QtWidgets import QMessageBox
+
             _app_log.exception("_run: is_alive() falhou")
             QMessageBox.warning(None, "Aviso", "Conexao indisponivel. Reconecte.")
             return

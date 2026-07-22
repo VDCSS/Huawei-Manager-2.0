@@ -2,7 +2,6 @@ import time
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 import huawei_manager.constants as _C
@@ -108,7 +107,11 @@ class AuthOverlay(QWidget):
         layout.addStretch()
 
         self._pw_entry.returnPressed.connect(self._verify)
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.close_)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.close_()
+        super().keyPressEvent(event)
 
     def show(self) -> None:
         parent = self.parent()

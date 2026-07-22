@@ -4,15 +4,16 @@ Estes testes requerem um servidor gráfico (DISPLAY) ou Qt offscreen.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
-from PySide6 import QtCore
 from PySide6.QtWidgets import QDialog
 
 from huawei_manager.widgets.device_dialog import DeviceDialog
 
 # Skip all tests if Qt is not available
 pytestmark = pytest.mark.skipif(
-    not QtCore.QCoreDatabase or QtCore.QCoreDatabase.available_drivers() == [],
+    not os.environ.get("QT_QPA_PLATFORM"),
     reason="Requires Qt platform (e.g., offscreen)",
 )
 
