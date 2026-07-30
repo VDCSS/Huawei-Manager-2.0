@@ -5,6 +5,8 @@ Retorna dados/diffs — o chamador decide como aplicar.
 """
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +35,14 @@ def _next_id(vnfs: list[VNF], name: str) -> str:
     return f"vnf-{len(vnfs) + 1:03d}-{slug}"
 
 
+log = logging.getLogger("huawei.vnf_service")
+
+
+def _noop_resolver(key: str, default: str = "") -> str:
+    """Resolver que não resolve nada — fallback seguro."""
+    return default
+
+
 class VnfService:
     """Serviço de domínio para gestão de VNFs.
 
@@ -41,24 +51,63 @@ class VnfService:
     - Probe ou simulação de status
     - Cálculo de SessionOverrides para seleção de alvo
 
-    Sem dependência de Qt, SSH ou event bus. Métodos retornam
-    dados — o chamador decide como aplicar.
-
     Args:
         inventory_path: Caminho para o arquivo JSON de inventário.
+        resolve_env: Callable que resolve nome de var de ambiente → valor.
+            Ex: ``lambda k: os.environ.get(k, "")`` ou ``_config._s``.
+            Se None, ``password_env`` não é resolvido (vazio = sem senha).
     """
 
-    def __init__(self, inventory_path: str) -> None:
+    def __init__(
+        self,
+        inventory_path: str,
+        resolve_env: Callable[[str], str] | None = None,
+    ) -> None:
         self._inventory_path = inventory_path
+        self._resolve_env = resolve_env or _noop_resolver
 
     # ── CRUD ─────────────────────────────────────────────────────────
 
     def load_inventory(self) -> list[VNF]:
-        """Carrega a lista de VNFs do arquivo de inventário."""
-        return load_vnf_inventory(self._inventory_path)
+        """Carrega a lista de VNFs do inventário e resolve ``password_env``.
+
+        Se um VNF tiver ``password_env`` preenchido (ex: ``"ROUTER_PASSWORD"``),
+        o valor real é lido do backend de secrets e atribuído a ``password``.
+        ``password`` explícito no JSON tem prioridade (override manual).
+        """
+        vnfs = load_vnf_inventory(self._inventory_path)
+        for vnf in vnfs:
+            if vnf.password_env and not vnf.password:
+                try:
+                    resolved = self._resolve_env(vnf.password_env)
+                except Exception:
+                    log.exception(
+                        "Falha ao resolver password_env '%s' para VNF %s",
+                        vnf.password_env, vnf.name,
+                    )
+                    continue
+                if resolved:
+                    vnf.password = resolved
+                    log.debug(
+                        "VNF %s: password_env '%s' resolvido",
+                        vnf.name, vnf.password_env,
+                    )
+                else:
+                    log.warning(
+                        "VNF %s: password_env '%s' retornou vazio",
+                        vnf.name, vnf.password_env,
+                    )
+        return vnfs
 
     def save_inventory(self, vnfs: list[VNF]) -> None:
-        """Persiste a lista de VNFs no arquivo de inventário."""
+        """Persiste a lista de VNFs no arquivo de inventário.
+
+        Se ``password_env`` está preenchido, ``password`` é limpo antes
+        de gravar para não persistir o segredo resolvido em disco.
+        """
+        for vnf in vnfs:
+            if vnf.password_env:
+                vnf.password = ""
         save_vnf_inventory(vnfs, self._inventory_path)
 
     def add_device(self, data: dict[str, Any]) -> VNF:
@@ -92,6 +141,7 @@ class VnfService:
             type=str(data.get("type", "ROUTER")),
             username=str(data.get("username", "")),
             password=str(data.get("password", "")),
+            password_env=str(data.get("password_env", "")),
             ssh_key=str(data.get("ssh_key", "")),
             location=str(data.get("location", "")),
         )
@@ -123,6 +173,7 @@ class VnfService:
             type=str(data.get("type", vnf.type)),
             username=str(data.get("username", vnf.username)),
             password=str(data.get("password", vnf.password)),
+            password_env=str(data.get("password_env", vnf.password_env)),
             ssh_key=str(data.get("ssh_key", vnf.ssh_key)),
             location=str(data.get("location", vnf.location)),
         )
@@ -182,11 +233,11 @@ class VnfService:
             SessionOverrides com os campos do VNF.
         """
         return SessionOverrides(
-            host=vnf.host,
-            port=vnf.port,
-            username=vnf.username,
-            password=vnf.password,
-            ssh_key=vnf.ssh_key,
+            host=vnf.host or None,
+            port=vnf.port or None,
+            username=vnf.username or None,
+            password=vnf.password or None,
+            ssh_key=vnf.ssh_key or None,
         )
 
     @staticmethod

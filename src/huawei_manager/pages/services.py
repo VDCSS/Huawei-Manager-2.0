@@ -172,6 +172,8 @@ class PageBuilderServicesMixin:
     # ── Services: listbox population ──────────────────────────────────
 
     def _refresh_service_list(self: AppCoreProtocol) -> None:
+        if "_svc_listbox" not in self.__dict__ or self._svc_listbox is None:
+            return
         self._svc_listbox.clear()
         self._svc_services.clear()
 

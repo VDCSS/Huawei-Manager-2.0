@@ -97,6 +97,7 @@ class SSHSouthbound(SouthboundProtocol):
                 self._session.connect(timeout=self._timeout)
                 with self._lock:
                     self._connected = True
+                    self._alive_cache = (True, time.time())
                 return
             except Exception as exc:
                 sanitized = _sanitize(str(exc))
@@ -119,6 +120,7 @@ class SSHSouthbound(SouthboundProtocol):
         self._session.disconnect()
         with self._lock:
             self._connected = False
+            self._alive_cache = (False, time.time())
 
     def is_alive(self) -> bool:
         """Retorna True se a sessao esta conectada (com cache de 2s).
@@ -132,7 +134,7 @@ class SSHSouthbound(SouthboundProtocol):
             now = time.time()
             if now - self._alive_cache[1] < 2.0:
                 return self._alive_cache[0]
-        alive = self._session.is_connected()
+        alive = self._session.is_connected
         with self._lock:
             self._alive_cache = (alive, time.time())
             self._connected = alive

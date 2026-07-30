@@ -31,18 +31,29 @@ _probe = _ProbeState()
 
 
 def simulate_status(vnfs: list[VNF]) -> list[VNF]:
-    """Simula variacao aleatoria de status dos VNFs (modo mock)."""
+    """Simula variacao aleatoria de status dos VNFs (modo mock).
+
+    Transicoes:
+        unknown -> online (80%) | offline (20%)     — 1a vez que aparece
+        online  -> offline (5%)                      — estabilidade alta
+        offline -> online  (20%)                     — recuperacao
+    """
     now = time.time()
     if now - _probe.mock_last_update < 15:
         return vnfs
     _probe.mock_last_update = now
     for v in vnfs:
-        if v.status == "offline":
-            if random.random() < 0.2:
+        if v.status == "unknown":
+            if random.random() < 0.20:
+                v.status = "offline"
+            else:
+                v.status = "online"
+        elif v.status == "offline":
+            if random.random() < 0.20:
                 v.status = "online"
         elif v.status == "online":
             if random.random() < 0.05:
-                v.status = random.choice(["offline", "unknown"])
+                v.status = "offline"
     return vnfs
 
 

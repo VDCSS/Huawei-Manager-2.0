@@ -103,3 +103,29 @@ from huawei_manager.sdn_controller import get_controller
 2. A GUI consome o controller via `self._controller`, nunca importando diretamente os módulos internos de `sdn_controller/`.
 
 3. O arquivo `topology.py` existente permanece inalterado — suas funções de canvas e inventário VNF são complementares ao Topology Manager (LLDP discovery).
+
+## Extensão para AN L1-L2 (Autonomic Networking)
+
+### Contexto Adicional
+
+O plano de evolução de 12 meses inclui Autonomic Networking L1-L2:
+- **L1**: Auto-configuração, auto-healing, monitoramento autonômico
+- **L2**: Otimização autônoma, proteção autônoma, policy-based automation
+
+### Impacto nesta ADR
+
+1. **EventQueue precisa de novos tipos de evento**: `TOPOLOGY_CHANGED` e `AN_TRIGGER` agora possuem payloads tipados (`TopologyChangedPayload`, `AnTriggerPayload` em `events.py`).
+
+2. **Policy Engine** (`policy.py`): necessário para decisões autonômicas. O `AnTriggerPayload.an_action` define ações (`heal`, `optimize`, `scale`, `rebalance`) que o policy engine deve executar.
+
+3. **Telemetry collection**: AN L1 requer coleta contínua de métricas (CPU, memória, rotas, vizinhos LLDP) para detectar anomalias. O `baseline.py` será expandido para incluir thresholds autonômicos.
+
+4. **Orchestrator multi-dispositivo**: `orchestrator.py` já existe como stub. AN L2 requer execução paralela de intents em múltiplos dispositivos com coordenação de dependências.
+
+5. **Northbound API pode ser removida**: O `northbound.py` foi deletado (código morto). A GUI continua acessando o controller via `self._controller` diretamente.
+
+### Riscos Adicionais
+
+- **Complexidade do policy engine**: decisões autonômicas erradas podem causar instabilidade em rede
+- **Telemetry overhead**: coleta contínua pode sobrecarregar dispositivos em topologias grandes
+- **Rollback de ações AN**: se uma ação de auto-healing causar problema, precisa de rollback automático (já suportado por `DryRunEngine`)

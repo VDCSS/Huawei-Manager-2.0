@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import threading
 
@@ -21,6 +22,8 @@ import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.widgets.neon_button import action_button
 from huawei_manager.widgets.neon_entry import output_text
+
+log = logging.getLogger("huawei.manutencao")
 
 
 class PageBuilderManutencaoMixin:
@@ -110,6 +113,29 @@ class PageBuilderManutencaoMixin:
         self._watcher_btn = action_button(grp_agents, "\U0001f504  Auto: ON",
                                           self._toggle_watcher, C.NEON_CYAN)
         grp_agents_layout.addWidget(self._watcher_btn)
+
+        # ── Group: MODO ──
+        grp_mode = QGroupBox("  MODO  ", top)
+        grp_mode.setStyleSheet(f"""
+            QGroupBox {{
+                background: {C.BG_CARD}; color: {C.NEON_AMBER};
+                font: bold 10px 'Inter'; border: 1px solid {C.BORDER_NRM};
+                border-radius: 4px; margin-top: 8px; padding: 12px 4px 4px 4px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin; subcontrol-position: top left;
+                padding: 0 6px;
+            }}
+        """)
+        grp_mode_layout = QHBoxLayout(grp_mode)
+        grp_mode_layout.setContentsMargins(4, 4, 4, 4)
+        top_layout.addWidget(grp_mode)
+
+        mode_text = "Real" if not self._mock_mode else "Mock"
+        mode_color = C.NEON_CYAN if not self._mock_mode else C.NEON_AMBER
+        self._mode_btn = action_button(grp_mode, f"\u25cf  {mode_text}",
+                                       self._toggle_probe_mode, mode_color)
+        grp_mode_layout.addWidget(self._mode_btn)
 
         # ── Group: SETUP ──
         grp_setup = QGroupBox("  SETUP  ", top)
@@ -332,6 +358,18 @@ class PageBuilderManutencaoMixin:
             self._watcher.start()
             self._watcher_btn.setText("\U0001f504  Auto: ON")
             self._write(self._manut_output, "Watcher ligado — varredura a cada 60s.")
+
+    def _toggle_probe_mode(self: AppCoreProtocol) -> None:
+        self._mock_mode = not self._mock_mode
+        mode = "Mock" if self._mock_mode else "Real"
+        color = C.NEON_AMBER if self._mock_mode else C.NEON_CYAN
+        self._mode_btn.setText(f"\u25cf  {mode}")
+        self._mode_btn.setStyleSheet(
+            f"color: {color}; background: {C.BG_CARD}; font: bold 11px 'Inter';"
+            f" border: 1px solid {color}; border-radius: 4px; padding: 4px 12px;")
+        log_msg = f"Modo de probe alterado: {mode}"
+        self._write(self._manut_output, log_msg)
+        log.info("Probe mode changed to %s", mode)
 
     def _apply_manut_filter(self) -> None:
         if self._last_manut_results:

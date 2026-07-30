@@ -5,7 +5,11 @@ A UI (formulário) foi extraída para DeviceDialog.
 """
 from __future__ import annotations
 
+import logging
+
 from huawei_manager._protocols import AppCoreProtocol
+
+log = logging.getLogger(__name__)
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import DeviceDisconnectedPayload
 from huawei_manager.vnf_models import VNF
@@ -25,6 +29,8 @@ class VnfsMixin:
             return
         try:
             vnfs = self._vnf_service.load_inventory()
+            if not vnfs:
+                log.warning("_refresh_vnfs: load_inventory retornou 0 VNFs")
             vnfs = self._vnf_service.probe_or_simulate(vnfs, self._mock_mode)
             self._vnf_service.save_inventory(vnfs)
             self._vnfs_gen += 1
@@ -82,15 +88,15 @@ class VnfsMixin:
         """Atualiza o alvo SSH ao selecionar um VNF no canvas."""
         self._target_vnf = vnf
         overrides = self._vnf_service.set_target(vnf)
-        if overrides.host is not None:
+        if overrides.host:
             self.session.override_host = overrides.host
-        if overrides.port is not None:
+        if overrides.port:
             self.session.override_port = overrides.port
-        if overrides.username is not None:
+        if overrides.username:
             self.session.override_username = overrides.username
-        if overrides.password is not None:
+        if overrides.password:
             self.session.override_password = overrides.password
-        if overrides.ssh_key is not None:
+        if overrides.ssh_key:
             self.session.override_ssh_key = overrides.ssh_key
         info = f"{vnf.name} ({vnf.host})"
         if self._access_level in ("admin", "tecnico"):
@@ -99,7 +105,8 @@ class VnfsMixin:
             info += f"  user:{vnf.username}"
         if self._vnf_info_lbl is not None:
             self._vnf_info_lbl.setText(f"  Selecionado: {info}")
-        self._vnf_target_lbl.setText(info)
+        if self._vnf_target_lbl is not None:
+            self._vnf_target_lbl.setText(info)
         self._refresh_service_list()
 
     def _clear_vnf_target(self: AppCoreProtocol) -> None:

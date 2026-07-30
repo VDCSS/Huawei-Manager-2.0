@@ -22,16 +22,16 @@ REQUIRED_DIRS = [
 REQUIRED_FILES = [
     "src/huawei_manager/__init__.py",
     "src/huawei_manager/app.py",
-    "src/huawei_manager/pages.py",
-    "src/huawei_manager/handlers.py",
+    "src/huawei_manager/pages/__init__.py",      # package, not single file
+    "src/huawei_manager/handlers/__init__.py",    # package, not single file
     "src/huawei_manager/session.py",
     "src/huawei_manager/topology.py",
     "src/huawei_manager/vault.py",
-    "src/huawei_manager/services.py",
+    "src/huawei_manager/services/__init__.py",    # package, not single file
     "src/huawei_manager/utils.py",
     "src/huawei_manager/audit_log.py",
     "src/huawei_manager/constants.py",
-    "src/huawei_manager/widgets.py",
+    "src/huawei_manager/widgets/__init__.py",     # package, not single file
     "src/huawei_manager/_config.py",
     "pyproject.toml",
     "Makefile",

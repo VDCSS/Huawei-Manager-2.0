@@ -16,6 +16,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsDropShadowEffect,
     QGraphicsEllipseItem,
     QGraphicsRectItem,
     QGraphicsScene,
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as C
+from huawei_manager.topology_effects import draw_background_grid, draw_sdn_bar
 from huawei_manager.topology_items import (
     ITEM_DATA_KEY,
     _build_tooltip_text,
@@ -109,6 +111,7 @@ class TopologyCanvas(QWidget):
         self._view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._view.setFrameShape(QFrame.Shape.NoFrame)
         self._view.setStyleSheet(f"background: {C.BG_BASE}; border: none;")
+        self._view.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self._view.setMouseTracking(True)
         layout.addWidget(self._view)
 
@@ -122,6 +125,9 @@ class TopologyCanvas(QWidget):
 
     def update_vnfs(self, vnfs: list[VNF]) -> None:
         """Atualiza a lista de VNFs e redesenha."""
+        if not vnfs and self._vnfs:
+            log.warning("update_vnfs: ignorando lista vazia (existem %d VNFs)", len(self._vnfs))
+            return
         self._vnfs = vnfs
         self._vnf_map = {v.id: v for v in vnfs}
         self._draw()
@@ -150,8 +156,10 @@ class TopologyCanvas(QWidget):
             return
 
         positions = self._layout()
-
-        self._draw_sdn_bar()
+        vw = self._view.viewport().width()
+        vh = self._view.viewport().height()
+        draw_background_grid(self._scene, vw, vh)
+        draw_sdn_bar(self._scene, vw, len(self._vnfs))
         for vnf in self._vnfs:
             x, y = positions.get(vnf.id, (0, 0))
             self._draw_vnf_node(vnf, x, y)
@@ -168,7 +176,7 @@ class TopologyCanvas(QWidget):
         pad_x, pad_y = 24, 24
         grid_w = cols * self.NODE_W + (cols - 1) * pad_x
         start_x = (w - grid_w) / 2 + self.NODE_W / 2
-        start_y = 100  # abaixo da SDN bar
+        start_y = 100  # 8 px abaixo da SDN bar (bar_y=0 + bar_h=40 + gap=8 + nh/2=35)
 
         for i, vnf in enumerate(self._vnfs):
             col = i % cols
@@ -199,48 +207,8 @@ class TopologyCanvas(QWidget):
         txt.setPos(w / 2 - br.width() / 2, h / 2 - br.height() / 2)
         self._scene.addItem(txt)
 
-    def _draw_sdn_bar(self) -> None:
-        """Desenha a barra SDN com contador de dispositivos."""
-        cw = self._view.viewport().width() or 800
-        bar_w = max(cw - 40, 200)
-        bar_h = 40
-        bar_x = (cw - bar_w) / 2
-        bar_y = 16
-
-        # Fundo
-        bg_rect = QGraphicsRectItem(bar_x, bar_y, bar_w, bar_h)
-        bg_rect.setBrush(QBrush(QColor(C.BG_INPUT)))
-        bg_rect.setPen(QPen(QColor(C.NEON_PURP), 2))
-        self._scene.addItem(bg_rect)
-
-        # Símbolo
-        symbol_text = QGraphicsSimpleTextItem("\u2b61")  # ⬡
-        symbol_text.setBrush(QBrush(QColor(C.NEON_PURP)))
-        symbol_text.setFont(_to_qfont(C.FONT_H1))
-        symbol_rect = symbol_text.boundingRect()
-        symbol_text.setPos(bar_x + 20, bar_y + bar_h / 2 - symbol_rect.height() / 2)
-        self._scene.addItem(symbol_text)
-
-        # Label
-        title_text = QGraphicsSimpleTextItem("SDN CONTROLLER")
-        title_text.setBrush(QBrush(QColor(C.NEON_PURP)))
-        title_text.setFont(_to_qfont(C.FONT_LARGE_B))
-        title_rect = title_text.boundingRect()
-        title_text.setPos(bar_x + 44, bar_y + bar_h / 2 - title_rect.height() / 2)
-        self._scene.addItem(title_text)
-
-        # Contador
-        counter_text = QGraphicsSimpleTextItem(
-            f"{len(self._vnfs)} dispositivo(s) gerenciado(s)")
-        counter_text.setBrush(QBrush(QColor(C.FG_DIM)))
-        counter_text.setFont(_to_qfont(C.FONT_BODY))
-        counter_rect = counter_text.boundingRect()
-        counter_text.setPos(bar_x + bar_w - 20 - counter_rect.width(),
-                            bar_y + bar_h / 2 - counter_rect.height() / 2)
-        self._scene.addItem(counter_text)
-
     def _draw_vnf_node(self, vnf: VNF, x: float, y: float) -> None:
-        """Desenha um nó VNF no scene com cor, status e tooltip."""
+        """Desenha um nó VNF com sombra, glow de seleção, pulse de status."""
         nw, nh = self.NODE_W, self.NODE_H
         is_selected = (self._selected is not None
                        and self._selected.id == vnf.id)
@@ -250,43 +218,68 @@ class TopologyCanvas(QWidget):
         st_color_str = _status_color(vnf, type_color_str)
         st_color_q = QColor(st_color_str)
 
-        border_w = 2
-        fill_col = QColor(C.BG_CARD)
+        border_w = 3 if is_selected else 2
+        fill_col = QColor(C.BG_INPUT) if is_selected else QColor(C.BG_CARD)
         hover_fill = QColor(C.BG_INPUT)
 
+        # ── Anel de seleção + glow ─────────────────────────────────
         if is_selected:
-            # Anel de seleção (tracejado)
-            sel = QGraphicsRectItem(
-                x - nw / 2 - 6, y - nh / 2 - 6,
-                nw + 12, nh + 12,
+            glow_sel = QGraphicsRectItem(
+                x - nw / 2 - 11, y - nh / 2 - 11,
+                nw + 22, nh + 22,
             )
-            sel.setPen(QPen(st_color_q, 1, Qt.PenStyle.DashLine))
+            glow_sel.setPen(QPen(QColor(st_color_str), 6))
+            glow_sel.setBrush(Qt.BrushStyle.NoBrush)
+            glow_sel.setOpacity(0.12)
+            glow_sel.setData(ITEM_DATA_KEY, vnf.id)
+            self._scene.addItem(glow_sel)
+
+            sel = QGraphicsRectItem(
+                x - nw / 2 - 8, y - nh / 2 - 8,
+                nw + 16, nh + 16,
+            )
+            sel.setPen(QPen(st_color_q, 1.5, Qt.PenStyle.DashDotDotLine))
             sel.setBrush(Qt.BrushStyle.NoBrush)
             sel.setData(ITEM_DATA_KEY, vnf.id)
             self._scene.addItem(sel)
-            fill_col = QColor(C.BG_INPUT)
-            border_w = 3
 
-        # Rect principal (com hover)
+        # ── Rect principal com sombra ───────────────────────────────
         rect = _VNFNodeRect(
             x - nw / 2, y - nh / 2, nw, nh,
             vnf, self,
             QBrush(fill_col), QBrush(hover_fill),
         )
-        rect.setPen(QPen(st_color_q, border_w))
+        normal_pen = QPen(st_color_q, border_w)
+        hover_pen = QPen(st_color_q.lighter(130), border_w + 1)
+        rect.set_pen_pair(normal_pen, hover_pen)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(10)
+        shadow.setOffset(2, 3)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        rect.setGraphicsEffect(shadow)
         self._scene.addItem(rect)
 
         # Tooltip
         rect.setToolTip(_build_tooltip_text(vnf, show_admin_info=admin))
 
-        # Status dot (canto superior esquerdo)
+        # ── Status dot — pulse ──────────────────────────────────────
+        glow_dot = QGraphicsEllipseItem(
+            x - nw / 2 + 2, y - nh / 2 + 2, 14, 14,
+        )
+        glow_dot.setBrush(QBrush(st_color_q))
+        glow_dot.setPen(Qt.PenStyle.NoPen)
+        glow_dot.setOpacity(0.30)
+        glow_dot.setData(ITEM_DATA_KEY, vnf.id)
+        self._scene.addItem(glow_dot)
+
         dot = QGraphicsEllipseItem(x - nw / 2 + 4, y - nh / 2 + 4, 10, 10)
         dot.setBrush(QBrush(st_color_q))
         dot.setPen(Qt.PenStyle.NoPen)
         dot.setData(ITEM_DATA_KEY, vnf.id)
         self._scene.addItem(dot)
 
-        # Nome (centro, acima do meio)
+        # ── Nome ────────────────────────────────────────────────────
         name_item = QGraphicsSimpleTextItem(vnf.label())
         name_item.setBrush(QBrush(st_color_q))
         name_item.setFont(_to_qfont(C.FONT_MEDIUM_B))
@@ -295,7 +288,7 @@ class TopologyCanvas(QWidget):
         name_item.setData(ITEM_DATA_KEY, vnf.id)
         self._scene.addItem(name_item)
 
-        # Endereço (centro, abaixo do meio)
+        # ── Endereço ────────────────────────────────────────────────
         addr = vnf.host if not admin else vnf.address()
         addr_item = QGraphicsSimpleTextItem(addr)
         addr_item.setBrush(QBrush(QColor(C.FG_DIM)))
@@ -305,7 +298,7 @@ class TopologyCanvas(QWidget):
         addr_item.setData(ITEM_DATA_KEY, vnf.id)
         self._scene.addItem(addr_item)
 
-        # Label de tipo (canto inferior direito)
+        # ── Label de tipo ───────────────────────────────────────────
         type_label = vnf.type.replace("-", "\n")
         type_item = QGraphicsSimpleTextItem(type_label)
         type_item.setBrush(QBrush(QColor(type_color_str)))
@@ -323,9 +316,12 @@ class TopologyCanvas(QWidget):
     def _on_click(self, vnf: VNF) -> None:
         """Seleciona o VNF e chama o callback on_select."""
         self._selected = vnf
+        try:
+            if self._on_select:
+                self._on_select(vnf)
+        except Exception:
+            log.exception("_on_click: on_select falhou para %s", vnf.id)
         self._draw()
-        if self._on_select:
-            self._on_select(vnf)
 
     def _on_hover_enter(self, vnf: VNF) -> None:
         """Registra o VNF sob o mouse (tooltip é nativo do Qt)."""

@@ -8,6 +8,7 @@ import os
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPixmap
@@ -26,7 +27,7 @@ from PySide6.QtWidgets import (
 
 import huawei_manager.constants as C
 from huawei_manager._app import apply_theme
-from huawei_manager._config import PROJECT_ROOT, _secrets, audit
+from huawei_manager._config import PROJECT_ROOT, _secrets, _s, audit
 from huawei_manager.agents.watcher import Watcher
 from huawei_manager.app_notify import NotifyMixin
 from huawei_manager.app_shortcuts import ShortcutsMixin
@@ -78,13 +79,14 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._dry_run = DryRunEngine()
         self._controller = ControllerCore(event_queue=self._event_queue)
         self._vnf_service = VnfService(
-            inventory_path=str(PROJECT_ROOT / "data" / "vnf_inventory.json")
+            inventory_path=str(Path(__file__).resolve().parent / "data" / "vnf_inventory.json"),
+            resolve_env=_s,
         )
         self._drv = RouterDriver(southbound=self._sb, event_queue=self._event_queue)
         self._session_tracker = SessionTracker(timeout_secs=300)
         self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
-        self._mock_mode: bool = True
+        self._mock_mode: bool = False
         self._theme: str = "dark"
         self._theme_toggling: bool = False
 
@@ -154,7 +156,7 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._vnfs_lock = threading.Lock()
         self._vnfs_gen: int = 0
         self._vnfs: list[VNF] = []
-        self._mock_mode: bool = True
+        self._mock_mode: bool = False
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
         self._cancel_event: threading.Event | None = None

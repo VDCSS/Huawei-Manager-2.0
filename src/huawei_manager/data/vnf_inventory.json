@@ -1,18 +1,34 @@
 {
   "vnfs": [
     {
-      "id": "vnf-001-roteador-gredes",
-      "name": "Roteador Gredes",
+      "id": "vnf-001",
+      "name": "Router Gredes",
       "host": "10.100.74.254",
       "port": 2222,
       "type": "ROUTER",
       "status": "offline",
       "version": "",
       "location": "",
-      "username": "",
+      "username": "admin",
       "password": "",
+      "password_env": "ROUTER_PASSWORD",
       "ssh_key": "",
-      "extra": {}
+      "extra_metadata": {}
+    },
+    {
+      "id": "vnf-002-switch-teste",
+      "name": "Switch teste",
+      "host": "10.1.2.3.",
+      "port": 2222,
+      "type": "SWITCH",
+      "status": "offline",
+      "version": "",
+      "location": "",
+      "username": "admin",
+      "password": "123@switch",
+      "password_env": "",
+      "ssh_key": "",
+      "extra_metadata": {}
     }
   ]
 }

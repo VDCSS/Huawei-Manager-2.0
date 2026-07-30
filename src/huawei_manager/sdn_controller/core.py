@@ -248,6 +248,17 @@ class ControllerCore:
     def _on_event(self, event: Event) -> None:
         """Callback interno para eventos do EventQueue."""
         self.process_event(event)
+        # WAL simplificado: dump imediato em eventos criticos
+        # (evita perda de estado em crash entre dumps periodicos)
+        if event.type in (
+            EventType.DEVICE_CONNECTED,
+            EventType.DEVICE_DISCONNECTED,
+            EventType.DEVICE_ERROR,
+        ):
+            try:
+                self.dump()
+            except Exception:
+                log.debug("immediate dump after %s failed", event.type.name)
 
     # ── Persistencia ───────────────────────────────────────────────────────
 

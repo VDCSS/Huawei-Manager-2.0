@@ -8,30 +8,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from _factories import make_vnf as _make_vnf
 from huawei_manager.handlers.vnfs import VnfsMixin
 from huawei_manager.sdn_controller.event_queue import EventType
 from huawei_manager.services.vnf_service import SessionOverrides
-from huawei_manager.vnf_models import VNF
-
-# ── Helpers ──────────────────────────────────────────────────────────────
-
-
-def _make_vnf(**overrides) -> VNF:
-    """Cria um VNF com valores padrão."""
-    defaults = dict(
-        id="vnf-001-test",
-        name="test-device",
-        host="10.0.0.1",
-        port=22,
-        type="ROUTER",
-        username="admin",
-        password="secret",
-        ssh_key="",
-        location="lab",
-        status="unknown",
-    )
-    defaults.update(overrides)
-    return VNF(**defaults)
 
 
 def _make_vnf_service(returns=None):
@@ -132,13 +112,14 @@ class TestOnVnfSelected:
     def test_skips_vnf_info_lbl_when_none(self):
         mixin = _make_mixin(_vnf_info_lbl=None)
         mixin._on_vnf_selected(_make_vnf())
-        # Should not crash
+        # Should not crash — no attribute access on None
 
     def test_limits_info_for_user_access(self):
         info_lbl = MagicMock()
         mixin = _make_mixin(_vnf_info_lbl=info_lbl, _access_level="user")
         vnf = _make_vnf(name="gw-01", host="10.0.0.1", port=22, username="admin")
         mixin._on_vnf_selected(vnf)
+        info_lbl.setText.assert_called_once()
         called_arg = info_lbl.setText.call_args[0][0]
         assert "admin" not in called_arg  # user level does not show credentials
 
@@ -366,5 +347,151 @@ class TestDeleteDevice:
         lock = MagicMock()
         mixin = _make_mixin(_vnfs_lock=lock, _spawn_io=fake_spawn, _vnf_service=svc)
         mixin._delete_device(_make_vnf())
+        assert len(spawned) == 1
+        assert spawned[0][0] == mixin._refresh_vnfs
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  _update_vnfs_ui
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestUpdateVnfsUi:
+    """_update_vnfs_ui atualiza canvas e controller com lista de VNFs."""
+
+    def test_sets_vnfs_attribute(self):
+        mixin = _make_mixin()
+        vnfs = [_make_vnf(), _make_vnf(id="vnf-002", name="other")]
+        mixin._update_vnfs_ui(vnfs)
+        assert mixin._vnfs is vnfs
+        assert len(mixin._vnfs) == 2
+
+    def test_calls_sync_from_vnfs(self):
+        mixin = _make_mixin()
+        vnfs = [_make_vnf()]
+        mixin._update_vnfs_ui(vnfs)
+        mixin._controller.sync_from_vnfs.assert_called_once_with(
+            vnfs, publish_events=False
+        )
+
+    def test_calls_topo_canvas_update_vnfs(self):
+        canvas = MagicMock()
+        mixin = _make_mixin(_topo_canvas=canvas, _access_level="admin")
+        vnfs = [_make_vnf()]
+        mixin._update_vnfs_ui(vnfs)
+        canvas.update_vnfs.assert_called_once_with(vnfs)
+
+    def test_calls_set_access_on_canvas(self):
+        canvas = MagicMock()
+        mixin = _make_mixin(_topo_canvas=canvas, _access_level="tecnico")
+        mixin._update_vnfs_ui([_make_vnf()])
+        canvas.set_access.assert_called_once_with("tecnico")
+
+    def test_skips_topo_canvas_when_none(self):
+        mixin = _make_mixin(_topo_canvas=None)
+        mixin._update_vnfs_ui([_make_vnf()])
+        # Should not crash — no canvas calls
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  _show_device_dialog
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestShowDeviceDialog:
+    """_show_device_dialog abre DeviceDialog e processa resultado."""
+
+    def test_calls_require_access(self):
+        mixin = _make_mixin(_require_access=MagicMock(return_value=False))
+        mixin._show_device_dialog()
+        mixin._require_access.assert_called_once()
+
+    def test_blocks_without_access(self):
+        mixin = _make_mixin(_require_access=MagicMock(return_value=False))
+        mixin._show_device_dialog()
+        # Should return early — no dialog created
+
+    def test_creates_dialog_with_vnf_types(self, monkeypatch):
+        mock_dialog_cls = MagicMock()
+        mock_dialog_cls.return_value.exec.return_value = False
+        monkeypatch.setattr(
+            "huawei_manager.handlers.vnfs.DeviceDialog", mock_dialog_cls
+        )
+        mixin = _make_mixin()
+        mixin._show_device_dialog()
+        mock_dialog_cls.assert_called_once()
+        call_kwargs = mock_dialog_cls.call_args
+        vnf_types = (
+            call_kwargs.kwargs.get("vnf_types")
+            or call_kwargs[1].get("vnf_types", [])
+        )
+        assert "ROUTER" in vnf_types
+
+    def test_creates_dialog_with_vnf_for_edit(self, monkeypatch):
+        mock_dialog_cls = MagicMock()
+        mock_dialog_cls.return_value.exec.return_value = False
+        monkeypatch.setattr(
+            "huawei_manager.handlers.vnfs.DeviceDialog", mock_dialog_cls
+        )
+        mixin = _make_mixin()
+        vnf = _make_vnf()
+        mixin._show_device_dialog(vnf)
+        call_kwargs = mock_dialog_cls.call_args
+        assert (call_kwargs.kwargs.get("vnf") == vnf) or (
+            call_kwargs[1].get("vnf") == vnf
+        )
+
+    def test_creates_dialog_without_vnf_for_add(self, monkeypatch):
+        mock_dialog_cls = MagicMock()
+        mock_dialog_cls.return_value.exec.return_value = False
+        monkeypatch.setattr(
+            "huawei_manager.handlers.vnfs.DeviceDialog", mock_dialog_cls
+        )
+        mixin = _make_mixin()
+        mixin._show_device_dialog()
+        call_kwargs = mock_dialog_cls.call_args
+        assert (call_kwargs.kwargs.get("vnf") is None) or (
+            call_kwargs[1].get("vnf") is None
+        )
+
+    def test_on_accept_calls_add_device(self, monkeypatch):
+        mock_dialog_cls = MagicMock()
+        mock_dialog_cls.return_value.exec.return_value = True
+        mock_dialog_cls.return_value.get_data.return_value = {"name": "new-vnf"}
+        monkeypatch.setattr(
+            "huawei_manager.handlers.vnfs.DeviceDialog", mock_dialog_cls
+        )
+        mixin = _make_mixin()
+        mixin._show_device_dialog()
+        mixin._vnf_service.add_device.assert_called_once_with({"name": "new-vnf"})
+
+    def test_on_accept_calls_update_device(self, monkeypatch):
+        mock_dialog_cls = MagicMock()
+        mock_dialog_cls.return_value.exec.return_value = True
+        mock_dialog_cls.return_value.get_data.return_value = {"name": "updated"}
+        monkeypatch.setattr(
+            "huawei_manager.handlers.vnfs.DeviceDialog", mock_dialog_cls
+        )
+        mixin = _make_mixin()
+        vnf = _make_vnf()
+        mixin._show_device_dialog(vnf)
+        mixin._vnf_service.update_device.assert_called_once_with(
+            vnf, {"name": "updated"}
+        )
+
+    def test_on_accept_calls_spawn_io_refresh(self, monkeypatch):
+        mock_dialog_cls = MagicMock()
+        mock_dialog_cls.return_value.exec.return_value = True
+        mock_dialog_cls.return_value.get_data.return_value = {"name": "new"}
+        monkeypatch.setattr(
+            "huawei_manager.handlers.vnfs.DeviceDialog", mock_dialog_cls
+        )
+        spawned: list[tuple] = []
+
+        def fake_spawn(fn, *args):
+            spawned.append((fn, args))
+
+        mixin = _make_mixin(_spawn_io=fake_spawn)
+        mixin._show_device_dialog()
         assert len(spawned) == 1
         assert spawned[0][0] == mixin._refresh_vnfs

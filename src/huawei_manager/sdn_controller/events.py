@@ -83,8 +83,35 @@ class AlertPayload(BaseEventPayload):
     severity: str = "info"
 
 
-# ── Eventos sem payload específico (usar BaseEventPayload) ─────
-# TOPOLOGY_CHANGED — sem payload no momento
-# AN_TRIGGER — sem payload no momento
-#
-# Estes tipos podem receber payloads específicos no futuro.
+@dataclass
+class TopologyChangedPayload(BaseEventPayload):
+    """Payload para ``EventType.TOPOLOGY_CHANGED``.
+
+    Attributes:
+        action: Tipo de mudanca (added, removed, link_changed, status_changed).
+        device_id: ID do dispositivo afetado.
+        previous_state: Estado anterior (opcional, para comparacoes).
+        new_state: Novo estado do dispositivo/topologia.
+    """
+
+    action: str  # added | removed | link_changed | status_changed
+    device_id: str
+    previous_state: dict[str, Any] | None = None
+    new_state: dict[str, Any] | None = None
+
+
+@dataclass
+class AnTriggerPayload(BaseEventPayload):
+    """Payload para ``EventType.AN_TRIGGER``.
+
+    Attributes:
+        trigger_source: Origem do trigger (monitor, policy, scheduler).
+        device_id: ID do dispositivo alvo.
+        an_action: Acao AN a ser executada (heal, optimize, scale).
+        context: Dados adicionais para decisao da politica AN.
+    """
+
+    trigger_source: str  # monitor | policy | scheduler
+    device_id: str
+    an_action: str  # heal | optimize | scale | rebalance
+    context: dict[str, Any] | None = None

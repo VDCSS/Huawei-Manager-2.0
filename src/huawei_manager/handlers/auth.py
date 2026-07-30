@@ -29,8 +29,11 @@ class AuthMixin:
             log.info("Acesso: deslogado")
             return
 
-        if self._auth_overlay is not None and self._auth_overlay.isVisible():
-            return
+        try:
+            if self._auth_overlay is not None and self._auth_overlay.isVisible():
+                return
+        except RuntimeError:
+            self._auth_overlay = None  # C++ object já deletado
 
         if not ADMIN_PASSWORD or not TECNICO_PASSWORD:
             QMessageBox.warning(None, "Configuracao incompleta",
@@ -45,6 +48,7 @@ class AuthMixin:
             return
 
         def _on_result(level: str, attempts: int, locked_until: float) -> None:
+            self._auth_overlay = None  # limpa ref p/ evitar crash ao reabrir
             if level != "user":
                 self._access_level = level
                 self._session_tracker.set_role(Role.from_string(level))

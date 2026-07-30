@@ -6,7 +6,6 @@ Fallback ARP quando LLDP nao esta disponivel.
 """
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -45,16 +44,6 @@ class TopologyLink:
     source_device: str
     target_device: str
 
-
-# Padrao para display lldp neighbor brief
-_LLDP_RE = re.compile(
-    r"(\S+)\s+(\S+)\s+(\S+)",
-)
-
-# Padrao para display arp
-_ARP_RE = re.compile(
-    r"(\S+)\s+(\S+)\s+(\S+)",
-)
 
 
 class TopologyManager:

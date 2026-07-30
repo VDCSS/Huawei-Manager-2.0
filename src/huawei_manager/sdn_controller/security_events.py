@@ -11,10 +11,6 @@ from datetime import datetime
 # Severidades ordenadas (mais critica primeiro)
 _SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
 
-# Categorias conhecidas
-_KNOWN_CATEGORIES = ["auth", "config", "policy", "system", "network"]
-
-
 @dataclass
 class SecurityEvent:
     """Um evento de seguranca na timeline.

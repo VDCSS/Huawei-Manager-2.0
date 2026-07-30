@@ -169,8 +169,128 @@ class TestProbeOrSimulate:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  Target
+#  password_env Resolution
 # ══════════════════════════════════════════════════════════════════════════
+
+
+class TestPasswordEnvResolution:
+    def test_resolves_password_env(self, inventory_path: str):
+        """VNF com password_env → resolver preenche password."""
+        vnfs = [VNF(id="v1", name="r1", host="10.0.0.1", port=22,
+                     password_env="ROUTER_PASSWORD")]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        resolver = lambda k: "s3cret" if k == "ROUTER_PASSWORD" else ""
+        svc = VnfService(inventory_path, resolve_env=resolver)
+        loaded = svc.load_inventory()
+        assert loaded[0].password == "s3cret"
+
+    def test_explicit_password_overrides_env(self, inventory_path: str):
+        """Se password já está no JSON, password_env não sobrescreve."""
+        vnfs = [VNF(id="v1", name="r1", host="10.0.0.1", port=22,
+                     password="manual_pass", password_env="ROUTER_PASSWORD")]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        resolver = lambda k: "env_pass" if k == "ROUTER_PASSWORD" else ""
+        svc = VnfService(inventory_path, resolve_env=resolver)
+        loaded = svc.load_inventory()
+        assert loaded[0].password == "manual_pass"
+
+    def test_empty_password_env_stays_empty(self, inventory_path: str):
+        """VNF sem password e sem password_env → password continua vazio."""
+        vnfs = [VNF(id="v1", name="r1", host="10.0.0.1", port=22)]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        svc = VnfService(inventory_path)
+        loaded = svc.load_inventory()
+        assert loaded[0].password == ""
+
+    def test_unresolvable_env_stays_empty(self, inventory_path: str):
+        """password_env aponta para var inexistente → password continua vazio."""
+        vnfs = [VNF(id="v1", name="r1", host="10.0.0.1", port=22,
+                     password_env="NONEXISTENT_VAR")]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        svc = VnfService(inventory_path)  # noop resolver
+        loaded = svc.load_inventory()
+        assert loaded[0].password == ""
+
+    def test_default_noop_resolver(self, inventory_path: str):
+        vnfs = [VNF(id="v1", name="r1", host="10.0.0.1", port=22,
+                     password_env="ROUTER_PASSWORD")]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        svc = VnfService(inventory_path)
+        loaded = svc.load_inventory()
+        assert loaded[0].password == ""
+
+    def test_save_clears_resolved_password_when_env_exists(self, inventory_path: str):
+        vnfs = [VNF(id="v1", name="r1", host="10.0.0.1", port=22,
+                     password_env="ROUTER_PASSWORD")]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        resolver = lambda k: "s3cret" if k == "ROUTER_PASSWORD" else ""
+        svc = VnfService(inventory_path, resolve_env=resolver)
+        loaded = svc.load_inventory()
+        assert loaded[0].password == "s3cret"
+
+        svc.save_inventory(loaded)
+
+        with open(inventory_path) as f:
+            raw = json.load(f)
+        raw_vnf = raw["vnfs"][0]
+        assert raw_vnf["password"] == ""
+        assert raw_vnf["password_env"] == "ROUTER_PASSWORD"
+
+    def test_save_preserves_explicit_password(self, inventory_path: str):
+        vnfs = [VNF(id="v1", name="r1", host="10.0.0.1", port=22,
+                     password="manual_pass")]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        svc = VnfService(inventory_path)
+        loaded = svc.load_inventory()
+        loaded[0].password = "manual_pass"
+        svc.save_inventory(loaded)
+
+        with open(inventory_path) as f:
+            raw = json.load(f)
+        raw_vnf = raw["vnfs"][0]
+        assert raw_vnf["password"] == "manual_pass"
+
+    def test_resolver_exception_isolated_per_vnf(self, inventory_path: str):
+        vnfs = [
+            VNF(id="v1", name="ok", host="10.0.0.1", port=22,
+                password_env="GOOD_VAR"),
+            VNF(id="v2", name="bad", host="10.0.0.2", port=22,
+                password_env="BAD_VAR"),
+            VNF(id="v3", name="also-ok", host="10.0.0.3", port=22,
+                password_env="GOOD_VAR"),
+        ]
+        with open(inventory_path, "w") as f:
+            json.dump({"vnfs": [vars(v) for v in vnfs]}, f)
+
+        call_count = 0
+        def flaky_resolver(key):
+            nonlocal call_count
+            if key == "BAD_VAR":
+                raise RuntimeError("vault unavailable")
+            call_count += 1
+            return "ok_pass"
+
+        svc = VnfService(inventory_path, resolve_env=flaky_resolver)
+        loaded = svc.load_inventory()
+
+        assert loaded[0].password == "ok_pass"
+        assert loaded[1].password == ""
+        assert loaded[2].password == "ok_pass"
+        assert call_count == 2
 
 
 class TestTarget:

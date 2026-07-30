@@ -5,7 +5,7 @@ class NotifyMixin:
     def _cleanup_executors(self) -> None:
         for pool in (self._io_executor, self._cpu_executor):
             if pool is not None:
-                pool.shutdown(wait=True, timeout=5)
+                pool.shutdown(wait=True)
 
     def _on_close(self) -> None:
         self._watcher.shutdown()

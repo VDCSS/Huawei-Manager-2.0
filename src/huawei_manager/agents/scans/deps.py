@@ -33,6 +33,7 @@ KNOWN_OK: set[str] = {
 # Módulos que são pacotes locais do projeto (não externos)
 LOCAL_PACKAGES: set[str] = {
     "agents", "huawei_manager", "tests",
+    "_factories",  # test helper module (tests/_factories.py)
 }
 
 # Package name → módulo importável (quando diferem)

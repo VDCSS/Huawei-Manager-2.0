@@ -226,7 +226,6 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         ctrl_layout = QHBoxLayout(ctrl)
         ctrl_layout.setContentsMargins(0, 0, 0, 0)
         self._page_layout(p).addWidget(ctrl)
-        self._page_layout(p).addSpacing(10)
 
         admin_label = "\U0001f512  Acesso"
         if self._access_level in ("admin", "tecnico"):

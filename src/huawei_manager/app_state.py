@@ -13,8 +13,7 @@ class AppStateMixin:
             self._refresh_dashboard()
 
     def _tick_vnfs(self) -> None:
-        if self._current_page in ("home", "topology"):
-            self._spawn_io(self._refresh_vnfs)
+        self._spawn_io(self._refresh_vnfs)
 
     def _check_session_timeout(self) -> None:
         if self._access_level == "user":

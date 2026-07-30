@@ -26,9 +26,10 @@ class VNF:
     status:   str     = "unknown"
     version:  str     = ""
     location: str     = ""
-    username: str     = ""
-    password: str     = ""
-    ssh_key:  str     = ""
+    username:     str = ""
+    password:     str = ""
+    password_env: str = ""   # nome da var no .env (ex: "ROUTER_PASSWORD")
+    ssh_key:      str = ""
     extra_metadata: dict = field(default_factory=dict)
 
     def label(self) -> str:

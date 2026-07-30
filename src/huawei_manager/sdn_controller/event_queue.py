@@ -29,11 +29,11 @@ class EventType(Enum):
     DEVICE_DISCONNECTED = auto()
     DEVICE_ERROR = auto()
     CONFIG_CHANGED = auto()
-    TOPOLOGY_CHANGED = auto()   # 🔶 Deprecated — não usado em produção
+    TOPOLOGY_CHANGED = auto()
     COMMAND_EXECUTED = auto()
     VNF_STATUS_CHANGED = auto()
     ALERT = auto()
-    AN_TRIGGER = auto()         # 🔶 Deprecated — não usado em produção
+    AN_TRIGGER = auto()
 
 
 @dataclass

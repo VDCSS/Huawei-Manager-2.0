@@ -22,6 +22,8 @@ EXCEPTIONS: set[str] = {
     "__contains__", "__getitem__", "__setitem__", "__delitem__",
     "__call__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__",
     "__hash__", "__bool__", "__del__", "__new__", "__subclasshook__",
+    # dunder attributes — usados implicitamente por Python
+    "__all__", "__post_init__",
     # pytest/test hooks
     "setup_method", "teardown_method", "setup_class", "teardown_class",
     "setup", "teardown", "main", "run",
@@ -31,6 +33,8 @@ EXCEPTIONS: set[str] = {
     "_active_theme",
     # Utilitários usados apenas por testes
     "_normalize_status", "_validate_credentials",
+    # Usado em tests/test_session.py (fora do escopo src/)
+    "_resolve_filter",
 }
 
 
