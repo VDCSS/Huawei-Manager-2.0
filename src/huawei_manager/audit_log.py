@@ -141,7 +141,26 @@ class AuditLogger:
         """Inicializa o logger apontando para o arquivo JSONL e chave HMAC opcional."""
         self._path = Path(filename)
         self._hmac_key = hmac_key
+        # Cauda da hash chain mantida em memória sob _lock (D16) para
+        # impedir fork sob escrita concorrente; seed = último hash do arquivo.
+        self._last_hash = self._read_tail_hash()
         _log.info("AuditLogger → %s  hmac=%s", self._path.resolve(), "on" if hmac_key else "off")
+
+    def _read_tail_hash(self) -> str:
+        """Lê o SHA-256 da última entrada existente (vazio se arquivo vazio)."""
+        if not self._path.exists():
+            return ""
+        try:
+            raw = self._path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+        if not raw:
+            return ""
+        try:
+            last_dict = json.loads(raw.splitlines()[-1].strip())
+        except (OSError, json.JSONDecodeError):
+            return ""
+        return self._entry_hash(last_dict)
 
     # ── HMAC ────────────────────────────────────────────────────────────
     def _hmac(self, data: dict) -> str:
@@ -176,26 +195,17 @@ class AuditLogger:
     # ── escrita thread-safe com hash chain ───────────────────────────
     def _write(self, entry: AuditEntry) -> None:
         """Serializa a entrada com HMAC + hash chain e anexa ao JSONL."""
-        # Computa previous_hash a partir do ultimo registro no arquivo
-        last_hash = ""
-        if self._path.exists():
-            try:
-                raw = self._path.read_text(encoding="utf-8").strip()
-                if raw:
-                    last_line = raw.splitlines()[-1].strip()
-                    if last_line:
-                        last_dict = json.loads(last_line)
-                        last_hash = self._entry_hash(last_dict)
-            except (OSError, json.JSONDecodeError):
-                pass
-        entry.previous_hash = last_hash
-
-        d = asdict(entry)
-        d["hmac"] = self._hmac(d)
-        line = json.dumps(d, ensure_ascii=False)
+        # previous_hash e append sob o MESMO lock: sem lock, duas threads
+        # poderiam ler o mesmo last_hash e gravar a mesma previous_hash,
+        # bifurcando a cadeia (Hades H2 / D16).
         with _lock:
+            entry.previous_hash = self._last_hash
+            d = asdict(entry)
+            d["hmac"] = self._hmac(d)
+            line = json.dumps(d, ensure_ascii=False)
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(line + "\n")
+            self._last_hash = self._entry_hash(d)
         _log.info("AUDIT op=%-12s user=%-8s status=%-10s dt=%.1fms",
                   entry.op, entry.user, entry.status, entry.duration_ms)
         _log.debug("AUDIT host=%s", entry.host)
