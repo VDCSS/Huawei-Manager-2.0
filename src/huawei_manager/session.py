@@ -23,7 +23,7 @@ log = logging.getLogger("huawei.session")
 class ConnectionConfig:
     device_type: str = "huawei_vrp"
     host: str = ""
-    port: int = 2222
+    port: int = 22
     username: str = ""
     password: str = ""
     ssh_key: str | None = None
@@ -61,7 +61,7 @@ class NetmikoSession(SessionCommandsMixin):
 
     @property
     def _port(self) -> int:
-        return self.override_port or int(self._backend.get("ROUTER_PORT", "2222"))
+        return self.override_port or int(self._backend.get("ROUTER_PORT", "22"))
 
     @property
     def _user(self) -> str:

@@ -21,7 +21,7 @@ def _reset_config():
     _cfg.audit = None
     _cfg.log = None
     _cfg.HOST = ""
-    _cfg.PORT = 2222
+    _cfg.PORT = 22
     _cfg.ADMIN_USERNAME = ""
     _cfg.ADMIN_PASSWORD = ""
     _cfg.TECNICO_USERNAME = ""

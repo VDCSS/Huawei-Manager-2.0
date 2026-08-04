@@ -105,12 +105,13 @@ class TestConnect:
         mock_connect.return_value = mock_conn
         with (
             patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(session), "_port", new_callable=PropertyMock, return_value=22),
             patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
             patch.object(type(session), "_pass", new_callable=PropertyMock, return_value="secret"),
             patch.object(type(session), "_ssh_key", new_callable=PropertyMock, return_value=None),
         ):
             session.connect()
-            assert session._session_id == "10.0.0.1:2222"
+            assert session._session_id == "10.0.0.1:22"
 
 
 class TestDisconnect:

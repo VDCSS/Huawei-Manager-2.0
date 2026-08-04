@@ -21,7 +21,7 @@ audit: AuditLogger | None = None
 log: logging.Logger | None = None
 
 HOST: str = ""
-PORT: int = 2222
+PORT: int = 22
 USER: str = ""
 PASS: str = ""
 SSH_KEY: str = ""
@@ -90,7 +90,7 @@ def init() -> None:
         _secrets = EnvBackend(env_path=PROJECT_ROOT / ".env")
 
     HOST      = _s("ROUTER_HOST")
-    PORT      = int(_s("ROUTER_PORT", "2222"))
+    PORT      = int(_s("ROUTER_PORT", "22"))
     USER      = _s("ROUTER_USERNAME")
     PASS      = _s("ROUTER_PASSWORD")
     SSH_KEY   = os.path.expanduser(_s("ROUTER_SSH_KEY", "~/.ssh/huawei_ed25519"))
