@@ -195,3 +195,28 @@ LINT_SUGGESTIONS: dict[str, str] = {
     "reportUnusedVariable": "Variável declarada mas não usada. Remova.",
     "reportMissingTypeArgument": "Tipo genérico sem argumento de tipo. Adicione `[...]`.",
 }
+
+# ─── POLLING ADAPTATIVO ───────────────────────────────────────────────
+# Dispositivos estáveis são pollados com menos frequência, instáveis com
+# mais (15s → 300s). Feature flag HW_ADAPTIVE_POLLING default OFF.
+POLL_MIN_INTERVAL = 15          # segundos — instável/novo device
+POLL_MAX_INTERVAL = 300         # 5 min máximo — estável
+POLL_STABLE_MULTIPLIER = 2.0    # dobra a cada ciclo estável
+POLL_HISTORY_SIZE = 5           # amostras p/ estabilidade
+POLL_DEFAULT_INTERVAL = 60      # fallback em erro (backoff D20)
+POLL_ENABLED_ENV = "HW_ADAPTIVE_POLLING"
+POLL_MAX_DEVICES = 10           # bound por tick (enforcement no loop)
+POLL_MAX_WORKERS = 4            # paralelismo máximo do sub-pool
+POLL_ORIGIN = "auto-poll"       # origin no audit (via wrapper)
+POLL_TICK_FLOOR_MS = 5000       # piso do re-arm (evita busy loop)
+
+# Serviços estruturalmente estáveis — EXCLUÍDOS os voláteis:
+# sys-cpu, sys-mem, fw-session-table, ap-client (nunca estabilizam).
+POLL_SERVICES: list[str] = [
+    "router-routing-table", "router-bgp-summary", "router-ospf-peer",
+    "router-interface-brief",
+    "switch-arp", "switch-mac", "switch-vlan", "switch-stp",
+    "fw-security-policy", "fw-zone", "fw-cpu", "fw-mem",
+    "slb-service-group", "slb-virtual-server",
+    "ap-radio",
+]
