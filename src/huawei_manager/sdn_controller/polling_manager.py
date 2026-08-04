@@ -36,7 +36,11 @@ log = logging.getLogger("huawei.polling")
 _ISO_TS = re.compile(r"\d{4}-\d{2}-\d{2}[T ]")
 _COUNTER_WORDS = ("total", "average", "peers", "sessions", "rules",
                   "zones", "entries", "stations")
-_ERROR_PREFIXES = ("ERRO:", "Sem conex")
+# Prefixos de erro-como-string do wrapper de sessão (D13) + erros reais de
+# device Huawei/CLI (ex.: "% Unrecognized command", "Invalid input").
+_ERROR_PREFIXES = ("ERRO:", "Sem conex", "Error:", "Unknown command",
+                   "Incomplete command", "Ambiguous", "Unrecognized",
+                   "Invalid input")
 
 
 def _normalize_output(text: str) -> str:
@@ -61,13 +65,19 @@ def _normalize_output(text: str) -> str:
 def _is_error_string(text: str) -> bool:
     """True se alguma linha do output é erro-como-string (D13).
 
-    Checa por linha porque send_service_commands prefixa cada comando
-    com '>  cmd' + separador antes do output.
+    Roda sobre o output CRU (antes de _normalize_output): erros reais de
+    device começam com '%' e o normalizer os descartaria como contadores.
+    Linhas começando com '%' são erro Huawei (ex.: "% Unrecognized").
     """
-    return any(
-        line.strip().startswith(_ERROR_PREFIXES)
-        for line in text.splitlines()
-    )
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if s.startswith("%"):
+            return True
+        if s.lower().startswith(tuple(p.lower() for p in _ERROR_PREFIXES)):
+            return True
+    return False
 
 
 class StabilityTracker:
@@ -180,6 +190,7 @@ class PollingManager:
         self._tracker = StabilityTracker()
         self._decider = IntervalDecider()
         self._next_due: dict[str, float] = {}
+        self._next_due_lock = threading.Lock()
         self._tick_lock = threading.Lock()
 
     @property
@@ -205,21 +216,26 @@ class PollingManager:
             self._tick_lock.release()
 
     def _tick_impl(self) -> None:
-        now = time.time()
-        vnfs = self._vnf_service.load_inventory()
-        online = [v for v in vnfs if v.status == "online"][: self._max_devices]
-        due = [v for v in online if now >= self._next_due.get(v.id, 0)]
-        if not due:
-            return
-        with ThreadPoolExecutor(max_workers=min(self._max_workers, len(due))) as pool:
-            futures = [pool.submit(self._poll_device, v, now) for v in due]
-            for fut in futures:
-                exc = fut.exception()
-                if exc is not None:
-                    log.error("device poll future falhou: %s", exc)
-        self._factory.purge_expired()
+        try:
+            now = time.time()
+            vnfs = self._vnf_service.load_inventory()
+            online = [v for v in vnfs if v.status == "online"][: self._max_devices]
+            with self._next_due_lock:
+                next_due = dict(self._next_due)
+            due = [v for v in online if now >= next_due.get(v.id, 0)]
+            if due:
+                with ThreadPoolExecutor(
+                    max_workers=min(self._max_workers, len(due))
+                ) as pool:
+                    futures = [pool.submit(self._poll_device, v) for v in due]
+                    for fut in futures:
+                        exc = fut.exception()
+                        if exc is not None:
+                            log.error("device poll future falhou: %s", exc)
+        finally:
+            self._factory.purge_expired()
 
-    def _poll_device(self, vnf: VNF, now: float) -> None:
+    def _poll_device(self, vnf: VNF) -> None:
         try:
             svcs = self._matching_services(vnf)
             if not svcs:
@@ -227,24 +243,30 @@ class PollingManager:
             ssb = self._factory.get(vnf)
             if ssb is None:
                 # Falha de conexão/validação — backoff p/ não martelar
-                self._next_due[vnf.id] = now + POLL_DEFAULT_INTERVAL
+                self._set_next_due(vnf.id, POLL_DEFAULT_INTERVAL)
                 return
             cmds = [c for s in svcs for c in (s.cli_commands or [])]
             out = ssb.send_service_commands(cmds)
-            norm = _normalize_output(out)
-            if _is_error_string(norm):
+            if _is_error_string(out):
                 log.warning("device %s erro-como-string — instável", vnf.id)
                 self._decider.next_interval(vnf.id, False)
-                self._next_due[vnf.id] = now + POLL_MIN_INTERVAL
+                self._set_next_due(vnf.id, POLL_MIN_INTERVAL)
                 return
+            norm = _normalize_output(out)
             sha = hashlib.sha256(norm.encode("utf-8")).hexdigest()
             stable = self._tracker.record(vnf.id, sha)
             interval = self._decider.next_interval(vnf.id, stable)
-            self._next_due[vnf.id] = now + interval
+            self._set_next_due(vnf.id, interval)
         except Exception:
             log.exception("device %s skip", vnf.id)
             self._factory.release(vnf.id)
-            self._next_due[vnf.id] = now + POLL_DEFAULT_INTERVAL
+            self._set_next_due(vnf.id, POLL_DEFAULT_INTERVAL)
+
+    def _set_next_due(self, device_id: str, interval: float) -> None:
+        # Anchora no tempo DE CONCLUSÃO, não no início do tick: device lento
+        # (poll > intervalo) nunca é re-agendado no passado nem martelado.
+        with self._next_due_lock:
+            self._next_due[device_id] = time.time() + interval
 
     def _matching_services(self, vnf: VNF) -> list[ServiceDef]:
         vtype = vnf.type.upper()
@@ -254,24 +276,28 @@ class PollingManager:
         ]
 
     def next_due_min(self) -> float | None:
-        if not self._next_due:
-            return None
-        return min(self._next_due.values())
+        with self._next_due_lock:
+            values = list(self._next_due.values())
+        return min(values) if values else None
 
     def get_status(self) -> dict[str, Any]:
+        with self._next_due_lock:
+            devices = dict(self._next_due)
+        intervals = {
+            d: self._decider.get_current_interval(d)
+            for d in devices
+        }
         return {
             "enabled": self._enabled,
-            "devices": len(self._next_due),
+            "devices": len(devices),
             "next_due_min": self.next_due_min(),
             "active_sessions": self._factory.active_sessions,
             "stable": self._tracker.get_all_states(),
-            "intervals": {
-                d: self._decider.get_current_interval(d)
-                for d in self._next_due
-            },
+            "intervals": intervals,
         }
 
     def force_poll(self, device_id: str, service_id: str | None = None) -> None:
         """Torna um device elegível imediatamente no próximo tick."""
         del service_id
-        self._next_due.pop(device_id, None)
+        with self._next_due_lock:
+            self._next_due.pop(device_id, None)

@@ -474,12 +474,20 @@ class AppCore(QMainWindow, ThreadingMixin):
                 self._spawn_io(self._polling_mgr.tick)
             except Exception:
                 log.exception("adaptive polling tick falhou ao despachar")
-        nxt = self._polling_mgr.next_due_min()
-        if nxt is None:
-            delay_ms = C.POLL_MIN_INTERVAL * 1000
-        else:
-            delay_ms = max(C.POLL_TICK_FLOOR_MS, int((nxt - time.time()) * 1000))
-        self._adaptive_timer.start(delay_ms)
+        try:
+            nxt = self._polling_mgr.next_due_min()
+            if nxt is None:
+                delay_ms = C.POLL_MIN_INTERVAL * 1000
+            else:
+                delay_ms = max(
+                    C.POLL_TICK_FLOOR_MS,
+                    int((nxt - time.time()) * 1000),
+                )
+            self._adaptive_timer.start(delay_ms)
+        except Exception:
+            # B-1: re-arm nunca deve morrer com o timer — polling continua.
+            log.exception("adaptive polling re-arm falhou")
+            self._adaptive_timer.start(C.POLL_TICK_FLOOR_MS)
 
     # ── Tema ──────────────────────────────────────────────────────────
     def _toggle_theme(self) -> None:
