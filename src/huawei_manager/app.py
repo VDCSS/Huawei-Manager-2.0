@@ -6,6 +6,7 @@ import datetime
 import logging
 import os
 import threading
+import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -41,6 +42,8 @@ from huawei_manager.sdn_controller.core import ControllerCore
 from huawei_manager.sdn_controller.drivers.router import RouterDriver
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import EventQueue
+from huawei_manager.sdn_controller.polling_manager import PollingManager
+from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.sdn_controller.validator import CommandValidator
 from huawei_manager.services.vnf_service import VnfService
@@ -82,6 +85,24 @@ class AppCore(QMainWindow, ThreadingMixin):
             inventory_path=str(Path(__file__).resolve().parent / "data" / "vnf_inventory.json"),
             resolve_env=_s,
         )
+
+        # ── Polling adaptativo (intervalos por device, fail-closed) ─────
+        self._polling_enabled = os.environ.get(C.POLL_ENABLED_ENV, "0") == "1"
+        if self._polling_enabled and not _s("VNF_ENCRYPT_KEY"):
+            log.critical(
+                "HW_ADAPTIVE_POLLING=1 mas VNF_ENCRYPT_KEY ausente — polling desabilitado"
+            )
+            self._polling_enabled = False
+        self._session_factory = SSHSessionFactory(_secrets, audit)
+        self._polling_mgr = PollingManager(
+            factory=self._session_factory,
+            vnf_service=self._vnf_service,
+            enabled=self._polling_enabled,
+        )
+        self._adaptive_timer = QTimer(self)
+        self._adaptive_timer.timeout.connect(self._tick_adaptive_polling)
+        self._adaptive_timer.start(C.POLL_TICK_FLOOR_MS)
+
         self._drv = RouterDriver(southbound=self._sb, event_queue=self._event_queue)
         self._session_tracker = SessionTracker(timeout_secs=300)
         self._active_btn: NeonButton | None = None
@@ -447,6 +468,19 @@ class AppCore(QMainWindow, ThreadingMixin):
         self.clock_lbl.setText(
             datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
 
+    def _tick_adaptive_polling(self) -> None:
+        if self._polling_enabled and not self._mock_mode:
+            try:
+                self._spawn_io(self._polling_mgr.tick)
+            except Exception:
+                log.exception("adaptive polling tick falhou ao despachar")
+        nxt = self._polling_mgr.next_due_min()
+        if nxt is None:
+            delay_ms = C.POLL_MIN_INTERVAL * 1000
+        else:
+            delay_ms = max(C.POLL_TICK_FLOOR_MS, int((nxt - time.time()) * 1000))
+        self._adaptive_timer.start(delay_ms)
+
     # ── Tema ──────────────────────────────────────────────────────────
     def _toggle_theme(self) -> None:
         if self._theme_toggling:
@@ -473,6 +507,8 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._poll_timer.stop()
         self._session_timer.stop()
         self._clock_timer.stop()
+        if getattr(self, "_adaptive_timer", None) is not None:
+            self._adaptive_timer.stop()
         self._watcher.stop()
 
         # 2. Salvar estado
@@ -501,6 +537,8 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._poll_timer.start()
         self._session_timer.start()
         self._clock_timer.start()
+        if getattr(self, "_adaptive_timer", None) is not None:
+            self._adaptive_timer.start()
         if self._watcher.is_active:
             self._watcher.start()
 
