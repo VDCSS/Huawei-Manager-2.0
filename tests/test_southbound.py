@@ -191,7 +191,7 @@ class TestSSHSouthboundLifecycle:
         )
 
         mock_session = MagicMock()
-        mock_session.is_connected.return_value = False
+        type(mock_session).is_connected = PropertyMock(return_value=False)
         mock_session_cls.return_value = mock_session
 
         sb = SSHSouthbound(EnvBackend(), AuditLogger())
