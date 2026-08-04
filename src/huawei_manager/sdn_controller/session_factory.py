@@ -40,7 +40,6 @@ class _OriginAuditWrapper(AuditLogger):
     """
 
     def __init__(self, inner: AuditLogger) -> None:
-        super().__init__(filename=str(inner._path), hmac_key=inner._hmac_key)
         self._inner = inner
 
     def _write(self, entry: AuditEntry) -> None:
@@ -141,9 +140,12 @@ class SSHSessionFactory:
             again = self._pool.get(vnf.id)
             if again is not None:
                 again.last_used = time.time()
-                self._close_ssb(ssb)
-                return again.ssb
-            self._pool[vnf.id] = _PoolEntry(ssb, time.time())
+            else:
+                self._pool[vnf.id] = _PoolEntry(ssb, time.time())
+        # Disconnect fora do lock: I/O de rede não bloqueia outros threads.
+        if again is not None:
+            self._close_ssb(ssb)
+            return again.ssb
         return ssb
 
     def release(self, device_id: str) -> None:
