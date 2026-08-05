@@ -77,10 +77,18 @@ def load_lab_devices_from_file(path: Path = CONFIG_PATH) -> list[dict[str, str |
 class TestCheckDeviceReachable:
     """Testa a função check_device_reachable em cenários controlados."""
 
+    @staticmethod
+    def _free_port() -> int:
+        """Reserva uma porta livre e a libera — garantidamente fechada."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            return int(sock.getsockname()[1])
+
     def test_valid_host_localhost_port_22_refused(self) -> None:
-        """localhost:22 não deve estar acessível (sem SSH server)."""
+        """Porta fechada em localhost deve retornar False (sem SSH server)."""
+        port = self._free_port()
         # Conexão será recusada, não deve levantar exceção
-        result = check_device_reachable("127.0.0.1", 22, timeout=1.0)
+        result = check_device_reachable("127.0.0.1", port, timeout=1.0)
         assert result is False
 
     def test_invalid_host_returns_false(self) -> None:
