@@ -8,12 +8,12 @@ from __future__ import annotations
 import logging
 
 from huawei_manager._protocols import AppCoreProtocol
-
-log = logging.getLogger(__name__)
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import DeviceDisconnectedPayload
 from huawei_manager.vnf_models import VNF
 from huawei_manager.widgets.device_dialog import DeviceDialog
+
+log = logging.getLogger(__name__)
 
 
 class VnfsMixin:

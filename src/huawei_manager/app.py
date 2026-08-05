@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 import huawei_manager.constants as C
 from huawei_manager._app import apply_theme
-from huawei_manager._config import PROJECT_ROOT, _secrets, _s, audit
+from huawei_manager._config import PROJECT_ROOT, _s, _secrets, audit
 from huawei_manager.agents.watcher import Watcher
 from huawei_manager.app_notify import NotifyMixin
 from huawei_manager.app_shortcuts import ShortcutsMixin

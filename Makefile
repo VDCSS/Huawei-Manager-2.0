@@ -82,7 +82,7 @@ test:
 	$(PY) -m pytest
 
 lint:
-	$(PY) -m ruff check
+	$(PY) -m ruff check src/huawei_manager/
 
 typecheck:
 	$(PY) -m pyright
