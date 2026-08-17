@@ -90,3 +90,28 @@ def _decrypt_val(enc: str) -> str:
     except Exception as exc:
         log.error("Falha ao descriptografar senha Device: %s", exc)
         raise
+
+
+def ensure_encrypt_key() -> str:
+    """Garante VNF_ENCRYPT_KEY: gera e persiste no secrets backend se ausente.
+
+    Raises:
+        RuntimeError: Se a persistência falhar (fail-closed explícito).
+    """
+    raw = _config._s("VNF_ENCRYPT_KEY")
+    if raw:
+        return raw
+
+    key = Fernet.generate_key().decode()
+
+    if _config._secrets is None:
+        raise RuntimeError("secrets backend nao inicializado")
+
+    try:
+        _config._secrets.put("VNF_ENCRYPT_KEY", key)
+    except Exception as exc:
+        log.warning("VNF_ENCRYPT_KEY gerada mas nao persistida (%s) — fail-closed mantido", exc)
+        raise
+
+    log.info("VNF_ENCRYPT_KEY gerada e persistida no secrets backend")
+    return key

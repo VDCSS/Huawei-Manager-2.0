@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from huawei_manager.sdn_controller.security_events import (
+from huawei_manager.sdn_controller._dormant.security_events import (
     SecurityEvent,
     SecurityTimeline,
 )

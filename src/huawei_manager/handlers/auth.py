@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QMessageBox, QWidget
 
 from huawei_manager._config import ADMIN_PASSWORD, TECNICO_PASSWORD, log
 from huawei_manager._protocols import AppCoreProtocol
-from huawei_manager.sdn_controller.authz import Role
+from huawei_manager.sdn_controller.authz import Role, role_meets
 from huawei_manager.widgets.auth_overlay import AuthOverlay
 
 
@@ -23,6 +23,7 @@ class AuthMixin:
         if self._access_level != "user":
             self._access_level = "user"
             self._session_tracker.set_role(Role.USER)
+            self._sb.set_access_role("user")
             self._mock_mode = False
             self._watcher.stop()
             self._rebuild_page("topology")
@@ -52,6 +53,7 @@ class AuthMixin:
             if level != "user":
                 self._access_level = level
                 self._session_tracker.set_role(Role.from_string(level))
+                self._sb.set_access_role(level)
                 self._admin_attempts = 0
                 self._admin_locked_until = 0
                 self._rebuild_page("topology")
@@ -80,7 +82,11 @@ class AuthMixin:
     def _require_access(self: AppCoreProtocol, level: str = "admin") -> bool:
         """Verifica se o nivel de acesso atual atende ao requisito.
 
+        Fonte unica da hierarquia: ``authz.role_meets`` (Role.hierarchy).
+        Nivel desconhecido no lado atual cai para ``Role.USER``
+        (fail-closed); nenhum call site real passa nivel de requisito
+        invalido (apenas "user"/"tecnico"/"admin").
+
         Returns True se permitido, False se bloqueado.
         """
-        levels = {"user": 0, "admin": 1, "tecnico": 2}
-        return levels.get(self._access_level, 0) >= levels.get(level, 1)
+        return role_meets(self._access_level, level)

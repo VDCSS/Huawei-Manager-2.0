@@ -186,11 +186,11 @@ class ServiceOrchestrator:
                 raise ValueError(f"Device offline: {dev_id}")
 
             if state.device_type.upper() not in [
-                t.upper() for t in svc.vnf_types
+                t.upper() for t in svc.device_types
             ]:
                 raise ValueError(
                     f"Device type incompatible: {dev_id} "
-                    f"({state.device_type} for {svc.vnf_types})"
+                    f"({state.device_type} for {svc.device_types})"
                 )
 
             steps.append(

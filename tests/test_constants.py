@@ -5,7 +5,7 @@ from huawei_manager.constants import (
     FONT_H1,
     THEME,
 )
-from huawei_manager.services import VNF_CATEGORIES, VNF_TYPES
+from huawei_manager.services import DEVICE_CATEGORIES, DEVICE_TYPES
 
 
 class TestTheme:
@@ -37,13 +37,13 @@ class TestCLIFilters:
             assert isinstance(v, str)
 
 
-class TestVnfCategories:
+class TestDeviceCategories:
     def test_all_types_have_categories(self):
-        for t in VNF_TYPES:
-            assert t in VNF_CATEGORIES, f"{t} missing from VNF_CATEGORIES"
+        for t in DEVICE_TYPES:
+            assert t in DEVICE_CATEGORIES, f"{t} missing from DEVICE_CATEGORIES"
 
     def test_categories_are_non_empty(self):
-        for t, cats in VNF_CATEGORIES.items():
+        for t, cats in DEVICE_CATEGORIES.items():
             assert len(cats) > 0, f"{t} has no categories"
 
 

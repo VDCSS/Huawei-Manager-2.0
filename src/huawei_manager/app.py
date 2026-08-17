@@ -35,7 +35,11 @@ from huawei_manager.app_shortcuts import ShortcutsMixin
 from huawei_manager.app_state import AppStateMixin
 from huawei_manager.app_threading import ThreadingMixin
 from huawei_manager.constants import set_theme
+from huawei_manager.db import get_connection, init_database
+from huawei_manager.device_models import Device
+from huawei_manager.device_repository import DeviceRepository
 from huawei_manager.handlers import EventHandlers
+from huawei_manager.migration import migrate_json_inventory
 from huawei_manager.pages import PageBuilder
 from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.sdn_controller.core import ControllerCore
@@ -46,15 +50,14 @@ from huawei_manager.sdn_controller.polling_manager import PollingManager
 from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.sdn_controller.validator import CommandValidator
-from huawei_manager.services.vnf_service import VnfService
+from huawei_manager.services.device_service import DeviceService
 from huawei_manager.session import NetmikoSession
-from huawei_manager.vnf_models import VNF
 from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button, neon_button
 
 log = logging.getLogger("huawei_manager")
 
 
-class AppCore(QMainWindow, ThreadingMixin):
+class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
     """Mixin principal Qt — inicializa janela, layout, navegação e helpers de threading."""
 
     def __init__(self) -> None:
@@ -80,13 +83,34 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._sb = SSHSouthbound(_secrets, audit, session=self.session)
         self._cmd_validator = CommandValidator()
         self._dry_run = DryRunEngine()
-        self._controller = ControllerCore(event_queue=self._event_queue)
-        self._vnf_service = VnfService(
-            inventory_path=str(Path(__file__).resolve().parent / "data" / "vnf_inventory.json"),
+        self._controller = ControllerCore(
+            event_queue=self._event_queue,
+            dump_path=str(Path.home() / ".huawei_manager" / "sdn_state.json"),
+        )
+        db_conn = get_connection()
+        init_database(db_conn)
+
+        # Auto-generate VNF_ENCRYPT_KEY on first boot (fail-closed: if put fails, log and continue)
+        try:
+            from huawei_manager.device_crypto import ensure_encrypt_key
+            ensure_encrypt_key()
+        except Exception as exc:
+            log.warning("VNF_ENCRYPT_KEY nao disponivel — segredos Device falharao no save (fail-closed): %s", exc)
+
+        # Auto-migrate JSON inventory to SQLite on first run
+        json_path = str(Path(__file__).resolve().parent / "data" / "vnf_inventory.json")
+        if Path(json_path).exists():
+            repo_check = DeviceRepository(db_conn)
+            if not repo_check.list_devices():
+                log.info("SQLite inventory empty — migrating from JSON...")
+                migrate_json_inventory(json_path, db_conn)
+
+        self._device_service = DeviceService(
+            inventory_path=json_path,
             resolve_env=_s,
+            repository=DeviceRepository(db_conn),
         )
 
-        # ── Polling adaptativo (intervalos por device, fail-closed) ─────
         self._polling_enabled = os.environ.get(C.POLL_ENABLED_ENV, "0") == "1"
         if self._polling_enabled and not _s("VNF_ENCRYPT_KEY"):
             log.critical(
@@ -96,7 +120,7 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._session_factory = SSHSessionFactory(_secrets, audit)
         self._polling_mgr = PollingManager(
             factory=self._session_factory,
-            vnf_service=self._vnf_service,
+            device_service=self._device_service,
             enabled=self._polling_enabled,
         )
         self._adaptive_timer = QTimer(self)
@@ -114,8 +138,8 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._admin_attempts = 0
         self._admin_locked_until: float = 0
 
-        self._target_vnf: VNF | None = None
-        self._vnfs: list[VNF] = []
+        self._target_device: Device | None = None
+        self._devices: list[Device] = []
         self._topo_canvas: object = None
         io_w = int(os.environ.get("HW_IO_WORKERS", "6"))
         cpu_w = int(os.environ.get("HW_CPU_WORKERS", "2"))
@@ -140,9 +164,9 @@ class AppCore(QMainWindow, ThreadingMixin):
         self._dash_timer.timeout.connect(self._tick_dashboard)
         self._dash_timer.start(5000)
 
-        self._vnf_timer = QTimer(self)
-        self._vnf_timer.timeout.connect(self._tick_vnfs)
-        self._vnf_timer.start(30000)
+        self._device_timer = QTimer(self)
+        self._device_timer.timeout.connect(self._tick_devices)
+        self._device_timer.start(30000)
 
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_queue)
@@ -169,21 +193,25 @@ class AppCore(QMainWindow, ThreadingMixin):
         self.out_backup: QTextEdit | None = None
         self._svc_output: QTextEdit | None = None
         self._page_container: QStackedWidget | None = None
-        self._vnf_info_lbl: QLabel | None = None
-        self._vnf_status_lbl: QLabel | None = None
+        self._device_info_lbl: QLabel | None = None
+        self._device_status_lbl: QLabel | None = None
         self._auth_overlay: QWidget | None = None
         self._last_manut_results: list = []
         self._manut_filter: str = "all"
-        self._vnfs_lock = threading.Lock()
-        self._vnfs_gen: int = 0
-        self._vnfs: list[VNF] = []
+        self._devices_lock = threading.Lock()
+        self._devices_gen: int = 0
+        self._devices: list[Device] = []
         self._mock_mode: bool = False
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
         self._cancel_event: threading.Event | None = None
         self.backup_path: str = ""
-        self._svc_mode_var: str = "mock"
+        self._svc_mode_var: str = os.environ.get("HW_SVC_MODE", "mock")
+        if self._svc_mode_var not in ("mock", "cli"):
+            log.warning("HW_SVC_MODE invalido (%r) — usando mock", self._svc_mode_var)
+            self._svc_mode_var = "mock"
         self._svc_param_entries: dict[str, QLineEdit] = {}
+        self._shutdown: bool = False
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:
@@ -345,7 +373,7 @@ class AppCore(QMainWindow, ThreadingMixin):
                 ("home", "\U0001f3e0", "Dashboard", C.NEON_CYAN),
             )),
             ("DISPOSITIVOS", (
-                ("topology", "\U0001f5fa", "Topologia / VNFs", C.NEON_AMBER),
+                ("topology", "\U0001f5fa", "Topologia / Devices", C.NEON_AMBER),
                 ("config",   "\U0001f4cb", "Config Atual", C.NEON_CYAN),
                 ("route",    "\U0001f310", "Roteamento", C.NEON_CYAN),
                 ("arp",      "\U0001f4e1", "Tabela ARP", C.NEON_CYAN),
@@ -389,24 +417,24 @@ class AppCore(QMainWindow, ThreadingMixin):
         sb_layout.addWidget(sep_line)
         sb_layout.addSpacing(8)
 
-        vnf_section = QWidget(sb)
-        vnf_section.setStyleSheet(f"background: {C.BG_SIDEBAR};")
-        vnf_layout = QVBoxLayout(vnf_section)
-        vnf_layout.setContentsMargins(16, 4, 16, 0)
-        vnf_layout.setSpacing(2)
+        device_section = QWidget(sb)
+        device_section.setStyleSheet(f"background: {C.BG_SIDEBAR};")
+        device_layout = QVBoxLayout(device_section)
+        device_layout.setContentsMargins(16, 4, 16, 0)
+        device_layout.setSpacing(2)
 
-        lbl_alvo = QLabel("ALVO VNF", vnf_section)
+        lbl_alvo = QLabel("ALVO DEVICE", device_section)
         lbl_alvo.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
                                f"font: 11px 'Inter';")
-        vnf_layout.addWidget(lbl_alvo)
+        device_layout.addWidget(lbl_alvo)
 
-        self._vnf_target_lbl = QLabel("(roteador padrao)", vnf_section)
-        self._vnf_target_lbl.setStyleSheet(
+        self._device_target_lbl = QLabel("(roteador padrao)", device_section)
+        self._device_target_lbl.setStyleSheet(
             f"color: {C.NEON_AMBER}; background: {C.BG_SIDEBAR}; "
             f"font: bold 12px 'Inter';")
-        self._vnf_target_lbl.setWordWrap(True)
-        vnf_layout.addWidget(self._vnf_target_lbl)
-        sb_layout.addWidget(vnf_section)
+        self._device_target_lbl.setWordWrap(True)
+        device_layout.addWidget(self._device_target_lbl)
+        sb_layout.addWidget(device_section)
 
         sb_layout.addStretch()
 
@@ -511,7 +539,7 @@ class AppCore(QMainWindow, ThreadingMixin):
     def _rebuild_ui(self) -> None:
         # 1. Parar todos os timers antes de destruir widgets
         self._dash_timer.stop()
-        self._vnf_timer.stop()
+        self._device_timer.stop()
         self._poll_timer.stop()
         self._session_timer.stop()
         self._clock_timer.stop()
@@ -541,7 +569,7 @@ class AppCore(QMainWindow, ThreadingMixin):
 
         # 5. Reiniciar timers
         self._dash_timer.start()
-        self._vnf_timer.start()
+        self._device_timer.start()
         self._poll_timer.start()
         self._session_timer.start()
         self._clock_timer.start()
@@ -550,5 +578,5 @@ class AppCore(QMainWindow, ThreadingMixin):
         if self._watcher.is_active:
             self._watcher.start()
 
-class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, NotifyMixin, AppCore, PageBuilder, EventHandlers):
+class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, AppCore, PageBuilder, EventHandlers):
     """Classe final que combina os mixins AppCore, PageBuilder e EventHandlers."""

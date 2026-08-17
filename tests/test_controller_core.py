@@ -17,7 +17,7 @@ from huawei_manager.sdn_controller.event_queue import (
 from huawei_manager.sdn_controller.events import (
     ConfigChangedPayload,
     DeviceErrorPayload,
-    VnfStatusChangedPayload,
+    DeviceStatusChangedPayload,
 )
 from tests.helpers import wait_until
 
@@ -246,15 +246,15 @@ class TestControllerCoreEventsChangeState:
         assert state is not None
         assert state.metadata.get("last_config_change") is not None
 
-    def test_vnf_status_changed_updates_status(self, event_queue: EventQueue) -> None:
+    def test_device_status_changed_updates_status(self, event_queue: EventQueue) -> None:
         from huawei_manager.sdn_controller.core import ControllerCore
 
         cc = ControllerCore(event_queue=event_queue)
         cc.register("gw-01", "10.0.0.1", 22, "router")
         ev = Event(
-            type=EventType.VNF_STATUS_CHANGED,
+            type=EventType.DEVICE_STATUS_CHANGED,
             source="gw-01",
-            payload=VnfStatusChangedPayload(status="degraded"),
+            payload=DeviceStatusChangedPayload(status="degraded"),
         )
         cc.process_event(ev)
         state = cc.get_state("gw-01")

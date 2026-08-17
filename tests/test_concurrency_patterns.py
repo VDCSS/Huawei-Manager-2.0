@@ -12,10 +12,43 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import pytest
-
-from huawei_manager.sdn_controller.event_queue import Event, EventQueue, EventType
 from huawei_manager.sdn_controller.core import ControllerCore
+from huawei_manager.sdn_controller.event_queue import Event, EventQueue, EventType
+
+
+class TestWatcherShutdown:
+    """shutdown(wait=False) não bloqueia com scan em voo (W4, R11/R12)."""
+
+    def test_watcher_shutdown_forwards_wait_to_executor(self):
+        from unittest.mock import MagicMock, patch
+
+        from huawei_manager.agents.watcher import Watcher
+
+        with patch("huawei_manager.agents.watcher.QTimer"):
+            w = Watcher(MagicMock(), on_update=lambda r: None)
+        w._executor = MagicMock()
+        w.shutdown(wait=False)
+        w._executor.shutdown.assert_called_once_with(wait=False)
+
+    def test_shutdown_wait_false_does_not_block_inflight_scan(self):
+        from unittest.mock import MagicMock, patch
+
+        from huawei_manager.agents.watcher import Watcher
+
+        release = threading.Event()
+        with patch("huawei_manager.agents.watcher.QTimer"):
+            w = Watcher(MagicMock(), on_update=lambda r: None)
+
+        def long_scan() -> None:
+            release.wait(timeout=10)
+
+        fut = w._executor.submit(long_scan)
+        start = time.monotonic()
+        w.shutdown(wait=False)
+        elapsed = time.monotonic() - start
+        release.set()
+        fut.result(timeout=2)
+        assert elapsed < 1.0
 
 
 class TestEventQueueConcurrency:

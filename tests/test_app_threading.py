@@ -12,7 +12,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from huawei_manager.app_notify import NotifyMixin  # noqa: E402
+from huawei_manager.app_shortcuts import ShortcutsMixin  # noqa: E402
 from huawei_manager.app_threading import ThreadingMixin  # noqa: E402
+from huawei_manager import app_threading as _ath  # noqa: E402
 from huawei_manager.sdn_controller.event_queue import Event, EventType  # noqa: E402
 
 
@@ -27,6 +30,8 @@ class _FakeApp(ThreadingMixin):
         self._cpu_executor = ThreadPoolExecutor(max_workers=2)
         self._sb = MagicMock()
         self._sb.is_alive.return_value = True
+        self._on_sdn_event = MagicMock()
+        self._event_drop_count = 0
 
     @property
     def _ui_queue_maxlen(self) -> int | None:
@@ -102,6 +107,19 @@ class TestDispatch:
             app._dispatch(lambda: None)
         assert len(app._ui_queue) == 100
 
+    def test_sdn_kwarg_appends_when_room(self, app: _FakeApp) -> None:
+        fn = lambda: 1  # noqa: E731
+        app._dispatch(fn, sdn=True)
+        assert len(app._ui_queue) == 1
+        assert app._event_drop_count == 0
+
+    def test_sdn_kwarg_drop_counted_when_full(self, app: _FakeApp) -> None:
+        app._ui_queue = deque(maxlen=1)
+        app._dispatch(lambda: 1)
+        app._dispatch(lambda: 2, sdn=True)  # queue full → drop
+        assert len(app._ui_queue) == 1
+        assert app._event_drop_count == 1
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  _poll_queue
@@ -135,9 +153,43 @@ class TestPollQueue:
         app._poll_queue()  # should not raise
 
     def test_drains_event_queue(self, app: _FakeApp) -> None:
-        app._event_queue.put(Event(EventType.DEVICE_CONNECTED, source="test"))
+        app._event_queue.put(Event(EventType.DEVICE_CONNECTED, source="r1"))
         app._poll_queue()
         assert app._event_queue.get(block=False) is None
+
+    def test_dispatches_sdn_events(self, app: _FakeApp) -> None:
+        for i in range(3):
+            app._event_queue.put(Event(EventType.CONFIG_CHANGED, source=f"dev{i}"))
+        app._poll_queue()  # 1ª passada: drain do bus → agenda no ui_queue
+        assert len(app._ui_queue) == 3
+        assert app._on_sdn_event.call_count == 0
+        app._poll_queue()  # 2ª passada: processa ui_queue → executa callbacks
+        assert app._on_sdn_event.call_count == 3
+
+    def test_poll_queue_batch_limits_sdn_events(self, app: _FakeApp) -> None:
+        total = _ath._EVENT_BATCH + 5
+        for i in range(total):
+            app._event_queue.put(Event(EventType.CONFIG_CHANGED, source=f"dev{i}"))
+        app._poll_queue()
+        assert len(app._ui_queue) == _ath._EVENT_BATCH  # só o batch saiu do bus
+        remaining = 0
+        while app._event_queue.get(block=False) is not None:
+            remaining += 1
+        assert remaining == 5
+
+    def test_critical_event_processed_directly(self, app: _FakeApp) -> None:
+        app._event_queue.put(
+            Event(EventType.DEVICE_DISCONNECTED, source="r1", priority=0)
+        )
+        app._poll_queue()
+        assert len(app._ui_queue) == 0  # crítico roda síncrono, sem passagem pelo ui_queue
+        app._on_sdn_event.assert_called_once()
+
+    def test_disconnect_default_priority_also_critical(self, app: _FakeApp) -> None:
+        app._event_queue.put(Event(EventType.DEVICE_DISCONNECTED, source="r1"))
+        app._poll_queue()
+        assert len(app._ui_queue) == 0
+        app._on_sdn_event.assert_called_once()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -240,3 +292,126 @@ class TestRun:
 
         app._run(fn)  # should not raise
         app._io_executor.shutdown(wait=True)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  W4 — Ciclo de vida (Ctrl+Q, closeEvent robusto, _shutdown gate)
+# ═══════════════════════════════════════════════════════════════════
+
+class _FakeBase:
+    def __init__(self) -> None:
+        self._super_close_called = False
+
+    def closeEvent(self, event) -> None:
+        self._super_close_called = True
+
+
+class _NotifyFakeApp(NotifyMixin, _FakeBase):
+    def __init__(self) -> None:
+        _FakeBase.__init__(self)
+        self._shutdown = False
+        self._adaptive_timer = MagicMock()
+        self._poll_timer = MagicMock()
+        self._device_timer = MagicMock()
+        self._dash_timer = MagicMock()
+        self._session_timer = MagicMock()
+        self._clock_timer = MagicMock()
+        self._session_factory = None
+        self._watcher = MagicMock()
+        self._sb = MagicMock()
+        self._io_executor = MagicMock()
+        self._cpu_executor = MagicMock()
+
+
+class TestCtrlQ:
+    def test_ctrl_q_closes_window(self) -> None:
+        fake = MagicMock()
+        ShortcutsMixin._on_ctrl_q(fake)
+        fake.close.assert_called_once()
+
+
+class TestCloseEvent:
+    def test_close_event_calls_super_when_on_close_raises(self) -> None:
+        app = _NotifyFakeApp()
+        app._on_close = MagicMock(side_effect=RuntimeError("boom"))
+        app.closeEvent(None)
+        assert app._super_close_called is True
+
+    def test_close_event_calls_on_close_and_super(self) -> None:
+        app = _NotifyFakeApp()
+        on_close = MagicMock()
+        app._on_close = on_close
+        app.closeEvent(None)
+        on_close.assert_called_once()
+        assert app._super_close_called is True
+
+
+class TestOnCloseLifecycle:
+    def test_on_close_sets_shutdown_first_and_stops_all_timers(self) -> None:
+        app = _NotifyFakeApp()
+        for t in (app._adaptive_timer, app._poll_timer, app._device_timer,
+                  app._dash_timer, app._session_timer, app._clock_timer):
+            t.stop.assert_not_called()
+        app._on_close()
+        assert app._shutdown is True
+        for t in (app._adaptive_timer, app._poll_timer, app._device_timer,
+                  app._dash_timer, app._session_timer, app._clock_timer):
+            t.stop.assert_called_once()
+
+    def test_on_close_watcher_shutdown_wait_false(self) -> None:
+        app = _NotifyFakeApp()
+        app._on_close()
+        app._watcher.shutdown.assert_called_once_with(wait=False)
+
+    def test_on_close_cleanup_executors_cancel_futures(self) -> None:
+        app = _NotifyFakeApp()
+        app._on_close()
+        app._io_executor.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+        app._cpu_executor.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+
+    def test_on_close_disconnects_sb(self) -> None:
+        app = _NotifyFakeApp()
+        app._on_close()
+        app._sb.disconnect.assert_called_once()
+
+    def test_on_close_handles_missing_timers(self) -> None:
+        app = _NotifyFakeApp()
+        app._poll_timer = None
+        app._on_close()
+        assert app._shutdown is True
+
+
+class TestSpawnIOShutdownGate:
+    def test_spawn_io_noop_after_shutdown(self, app: _FakeApp) -> None:
+        app._shutdown = True
+        results: list[int] = []
+
+        def fn() -> None:
+            results.append(1)
+
+        app._spawn_io(fn)
+        app._io_executor.shutdown(wait=True)
+        assert results == []
+
+    def test_spawn_io_noop_when_executor_none(self, app: _FakeApp) -> None:
+        original = app._io_executor
+        app._io_executor = None
+        results: list[int] = []
+
+        def fn() -> None:
+            results.append(1)
+
+        app._spawn_io(fn)
+        app._io_executor = original
+        assert results == []
+
+    def test_spawn_io_runs_when_not_shutdown(self, app: _FakeApp) -> None:
+        app._shutdown = False
+        results: list[int] = []
+
+        def fn() -> None:
+            results.append(42)
+
+        app._spawn_io(fn)
+        app._io_executor.shutdown(wait=True)
+        assert results == [42]

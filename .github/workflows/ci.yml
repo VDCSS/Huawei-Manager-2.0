@@ -24,6 +24,6 @@ jobs:
       - name: Lint (ruff)
         run: ruff check src/huawei_manager/
       - name: Test + Coverage (pytest)
-        run: pytest tests/ -q --cov=src/huawei_manager --cov-report=term --cov-fail-under=45
+        run: pytest tests/ -q --cov=src/huawei_manager --cov-report=term --cov-fail-under=60
       - name: Typecheck (pyright)
         run: pyright

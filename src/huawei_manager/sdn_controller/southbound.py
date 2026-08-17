@@ -13,10 +13,11 @@ import time
 from abc import ABC, abstractmethod
 
 from huawei_manager.audit_log import AuditLogger
-from huawei_manager.exceptions import SdnAuthError, SdnCommandError, SdnConnectionError
+from huawei_manager.exceptions import SdnAuthError, SdnCommandError, SdnConnectionError, SdnValidationError
 from huawei_manager.sdn_controller.validator import CommandValidator, ValidationResult
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import SecretsBackend
+from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
 log = logging.getLogger("huawei.southbound")
 
@@ -90,7 +91,13 @@ class SSHSouthbound(SouthboundProtocol):
         self._access_role = access_role
 
     def connect(self) -> None:
-        """Tenta conectar com retry em caso de falha transiente."""
+        """Tenta conectar com retry em caso de falha transiente.
+
+        Exceções determinísticas (SdnValidationError, NetmikoAuthenticationException)
+        propagam imediatamente sem retry.
+        NetmikoTimeoutException faz retry e, ao esgotar, relança o tipo original.
+        Outras exceções fazem retry e wrap em SdnConnectionError.
+        """
         last_exc: Exception | None = None
         for attempt in range(1, self._max_retries + 1):
             try:
@@ -99,7 +106,14 @@ class SSHSouthbound(SouthboundProtocol):
                     self._connected = True
                     self._alive_cache = (True, time.time())
                 return
-            except Exception as exc:
+            except SdnValidationError:
+                # Erro determinístico de config — sem retry, sem wrap
+                raise
+            except NetmikoAuthenticationException:
+                # Credencial inválida não muda em 1s — sem retry, sem wrap
+                raise
+            except NetmikoTimeoutException as exc:
+                # Transiente — faz retry, mas ao esgotar relança tipo original
                 sanitized = _sanitize(str(exc))
                 log.warning(
                     "Connect attempt %d/%d failed: %s",
@@ -107,7 +121,21 @@ class SSHSouthbound(SouthboundProtocol):
                 )
                 last_exc = exc
                 if attempt < self._max_retries:
-                    time.sleep(1.0 * attempt)  # backoff simples
+                    time.sleep(1.0 * attempt)
+            except Exception as exc:
+                # Genérico — retry + wrap em SdnConnectionError
+                sanitized = _sanitize(str(exc))
+                log.warning(
+                    "Connect attempt %d/%d failed: %s",
+                    attempt, self._max_retries, sanitized,
+                )
+                last_exc = exc
+                if attempt < self._max_retries:
+                    time.sleep(1.0 * attempt)
+
+        # Retries esgotados
+        if isinstance(last_exc, NetmikoTimeoutException):
+            raise last_exc  # tipo original
         msg = f"After {self._max_retries} retries, connect failed"
         if last_exc:
             raise SdnConnectionError(

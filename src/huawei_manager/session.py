@@ -138,6 +138,7 @@ class NetmikoSession(SessionCommandsMixin):
 
     # ── conexao ──────────────────────────────────────────────────────
     def connect(self, timeout: int = 30) -> None:
+        self._validate_credentials()
         mode = self._hk_verify
         ssh_strict = mode == "strict"
 

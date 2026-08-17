@@ -28,7 +28,8 @@ def load_devices(filename: str = DEVICE_INVENTORY_FILE) -> list[Device]:
     with _INV_LOCK:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return [Device.from_dict(d) for d in data.get("devices", [])]
+            items = data.get("devices", data.get("vnfs", []))
+            return [Device.from_dict(d) for d in items]
         except (OSError, json.JSONDecodeError) as e:
             load_error = str(e)
             log.warning("Arquivo %s nao pode ser lido/parseado: %s", filename, e)

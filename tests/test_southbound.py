@@ -305,6 +305,76 @@ class TestSSHSouthboundRetry:
         assert mock_session.connect.call_count == 2
 
 
+class TestSSHSouthboundExceptionPropagation:
+    """Exceções tipadas propagam sem wrap genérico."""
+
+    @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
+    def test_sdn_validation_error_propagates_no_retry(self, mock_session_cls):
+        from huawei_manager.sdn_controller.southbound import (
+            SSHSouthbound,
+        )
+        from huawei_manager.exceptions import SdnValidationError
+
+        mock_session = MagicMock()
+        mock_session_cls.return_value = mock_session
+        mock_session.connect.side_effect = SdnValidationError("Credenciais incompletas")
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger(), max_retries=2)
+        with pytest.raises(SdnValidationError, match="Credenciais incompletas"):
+            sb.connect()
+        # Sem retry — chamada única
+        assert mock_session.connect.call_count == 1
+
+    @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
+    def test_netmiko_auth_exception_propagates_no_retry(self, mock_session_cls):
+        from huawei_manager.sdn_controller.southbound import (
+            SSHSouthbound,
+        )
+        from netmiko.exceptions import NetmikoAuthenticationException
+
+        mock_session = MagicMock()
+        mock_session_cls.return_value = mock_session
+        mock_session.connect.side_effect = NetmikoAuthenticationException("auth fail")
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger(), max_retries=2)
+        with pytest.raises(NetmikoAuthenticationException):
+            sb.connect()
+        assert mock_session.connect.call_count == 1
+
+    @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
+    def test_netmiko_timeout_exception_retries_then_propagates_original(self, mock_session_cls):
+        from huawei_manager.sdn_controller.southbound import (
+            SSHSouthbound,
+        )
+        from netmiko.exceptions import NetmikoTimeoutException
+
+        mock_session = MagicMock()
+        mock_session_cls.return_value = mock_session
+        mock_session.connect.side_effect = NetmikoTimeoutException("timeout")
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger(), max_retries=2)
+        with pytest.raises(NetmikoTimeoutException, match="timeout"):
+            sb.connect()
+        # max_retries=2 → loop roda 2 vezes (attempt 1, 2)
+        assert mock_session.connect.call_count == 2
+
+    @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
+    def test_generic_exception_still_wrapped_in_sdn_connection_error(self, mock_session_cls):
+        from huawei_manager.sdn_controller.southbound import (
+            SSHSouthbound,
+        )
+        from huawei_manager.exceptions import SdnConnectionError
+
+        mock_session = MagicMock()
+        mock_session_cls.return_value = mock_session
+        mock_session.connect.side_effect = RuntimeError("generic failure")
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger(), max_retries=2)
+        with pytest.raises(SdnConnectionError, match="After 2 retries"):
+            sb.connect()
+        assert mock_session.connect.call_count == 2
+
+
 class TestSSHSouthboundTimeout:
     """Timeout is passed through to session connect."""
 

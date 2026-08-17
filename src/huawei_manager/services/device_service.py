@@ -83,8 +83,12 @@ class DeviceService:
     def save_inventory(self, devices: list[Device]) -> None:
         """Salva dispositivos no repositório SQLite se disponível, senão no JSON."""
         if self._repository is not None:
+            existing = {d.id for d in self._repository.list_devices()}
+            current = {d.id for d in devices}
             for d in devices:
                 self._repository.create_device(d)
+            for removed_id in existing - current:
+                self._repository.delete_device(removed_id)
         else:
             for d in devices:
                 if d.password_env:

@@ -1,12 +1,12 @@
 """Testes de caracterização — SshMixin (handlers/ssh.py).
 
-Testa _get_selected_vnf (puro) e caracterização dos caminhos de erro em _do_connect.
+Testa _get_selected_device (puro) e caracterização dos caminhos de erro em _do_connect.
 """
 from __future__ import annotations
 
 from unittest.mock import ANY, MagicMock, patch
 
-from _factories import make_vnf as _make_vnf
+from _factories import make_device as _make_device
 from huawei_manager.handlers.ssh import SshMixin
 
 
@@ -14,7 +14,7 @@ def _make_mixin(**attrs) -> SshMixin:
     mixin = SshMixin()
     defaults = dict(
         _topo_canvas=MagicMock(),
-        _target_vnf=None,
+        _target_device=None,
         _sb=MagicMock(),
         _session_tracker=MagicMock(),
         _set_status=MagicMock(),
@@ -31,34 +31,34 @@ def _make_mixin(**attrs) -> SshMixin:
     return mixin
 
 
-class TestGetSelectedVnf:
-    """_get_selected_vnf retorna VNF do canvas ou do target."""
+class TestGetSelectedDevice:
+    """_get_selected_device retorna Device do canvas ou do target."""
 
     def test_returns_canvas_selection_if_exists(self):
-        vnf = _make_vnf()
+        device = _make_device()
         canvas = MagicMock()
-        canvas.get_selected.return_value = vnf
-        mixin = _make_mixin(_topo_canvas=canvas, _target_vnf=None)
-        assert mixin._get_selected_vnf() is vnf
+        canvas.get_selected.return_value = device
+        mixin = _make_mixin(_topo_canvas=canvas, _target_device=None)
+        assert mixin._get_selected_device() is device
 
     def test_returns_target_when_canvas_none(self):
-        vnf = _make_vnf()
-        mixin = _make_mixin(_topo_canvas=None, _target_vnf=vnf)
-        assert mixin._get_selected_vnf() is vnf
+        device = _make_device()
+        mixin = _make_mixin(_topo_canvas=None, _target_device=device)
+        assert mixin._get_selected_device() is device
 
     def test_returns_none_when_nothing_selected(self):
         canvas = MagicMock()
         canvas.get_selected.return_value = None
-        mixin = _make_mixin(_topo_canvas=canvas, _target_vnf=None)
-        assert mixin._get_selected_vnf() is None
+        mixin = _make_mixin(_topo_canvas=canvas, _target_device=None)
+        assert mixin._get_selected_device() is None
 
     def test_returns_canvas_selection_over_target(self):
-        canvas_vnf = _make_vnf(name="CanvasVNF")
-        target_vnf = _make_vnf(name="TargetVNF")
+        canvas_device = _make_device(name="CanvasDevice")
+        target_device = _make_device(name="TargetDevice")
         canvas = MagicMock()
-        canvas.get_selected.return_value = canvas_vnf
-        mixin = _make_mixin(_topo_canvas=canvas, _target_vnf=target_vnf)
-        assert mixin._get_selected_vnf() is canvas_vnf
+        canvas.get_selected.return_value = canvas_device
+        mixin = _make_mixin(_topo_canvas=canvas, _target_device=target_device)
+        assert mixin._get_selected_device() is canvas_device
 
 
 class TestDoConnect:
@@ -109,6 +109,18 @@ class TestDoConnect:
         mixin._do_connect("OK {sid}", "Erro")
         mixin._set_status.assert_called_with("Config: bad config", ANY)
 
+    def test_sdn_validation_error_sets_config_status(self):
+        from huawei_manager.exceptions import SdnValidationError
+        mixin = _make_mixin()
+        mixin._sb.connect.side_effect = SdnValidationError("Credenciais incompletas")
+
+        def _capture_spawn_io(fn):
+            fn()
+
+        mixin._spawn_io = _capture_spawn_io
+        mixin._do_connect("OK {sid}", "Erro")
+        mixin._set_status.assert_called_with("Config: Credenciais incompletas", ANY)
+
     def test_generic_error_sets_on_error_msg(self):
         mixin = _make_mixin()
         mixin._sb.connect.side_effect = RuntimeError("oops")
@@ -130,19 +142,19 @@ class TestToggleConnect:
         mixin._toggle_connect()
         mixin._sb.disconnect.assert_called_once()
 
-    def test_connects_default_when_no_vnf(self):
+    def test_connects_default_when_no_device(self):
         mixin = _make_mixin()
         mixin._sb.is_alive.return_value = False
-        mixin._get_selected_vnf = MagicMock(return_value=None)
+        mixin._get_selected_device = MagicMock(return_value=None)
         with patch.object(mixin, "_connect_default") as mock_def:
             mixin._toggle_connect()
         mock_def.assert_called_once()
 
-    def test_connects_with_vnf_when_selected(self):
-        vnf = _make_vnf()
+    def test_connects_with_device_when_selected(self):
+        device = _make_device()
         mixin = _make_mixin()
         mixin._sb.is_alive.return_value = False
-        mixin._get_selected_vnf = MagicMock(return_value=vnf)
-        with patch.object(mixin, "_connect_with_vnf") as mock_vnf:
+        mixin._get_selected_device = MagicMock(return_value=device)
+        with patch.object(mixin, "_connect_with_device") as mock_dev:
             mixin._toggle_connect()
-        mock_vnf.assert_called_once_with(vnf)
+        mock_dev.assert_called_once_with(device)

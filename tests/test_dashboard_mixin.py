@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from _factories import make_vnf as _make_vnf_factory
+from _factories import make_device as _make_device_factory
 from huawei_manager.handlers.dashboard import DashboardMixin
 
 
@@ -15,12 +15,12 @@ def _make_mixin(**attrs) -> DashboardMixin:
     defaults = dict(
         _sb=MagicMock(),
         session=MagicMock(),
-        _vnfs=[],
+        _devices=[],
         _dash_conn_status=MagicMock(),
         _dash_conn_host=MagicMock(),
-        _dash_vnf_online=MagicMock(),
-        _dash_vnf_offline=MagicMock(),
-        _dash_vnf_unknown=MagicMock(),
+        _dash_device_online=MagicMock(),
+        _dash_device_offline=MagicMock(),
+        _dash_device_unknown=MagicMock(),
         _dash_audit_text=MagicMock(),
     )
     for k, v in defaults.items():
@@ -30,8 +30,8 @@ def _make_mixin(**attrs) -> DashboardMixin:
     return mixin
 
 
-def _make_vnf(status: str = "online"):
-    return _make_vnf_factory(status=status)
+def _make_device(status: str = "online"):
+    return _make_device_factory(status=status)
 
 
 class TestRefreshDashboard:
@@ -53,26 +53,26 @@ class TestRefreshDashboard:
         mixin._refresh_dashboard()
         mixin._dash_conn_status.setText.assert_called_with("Desconectado")
 
-    def test_counts_online_vnfs(self):
-        vnfs = [_make_vnf("online"), _make_vnf("online"), _make_vnf("offline")]
-        mixin = _make_mixin(_vnfs=vnfs)
+    def test_counts_online_devices(self):
+        devices = [_make_device("online"), _make_device("online"), _make_device("offline")]
+        mixin = _make_mixin(_devices=devices)
         mixin._sb.is_alive.return_value = False
         mixin._refresh_dashboard()
-        mixin._dash_vnf_online.setText.assert_called_with("Online: 2")
+        mixin._dash_device_online.setText.assert_called_with("Online: 2")
 
-    def test_counts_offline_vnfs(self):
-        vnfs = [_make_vnf("offline"), _make_vnf("unknown")]
-        mixin = _make_mixin(_vnfs=vnfs)
+    def test_counts_offline_devices(self):
+        devices = [_make_device("offline"), _make_device("unknown")]
+        mixin = _make_mixin(_devices=devices)
         mixin._sb.is_alive.return_value = False
         mixin._refresh_dashboard()
-        mixin._dash_vnf_offline.setText.assert_called_with("Offline: 1")
+        mixin._dash_device_offline.setText.assert_called_with("Offline: 1")
 
-    def test_counts_unknown_vnfs(self):
-        vnfs = [_make_vnf("unknown"), _make_vnf("")]
-        mixin = _make_mixin(_vnfs=vnfs)
+    def test_counts_unknown_devices(self):
+        devices = [_make_device("unknown"), _make_device("")]
+        mixin = _make_mixin(_devices=devices)
         mixin._sb.is_alive.return_value = False
         mixin._refresh_dashboard()
-        mixin._dash_vnf_unknown.setText.assert_called_with("Desconhecido: 2")
+        mixin._dash_device_unknown.setText.assert_called_with("Desconhecido: 2")
 
     def test_refreshes_audit_text(self):
         mixin = _make_mixin()
@@ -80,13 +80,13 @@ class TestRefreshDashboard:
         mixin._refresh_dashboard()
         mixin._dash_audit_text.setPlainText.assert_called_once()
 
-    def test_empty_vnfs_sets_all_zero(self):
-        mixin = _make_mixin(_vnfs=[])
+    def test_empty_devices_sets_all_zero(self):
+        mixin = _make_mixin(_devices=[])
         mixin._sb.is_alive.return_value = False
         mixin._refresh_dashboard()
-        mixin._dash_vnf_online.setText.assert_called_with("Online: 0")
-        mixin._dash_vnf_offline.setText.assert_called_with("Offline: 0")
-        mixin._dash_vnf_unknown.setText.assert_called_with("Desconhecido: 0")
+        mixin._dash_device_online.setText.assert_called_with("Online: 0")
+        mixin._dash_device_offline.setText.assert_called_with("Offline: 0")
+        mixin._dash_device_unknown.setText.assert_called_with("Desconhecido: 0")
 
     def test_handles_audit_error(self):
         mixin = _make_mixin()

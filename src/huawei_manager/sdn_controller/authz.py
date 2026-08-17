@@ -55,6 +55,33 @@ class Role(enum.Enum):
 _ROLE_EQUIV: dict[Role, int] = {r: r.hierarchy for r in Role}
 
 
+def role_meets(actual: str, required: str = "tecnico") -> bool:
+    """True se ``actual`` tem hierarquia >= ``required`` (fonte unica).
+
+    A hierarquia e definida em ``Role.hierarchy`` (``authz.py``); nenhum
+    call site deve duplicar a ordem dos papeis (evita divergencia).
+
+    Args:
+        actual: Nivel de acesso corrente (``"user"``/``"tecnico"``/``"admin"``).
+        required: Nivel minimo exigido. Default ``"tecnico"``.
+
+    Returns:
+        True se ``actual`` atende ao requisito. Nivel desconhecido em
+        ``actual`` cai para ``Role.USER`` (fail-closed); ``required``
+        desconhecido tambem cai para ``Role.USER`` para nao quebrar call
+        sites existentes — nenhum call site real passa nivel invalido.
+    """
+    try:
+        cur = Role.from_string(actual)
+    except SdnValidationError:
+        cur = Role.USER
+    try:
+        req = Role.from_string(required)
+    except SdnValidationError:
+        req = Role.USER
+    return cur.hierarchy >= req.hierarchy
+
+
 def require_role(
     min_role: Role | str,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:

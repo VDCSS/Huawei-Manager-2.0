@@ -15,7 +15,6 @@ class DashboardMixin:
     """Mixin com metodos de atualizacao do dashboard."""
 
     def _refresh_dashboard(self: AppCoreProtocol) -> None:
-        """Atualiza os indicadores do dashboard (conexao, VNFs, auditoria)."""
         try:
             conn = self._sb.is_alive()
         except Exception:
@@ -32,13 +31,13 @@ class DashboardMixin:
                 f"color: {C.NEON_RED}; font: bold 14px 'Inter'; background: {C.BG_INPUT};")
             self._dash_conn_host.setText("Host: ---")
 
-        vnfs = self._vnfs
-        online = sum(1 for v in vnfs if getattr(v, "status", "") == "online")
-        offline = sum(1 for v in vnfs if getattr(v, "status", "") == "offline")
-        unknown = sum(1 for v in vnfs if getattr(v, "status", "") not in ("online", "offline"))
-        self._dash_vnf_online.setText(f"Online: {online}")
-        self._dash_vnf_offline.setText(f"Offline: {offline}")
-        self._dash_vnf_unknown.setText(f"Desconhecido: {unknown}")
+        devices = self._devices
+        online = sum(1 for d in devices if getattr(d, "status", "") == "online")
+        offline = sum(1 for d in devices if getattr(d, "status", "") == "offline")
+        unknown = sum(1 for d in devices if getattr(d, "status", "") not in ("online", "offline"))
+        self._dash_device_online.setText(f"Online: {online}")
+        self._dash_device_offline.setText(f"Offline: {offline}")
+        self._dash_device_unknown.setText(f"Desconhecido: {unknown}")
 
         try:
             text = audit.format_tail(5)

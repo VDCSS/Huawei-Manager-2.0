@@ -18,8 +18,9 @@ from PySide6.QtWidgets import (
 import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.constants import SERVICE_CAT_LABELS
+from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.services import (
-    VNF_TYPES,
+    DEVICE_TYPES,
     ServiceDef,
     get_categories_for,
     get_services_for,
@@ -43,9 +44,9 @@ class PageBuilderServicesMixin:
         parent.layout().addWidget(info_row)
         parent.layout().addSpacing(10)
 
-        self._svc_vnf_lbl = QLabel("VNF: (selecione um VNF na aba Topologia)", info_row)
-        self._svc_vnf_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_CARD, 12, True))
-        info_layout.addWidget(self._svc_vnf_lbl)
+        self._svc_device_lbl = QLabel("Device: (selecione um device na aba Topologia)", info_row)
+        self._svc_device_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_CARD, 12, True))
+        info_layout.addWidget(self._svc_device_lbl)
         info_layout.addSpacing(16)
 
         self._svc_type_lbl = QLabel("Tipo: \u2014", info_row)
@@ -156,7 +157,7 @@ class PageBuilderServicesMixin:
     def _build_services_page(self: AppCoreProtocol) -> None:
         p = self._make_page("services")
         self._page_title(p, "Catalogo de Servicos", C.NEON_AMBER,
-                         "Comandos SHOW e CONFIG por tipo de VNF "
+                         "Comandos SHOW e CONFIG por tipo de device "
                          "(ROUTER | SWITCH | FIREWALL | \u2026)")
 
         self._build_services_info_row(p)
@@ -177,9 +178,9 @@ class PageBuilderServicesMixin:
         self._svc_listbox.clear()
         self._svc_services.clear()
 
-        vnf = self._target_vnf
-        if not vnf:
-            self._svc_vnf_lbl.setText("VNF: (nenhum selecionado)")
+        device = self._target_device
+        if not device:
+            self._svc_device_lbl.setText("Device: (nenhum selecionado)")
             self._svc_type_lbl.setText("Tipo: \u2014")
             self._svc_cat_cb.blockSignals(True)
             self._svc_cat_cb.clear()
@@ -188,18 +189,18 @@ class PageBuilderServicesMixin:
             self._clear_detail_panel()
             return
 
-        vnf_type = vnf.type.upper()
-        host_info = f"{vnf.host}:{vnf.port}" if self._access_level in ("admin", "tecnico") else vnf.host
-        self._svc_vnf_lbl.setText(f"VNF: {vnf.name} ({host_info})")
-        self._svc_type_lbl.setText(f"Tipo: {VNF_TYPES.get(vnf_type, vnf_type)}")
+        device_type = device.type.upper()
+        host_info = f"{device.host}:{device.port}" if role_meets(self._access_level, "tecnico") else device.host
+        self._svc_device_lbl.setText(f"Device: {device.name} ({host_info})")
+        self._svc_type_lbl.setText(f"Tipo: {DEVICE_TYPES.get(device_type, device_type)}")
 
         status_color = {"online": C.NEON_CYAN, "offline": C.NEON_RED,
-                        "unknown": C.NEON_AMBER}.get(vnf.status, C.NEON_AMBER)
-        self._svc_status_lbl.setText(f"Status: {vnf.status}")
+                        "unknown": C.NEON_AMBER}.get(device.status, C.NEON_AMBER)
+        self._svc_status_lbl.setText(f"Status: {device.status}")
         self._svc_status_lbl.setStyleSheet(
             f"color: {status_color}; background: {C.BG_CARD}; font: 11px 'Inter';")
 
-        all_cats = get_categories_for(vnf_type)
+        all_cats = get_categories_for(device_type)
         config_cats = [c for c in all_cats if c.startswith("config-")]
         cat_labels = [SERVICE_CAT_LABELS.get(c, c) for c in config_cats]
         all_labels = ["Todas as Categorias"] + cat_labels
@@ -217,12 +218,12 @@ class PageBuilderServicesMixin:
         selected_cat = self._svc_cat_var
         label_to_cat = {v: k for k, v in SERVICE_CAT_LABELS.items()}
         cat_filter = None if selected_cat == "Todas as Categorias" else label_to_cat.get(selected_cat)
-        services = get_services_for(vnf_type, category=cat_filter)
+        services = get_services_for(device_type, category=cat_filter)
         services = [s for s in services if s.config_mode]
         self._svc_services = services
 
         if not services:
-            self._svc_listbox.addItem("  Nenhum servico de configuracao para este tipo de VNF")
+            self._svc_listbox.addItem("  Nenhum servico de configuracao para este tipo de Device")
             self._clear_detail_panel()
             return
 

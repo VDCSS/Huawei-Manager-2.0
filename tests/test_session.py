@@ -77,6 +77,29 @@ class TestResolveFilter:
 
 
 class TestConnect:
+    def test_empty_host_raises_validation_error(self, session):
+        with patch.object(type(session), "_host", new_callable=PropertyMock, return_value=""):
+            with pytest.raises(SdnValidationError, match="ROUTER_HOST"):
+                session.connect()
+
+    def test_empty_user_raises_validation_error(self, session):
+        with (
+            patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(session), "_user", new_callable=PropertyMock, return_value=""),
+        ):
+            with pytest.raises(SdnValidationError, match="ROUTER_USERNAME"):
+                session.connect()
+
+    def test_no_pass_no_key_raises_validation_error(self, session):
+        with (
+            patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
+            patch.object(type(session), "_pass", new_callable=PropertyMock, return_value=""),
+            patch.object(type(session), "_ssh_key", new_callable=PropertyMock, return_value=None),
+        ):
+            with pytest.raises(SdnValidationError, match="ROUTER_PASSWORD"):
+                session.connect()
+
     @patch("huawei_manager.session.ConnectHandler")
     def test_calls_connect_handler(self, mock_connect, session):
         with (

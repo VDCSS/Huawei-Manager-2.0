@@ -1,4 +1,4 @@
-"""Testes para DeviceDialog — formulário Qt de cadastro/edição de VNF.
+"""Testes para DeviceDialog — formulário Qt de cadastro/edição de Device.
 
 Estes testes requerem um servidor gráfico (DISPLAY) ou Qt offscreen.
 """
@@ -21,18 +21,18 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def dialog(qtbot) -> DeviceDialog:
     """Cria um DeviceDialog vazio (modo cadastro)."""
-    dlg = DeviceDialog(vnf_types=["ROUTER", "SWITCH", "FIREWALL"])
+    dlg = DeviceDialog(device_types=["ROUTER", "SWITCH", "FIREWALL"])
     qtbot.addWidget(dlg)
     return dlg
 
 
 @pytest.fixture
 def edit_dialog(qtbot) -> DeviceDialog:
-    """Cria um DeviceDialog com VNF existente (modo edição)."""
-    from huawei_manager.vnf_models import VNF
+    """Cria um DeviceDialog com Device existente (modo edição)."""
+    from huawei_manager.device_models import Device
 
-    vnf = VNF(
-        id="vnf-001",
+    device = Device(
+        id="dev-001",
         name="gw-01",
         host="10.0.0.1",
         port=22,
@@ -40,7 +40,7 @@ def edit_dialog(qtbot) -> DeviceDialog:
         username="admin",
         password="secret",
     )
-    dlg = DeviceDialog(vnf=vnf, vnf_types=["ROUTER", "SWITCH"])
+    dlg = DeviceDialog(device=device, device_types=["ROUTER", "SWITCH"])
     qtbot.addWidget(dlg)
     return dlg
 

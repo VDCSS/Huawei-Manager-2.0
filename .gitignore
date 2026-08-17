@@ -17,6 +17,7 @@ dev/
 huawei_manager.egg-info/
 .ssh_rotation_ts
 data/vnf_inventory.json
+src/huawei_manager/data/vnf_inventory.json
 data.old/
 .playwright-mcp/
 .env.enc

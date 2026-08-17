@@ -1,11 +1,13 @@
 """Testes de caracterização — ServicesMixin (handlers/services.py).
 
-Testa caminhos de _run_service (mock, cli, param validation).
+Testa caminhos de _run_service (mock, cli, param validation),
+confirmação de operação destrutiva e auditoria de bloqueio.
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock
 
 from huawei_manager.handlers.services import ServicesMixin
 from huawei_manager.services import ServiceDef
@@ -17,7 +19,7 @@ def _make_svc(**overrides) -> ServiceDef:
         name="Test Service",
         description="test command <param1>",
         category="test",
-        vnf_types=["ROUTER"],
+        device_types=["ROUTER"],
         cli_commands=["test command <param1>"],
         config_mode=False,
     )
@@ -29,8 +31,8 @@ def _make_mixin(**attrs) -> ServicesMixin:
     mixin = ServicesMixin()
     defaults = dict(
         _svc_mode_var="mock",
-        _target_vnf=None,
-        _svc_vnf_lbl=MagicMock(),
+        _target_device=None,
+        _svc_device_lbl=MagicMock(),
         _svc_output=MagicMock(),
         _svc_param_entries={},
         _sb=MagicMock(),
@@ -47,23 +49,23 @@ def _make_mixin(**attrs) -> ServicesMixin:
 
 
 class TestRunService:
-    def test_sets_label_without_vnf(self):
+    def test_sets_label_without_device(self):
         mixin = _make_mixin()
         svc = _make_svc()
         mixin._run_service(svc)
-        mixin._svc_vnf_lbl.setText.assert_called_once()
-        label = mixin._svc_vnf_lbl.setText.call_args[0][0]
+        mixin._svc_device_lbl.setText.assert_called_once()
+        label = mixin._svc_device_lbl.setText.call_args[0][0]
         assert "Test Service" in label
 
-    def test_sets_label_with_vnf(self):
-        vnf = MagicMock()
-        vnf.name = "MyVNF"
-        vnf.host = "10.0.0.1"
-        mixin = _make_mixin(_target_vnf=vnf)
+    def test_sets_label_with_device(self):
+        device = MagicMock()
+        device.name = "MyDevice"
+        device.host = "10.0.0.1"
+        mixin = _make_mixin(_target_device=device)
         svc = _make_svc()
         mixin._run_service(svc)
-        label = mixin._svc_vnf_lbl.setText.call_args[0][0]
-        assert "MyVNF" in label
+        label = mixin._svc_device_lbl.setText.call_args[0][0]
+        assert "MyDevice" in label
 
     def test_spawns_io(self):
         mixin = _make_mixin()
@@ -134,3 +136,65 @@ class TestRunService:
         mixin._run_service(svc)
         written = mixin._write.call_args[0][1]
         assert "caracteres invalidos" in written
+
+
+class TestDestructiveConfirmation:
+
+    def test_cancel_writes_and_does_not_spawn(self):
+        mixin = _make_mixin()
+        svc = _make_svc(config_mode=True, cli_commands=["reset saved-configuration"])
+        with patch("PySide6.QtWidgets.QMessageBox") as msgbox:
+            msgbox.question.return_value = msgbox.StandardButton.No
+            mixin._run_service(svc)
+        msgbox.question.assert_called_once()
+        mixin._spawn_io.assert_not_called()
+        written = mixin._write.call_args[0][1]
+        assert "cancelada" in written
+
+    def test_confirm_spawns(self):
+        mixin = _make_mixin()
+        svc = _make_svc(config_mode=True, cli_commands=["shutdown"])
+        with patch("PySide6.QtWidgets.QMessageBox") as msgbox:
+            msgbox.question.return_value = msgbox.StandardButton.Yes
+            mixin._run_service(svc)
+        msgbox.question.assert_called_once()
+        mixin._spawn_io.assert_called_once()
+
+    def test_confirm_does_not_bypass_hard_deny(self):
+        mixin = _make_mixin()
+        svc = _make_svc(config_mode=True, cli_commands=["reset saved-configuration"])
+        with patch("PySide6.QtWidgets.QMessageBox") as msgbox:
+            msgbox.question.return_value = msgbox.StandardButton.Yes
+            mixin._run_service(svc)
+        msgbox.question.assert_called_once()
+        mixin._spawn_io.assert_not_called()
+        written = mixin._write.call_args[0][1]
+        assert "bloqueado" in written
+
+    def test_non_destructive_no_dialog(self):
+        mixin = _make_mixin()
+        svc = _make_svc(config_mode=True)
+        with patch("PySide6.QtWidgets.QMessageBox") as msgbox:
+            mixin._run_service(svc)
+        msgbox.question.assert_not_called()
+
+
+class TestAuditDenied:
+
+    def test_logs_operation_when_rejected(self):
+        logger = MagicMock()
+        mixin = _make_mixin(audit_logger=logger)
+        svc = _make_svc(cli_commands=["delete flash:/file.cfg"])
+        mixin._run_service(svc)
+        logger.log_operation.assert_called_once()
+        kwargs = logger.log_operation.call_args.kwargs
+        assert kwargs.get("status") == "blocked"
+        assert kwargs.get("service") == "Test Service"
+
+    def test_skips_audit_when_no_logger(self):
+        mixin = _make_mixin()
+        svc = _make_svc(cli_commands=["delete flash:/file.cfg"])
+        mixin._run_service(svc)
+        mixin._spawn_io.assert_not_called()
+        written = mixin._write.call_args[0][1]
+        assert "bloqueado" in written

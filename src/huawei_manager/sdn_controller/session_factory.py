@@ -1,8 +1,8 @@
 """SSHSessionFactory — pool de sessões SSH per-device (polling adaptativo).
 
-Segurança (D14/D15): credenciais estritas por VNF. Host/username são
+Segurança (D14/D15): credenciais estritas por Device. Host/username são
 obrigatórios e password OU ssh_key também; sem nenhum fallback para as
-credenciais globais (ROUTER_*) — um VNF mal configurado NUNCA conecta
+credenciais globais (ROUTER_*) — um Device mal configurado NUNCA conecta
 no roteador default. Falha de validação ou conexão → get() retorna None.
 
 Toda auditoria gerada pelas sessões deste pool é marcada com
@@ -19,10 +19,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from huawei_manager.audit_log import AuditEntry, AuditLogger, _TimedCtx
+from huawei_manager.constants import POLL_ORIGIN
+from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import SecretsBackend
-from huawei_manager.vnf_models import VNF
 
 log = logging.getLogger("huawei.session_factory")
 
@@ -57,7 +58,7 @@ class _OriginAuditWrapper(AuditLogger):
         category: str = "general",
         **extra: Any,
     ) -> None:
-        extra.setdefault("origin", "auto-poll")
+        extra.setdefault("origin", POLL_ORIGIN)
         self._inner.log_operation(
             op, user=user, host=host, datastore=datastore,
             status=status, duration_ms=duration_ms,
@@ -75,7 +76,7 @@ class _OriginAuditWrapper(AuditLogger):
         category: str = "general",
         **extra: Any,
     ) -> Generator[_TimedCtx, None, None]:
-        extra.setdefault("origin", "auto-poll")
+        extra.setdefault("origin", POLL_ORIGIN)
         with self._inner.timed(
             op, user=user, host=host, datastore=datastore,
             session_id=session_id, category=category, **extra,
@@ -90,7 +91,7 @@ class _PoolEntry:
 
 
 class SSHSessionFactory:
-    """Pool thread-safe de SSHSouthbound por ``vnf.id`` com TTL de idle.
+    """Pool thread-safe de SSHSouthbound por ``device.id`` com TTL de idle.
 
     get() cria e conecta lazy (retry via SSHSouthbound); falha → None
     (fail-closed). release()/purge_expired()/dispose() fecham sessões.
@@ -120,28 +121,28 @@ class SSHSessionFactory:
         with self._lock:
             return len(self._pool)
 
-    def get(self, vnf: VNF) -> SSHSouthbound | None:
-        """Retorna sessão para o VNF, criando+conectando se necessário.
+    def get(self, device: Device) -> SSHSouthbound | None:
+        """Retorna sessão para o Device, criando+conectando se necessário.
 
-        Valida credenciais estritas antes de criar. Se o VNF estiver
+        Valida credenciais estritas antes de criar. Se o Device estiver
         mal configurado ou a conexão falhar, retorna None sem lançar.
         """
         with self._lock:
-            existing = self._pool.get(vnf.id)
+            existing = self._pool.get(device.id)
             if existing is not None:
                 existing.last_used = time.time()
                 return existing.ssb
-        if not self._validate_vnf(vnf):
+        if not self._validate_device(device):
             return None
-        ssb = self._create(vnf)
+        ssb = self._create(device)
         if ssb is None:
             return None
         with self._lock:
-            again = self._pool.get(vnf.id)
+            again = self._pool.get(device.id)
             if again is not None:
                 again.last_used = time.time()
             else:
-                self._pool[vnf.id] = _PoolEntry(ssb, time.time())
+                self._pool[device.id] = _PoolEntry(ssb, time.time())
         # Disconnect fora do lock: I/O de rede não bloqueia outros threads.
         if again is not None:
             self._close_ssb(ssb)
@@ -177,36 +178,36 @@ class SSHSessionFactory:
     # ── helpers ──────────────────────────────────────────────────────
 
     @staticmethod
-    def _validate_vnf(vnf: VNF) -> bool:
+    def _validate_device(device: Device) -> bool:
         """Credenciais estritas: host+username e password ou ssh_key."""
-        if not vnf.host or not vnf.host.strip():
-            log.warning("poll skip %s: host vazio", vnf.id)
+        if not device.host or not device.host.strip():
+            log.warning("poll skip %s: host vazio", device.id)
             return False
-        if not vnf.username:
-            log.warning("poll skip %s: username vazio", vnf.id)
+        if not device.username:
+            log.warning("poll skip %s: username vazio", device.id)
             return False
-        if not vnf.password and not vnf.ssh_key:
+        if not device.password and not device.ssh_key:
             log.warning(
                 "poll skip %s: sem password nem ssh_key (fail-closed)",
-                vnf.id,
+                device.id,
             )
             return False
         return True
 
-    def _create(self, vnf: VNF) -> SSHSouthbound | None:
+    def _create(self, device: Device) -> SSHSouthbound | None:
         overrides = {
-            "override_host": vnf.host,
-            "override_port": vnf.port if vnf.port else 22,
-            "override_username": vnf.username,
-            "override_password": vnf.password or None,
-            "override_ssh_key": vnf.ssh_key or None,
+            "override_host": device.host,
+            "override_port": device.port if device.port else 22,
+            "override_username": device.username,
+            "override_password": device.password or None,
+            "override_ssh_key": device.ssh_key or None,
         }
         ssb = self._session_builder(self._backend, self._audit, **overrides)
         try:
             ssb.connect()
         except Exception as exc:
             # Nunca logar credenciais; apenas tipo + id do device.
-            log.warning("poll connect falhou %s (%s)", vnf.id, type(exc).__name__)
+            log.warning("poll connect falhou %s (%s)", device.id, type(exc).__name__)
             self._close_ssb(ssb)
             return None
         return ssb

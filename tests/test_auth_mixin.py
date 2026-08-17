@@ -20,6 +20,7 @@ def _make_mixin(**attrs) -> AuthMixin:
         _session_tracker=MagicMock(),
         _mock_mode=False,
         _watcher=MagicMock(),
+        _sb=MagicMock(),
         _rebuild_page=MagicMock(),
         content=MagicMock(),
     )
@@ -45,9 +46,9 @@ class TestRequireAccess:
         mixin = _make_mixin(_access_level="tecnico")
         assert mixin._require_access("user") is True
 
-    def test_admin_requires_tecnico_returns_false(self):
+    def test_admin_requires_tecnico_returns_true(self):
         mixin = _make_mixin(_access_level="admin")
-        assert mixin._require_access("tecnico") is False
+        assert mixin._require_access("tecnico") is True
 
     def test_tecnico_requires_tecnico_returns_true(self):
         mixin = _make_mixin(_access_level="tecnico")
@@ -71,7 +72,7 @@ class TestShowAuthDialog:
 
     def test_logout_when_not_user(self):
         mixin = _make_mixin(_access_level="admin")
-        with patch("huawei_manager.handlers.auth.log") as mock_log:
+        with patch("huawei_manager.handlers.auth.log"):
             mixin._show_auth_dialog()
         assert mixin._access_level == "user"
         mixin._session_tracker.set_role.assert_called_once()

@@ -23,6 +23,7 @@ from huawei_manager.constants import ROUTE_FILTER_LABELS
 from huawei_manager.pages.cmd import PageBuilderCmdMixin
 from huawei_manager.pages.manutencao import PageBuilderManutencaoMixin
 from huawei_manager.pages.services import PageBuilderServicesMixin
+from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
 from huawei_manager.widgets.neon_button import action_button
 from huawei_manager.widgets.neon_entry import neon_entry, output_text
@@ -217,7 +218,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
     # ── Topology ──────────────────────────────────────────────────────
     def _build_topology_page(self: AppCoreProtocol) -> None:
         p = self._make_page("topology")
-        self._page_title(p, "Topologia / VNFs", C.NEON_AMBER,
+        self._page_title(p, "Topologia / Devices", C.NEON_AMBER,
                          "Cadastro manual + alvo SSH clicavel")
 
         ctrl = QWidget(p)
@@ -228,55 +229,55 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         self._page_layout(p).addWidget(ctrl)
 
         admin_label = "\U0001f512  Acesso"
-        if self._access_level in ("admin", "tecnico"):
+        if role_meets(self._access_level, "tecnico"):
             admin_label = "\U0001f513  Admin" if self._access_level == "admin" else "\U0001f6e0  Tecnico"
         self._admin_btn = action_button(ctrl, admin_label,
                                         self._show_auth_dialog, C.NEON_PURP)
         ctrl_layout.addWidget(self._admin_btn)
         ctrl_layout.addSpacing(8)
 
-        if self._access_level in ("admin", "tecnico"):
+        if role_meets(self._access_level, "tecnico"):
             cad_btn = action_button(ctrl, "\u2795  Cadastrar Dispositivo",
                                     lambda: self._show_device_dialog(), C.NEON_CYAN)
             ctrl_layout.addWidget(cad_btn)
             ctrl_layout.addSpacing(8)
 
         btn_refresh = action_button(ctrl, "\u21bb  Atualizar",
-                                    lambda: self._spawn_io(self._refresh_vnfs),
+                                    lambda: self._spawn_io(self._refresh_devices),
                                     C.NEON_AMBER)
         ctrl_layout.addWidget(btn_refresh)
         ctrl_layout.addSpacing(8)
         btn_back = action_button(ctrl, "\u2716  Voltar",
-                                 self._clear_vnf_target, C.NEON_PURP)
+                                 self._clear_device_target, C.NEON_PURP)
         ctrl_layout.addWidget(btn_back)
 
         ctrl_layout.addStretch()
 
-        self._vnf_info_lbl = QLabel("  Nenhum VNF selecionado", ctrl)
-        self._vnf_info_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
-        ctrl_layout.addWidget(self._vnf_info_lbl)
+        self._device_info_lbl = QLabel("  Nenhum device selecionado", ctrl)
+        self._device_info_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
+        ctrl_layout.addWidget(self._device_info_lbl)
         ctrl_layout.addSpacing(8)
 
         self._topo_canvas = TopologyCanvas(
             p,
-            on_select=self._on_vnf_selected,
+            on_select=self._on_device_selected,
             on_edit=self._show_device_dialog,
             on_delete=self._delete_device,
         )
         self._page_layout(p).addWidget(self._topo_canvas, stretch=1)
 
-        self._vnf_status_lbl = QLabel("Inventario: vnf_inventory.json", p)
-        self._vnf_status_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_CARD, 10))
-        self._page_layout(p).addWidget(self._vnf_status_lbl)
+        self._device_status_lbl = QLabel("Inventario: vnf_inventory.json", p)
+        self._device_status_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_CARD, 10))
+        self._page_layout(p).addWidget(self._device_status_lbl)
         self._page_layout(p).addSpacing(4)
 
-        self._spawn_io(self._refresh_vnfs)
+        self._spawn_io(self._refresh_devices)
 
     # ── Dashboard ─────────────────────────────────────────────────────
     def _build_home_page(self: AppCoreProtocol) -> None:
         p = self._make_page("home")
         self._page_title(p, "Dashboard", C.NEON_CYAN,
-                         "Painel de controle — conectividade, VNFs, operacoes recentes")
+                         "Painel de controle — conectividade, Devices, operacoes recentes")
 
         self._dash_labels: dict[str, QLabel] = {}
 
@@ -316,22 +317,22 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         card1._clayout.addWidget(self._dash_conn_host)
         card1._clayout.addStretch()
 
-        # Card: VNFs
+        # Card: Devices
         card2 = _make_card(row1)
-        _card_title(card2, "\U0001f4e1 VNFs", C.NEON_MAG)
+        _card_title(card2, "\U0001f4e1 DISPOSITIVOS", C.NEON_MAG)
         row1_layout.addWidget(card2)
 
-        self._dash_vnf_online = QLabel("Online: 0", card2)
-        self._dash_vnf_online.setStyleSheet(self._css_label(C.NEON_CYAN, C.BG_INPUT, 11))
-        card2._clayout.addWidget(self._dash_vnf_online)
+        self._dash_device_online = QLabel("Online: 0", card2)
+        self._dash_device_online.setStyleSheet(self._css_label(C.NEON_CYAN, C.BG_INPUT, 11))
+        card2._clayout.addWidget(self._dash_device_online)
 
-        self._dash_vnf_offline = QLabel("Offline: 0", card2)
-        self._dash_vnf_offline.setStyleSheet(self._css_label(C.NEON_RED, C.BG_INPUT, 11))
-        card2._clayout.addWidget(self._dash_vnf_offline)
+        self._dash_device_offline = QLabel("Offline: 0", card2)
+        self._dash_device_offline.setStyleSheet(self._css_label(C.NEON_RED, C.BG_INPUT, 11))
+        card2._clayout.addWidget(self._dash_device_offline)
 
-        self._dash_vnf_unknown = QLabel("Desconhecido: 0", card2)
-        self._dash_vnf_unknown.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_INPUT, 11))
-        card2._clayout.addWidget(self._dash_vnf_unknown)
+        self._dash_device_unknown = QLabel("Desconhecido: 0", card2)
+        self._dash_device_unknown.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_INPUT, 11))
+        card2._clayout.addWidget(self._dash_device_unknown)
         card2._clayout.addStretch()
 
         # Card: Ultimas Operacoes

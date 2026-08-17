@@ -1,6 +1,6 @@
-"""Testes do PollingManager (TODO 5/9b).
+"""Testes do PollingManager (TODO 5/9).
 
-Usa VnfService fake (fonte do inventário — D6) e SSHSouthbound fake
+Usa DeviceService fake (fonte do inventário — D6) e SSHSouthbound fake
 (sem SSH). get_service_by_id do módulo é patchado para retornos
 determinísticos; poll_services explícitos por teste.
 """
@@ -16,41 +16,41 @@ from huawei_manager.sdn_controller.polling_manager import (
 )
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.services_data import ServiceDef
-from huawei_manager.vnf_models import VNF
+from huawei_manager.device_models import Device
 
 
-def _vnf_fake(device_id: str, status: str = "online", vtype: str = "ROUTER") -> VNF:
-    return VNF(
+def _device_fake(device_id: str, status: str = "online", dtype: str = "ROUTER") -> Device:
+    return Device(
         id=device_id,
         name=device_id,
         host="10.0.0.1",
         username="admin",
         password="secret",
         status=status,
-        type=vtype,
+        type=dtype,
         port=22,
     )
 
 
-def _svc(svc_id: str, vnf_types: list[str], cmds: list[str]) -> ServiceDef:
+def _svc(svc_id: str, device_types: list[str], cmds: list[str]) -> ServiceDef:
     return ServiceDef(
         id=svc_id,
         name=svc_id,
         description=svc_id,
         category="c",
-        vnf_types=vnf_types,
+        device_types=device_types,
         cli_commands=cmds,
     )
 
 
-class _FakeVnfService:
+class _FakeDeviceService:
     """Fonte de inventário controlável (load_inventory retorna lista fixa)."""
 
-    def __init__(self, vnfs: list[VNF]) -> None:
-        self._vnfs = vnfs
+    def __init__(self, devices: list[Device]) -> None:
+        self._devices = devices
 
-    def load_inventory(self) -> list[VNF]:
-        return list(self._vnfs)
+    def load_inventory(self) -> list[Device]:
+        return list(self._devices)
 
 
 class _FakeFactory:
@@ -63,8 +63,8 @@ class _FakeFactory:
         self.active_sessions = 0
         self._ssb = MagicMock(spec=SSHSouthbound)
 
-    def get(self, vnf: VNF) -> SSHSouthbound | None:
-        self.get_calls.append(vnf.id)
+    def get(self, device: Device) -> SSHSouthbound | None:
+        self.get_calls.append(device.id)
         return self._ssb
 
     def release(self, device_id: str) -> None:
@@ -81,21 +81,21 @@ def root_svc():
 
 @pytest.fixture
 def make_manager(monkeypatch):
-    def _make(vnfs, services=None, poll_services=None, enabled=True, ssb_out="stable output"):
+    def _make(devices, services=None, poll_services=None, enabled=True, ssb_out="stable output"):
         svc_objs = list(services or [])
         lookup = {s.id: s for s in svc_objs}
         # Patcheia get_service_by_id do MÓDULO polling_manager com o
         # lookup deterministico (ids reais do catalogo casam com varias
-        # vnf_types — videos usar fakes para o teste de skip ser preciso)
+        # device_types — videos usar fakes para o teste de skip ser preciso)
         import huawei_manager.sdn_controller.polling_manager as pm
         monkeypatch.setattr(pm, "get_service_by_id", lookup.get)
         factory = _FakeFactory()
         factory._ssb.send_service_commands.return_value = ssb_out
-        vnf_service = _FakeVnfService(vnfs)
+        device_service = _FakeDeviceService(devices)
         ids = poll_services if poll_services is not None else [s.id for s in svc_objs]
         mgr = PollingManager(
             factory=factory,
-            vnf_service=vnf_service,
+            device_service=device_service,
             enabled=enabled,
             poll_services=ids,
         )
@@ -104,20 +104,20 @@ def make_manager(monkeypatch):
 
 
 def test_tick_no_exceptions(make_manager):
-    mgr, _ = make_manager([_vnf_fake("r1")])
+    mgr, _ = make_manager([_device_fake("r1")])
     mgr.tick()  # não lança
 
 
 def test_tick_noop_when_disabled(make_manager):
-    mgr, factory = make_manager([_vnf_fake("r1")], enabled=False)
+    mgr, factory = make_manager([_device_fake("r1")], enabled=False)
     mgr.tick()
     assert factory.get_calls == []
 
 
 def test_tick_sources_online_from_inventory(make_manager, root_svc):
     # NÃO usa ControllerCore (D6): v.status=="online" decide
-    offline = _vnf_fake("off", status="offline")
-    online = _vnf_fake("on", status="online")
+    offline = _device_fake("off", status="offline")
+    online = _device_fake("on", status="online")
     mgr, factory = make_manager([offline, online], services=[root_svc])
     mgr.tick()
     assert factory.get_calls == ["on"]
@@ -125,7 +125,7 @@ def test_tick_sources_online_from_inventory(make_manager, root_svc):
 
 def test_tick_respects_next_due(make_manager):
     # device com next_due futuro NÃO é pollado (regressão B3)
-    mgr, factory = make_manager([_vnf_fake("r1")])
+    mgr, factory = make_manager([_device_fake("r1")])
     mgr._next_due["r1"] = 9999999999.0
     mgr.tick()
     assert factory.get_calls == []
@@ -134,7 +134,7 @@ def test_tick_respects_next_due(make_manager):
 def test_tick_consolidates_services_per_device(make_manager, root_svc):
     svc2 = _svc("router-bgp-summary", ["ROUTER"], ["display bgp summary"])
     mgr, factory = make_manager(
-        [_vnf_fake("r1")],
+        [_device_fake("r1")],
         services=[root_svc, svc2],
     )
     mgr.tick()
@@ -144,8 +144,8 @@ def test_tick_consolidates_services_per_device(make_manager, root_svc):
 
 
 def test_tick_skips_device_without_matching_services(make_manager, root_svc):
-    # VNF SWITCH não casa com serviço ROUTER → skip, zero custo
-    switch = _vnf_fake("sw1", vtype="SWITCH")
+    # Device SWITCH não casa com serviço ROUTER → skip, zero custo
+    switch = _device_fake("sw1", dtype="SWITCH")
     mgr, factory = make_manager([switch], services=[root_svc])
     mgr.tick()
     assert factory.get_calls == []
@@ -153,7 +153,7 @@ def test_tick_skips_device_without_matching_services(make_manager, root_svc):
 
 
 def test_tick_survives_device_exception_and_releases(make_manager, root_svc):
-    mgr, factory = make_manager([_vnf_fake("r1")], services=[root_svc])
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
     factory._ssb.send_service_commands.side_effect = RuntimeError("boom")
     mgr.tick()  # não lança (D20: try/except por device)
     assert factory.release_calls == ["r1"]
@@ -161,14 +161,14 @@ def test_tick_survives_device_exception_and_releases(make_manager, root_svc):
 
 def test_tick_releases_only_on_error(make_manager, root_svc):
     # D20: sucesso NÃO chama release — sessão fica no pool
-    mgr, factory = make_manager([_vnf_fake("r1")], services=[root_svc])
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
     mgr.tick()
     assert factory.release_calls == []
 
 
 def test_tick_sets_backoff_after_device_error(make_manager, root_svc):
     # D20: next_due = now + POLL_DEFAULT_INTERVAL (anti hot-loop)
-    mgr, factory = make_manager([_vnf_fake("r1")], services=[root_svc])
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
     factory._ssb.send_service_commands.side_effect = RuntimeError("boom")
     mgr.tick()
     # POLL_DEFAULT_INTERVAL = 60; now não é injetável, então basta o
@@ -179,7 +179,7 @@ def test_tick_sets_backoff_after_device_error(make_manager, root_svc):
 def test_error_string_marks_unstable(make_manager, root_svc):
     # D13: output com "ERRO:" → instável, next_due curto (POLL_MIN_INTERVAL)
     mgr, factory = make_manager(
-        [_vnf_fake("r1")],
+        [_device_fake("r1")],
         services=[root_svc],
         ssb_out="ERRO: comando invalido",
     )
@@ -190,7 +190,7 @@ def test_error_string_marks_unstable(make_manager, root_svc):
 
 
 def test_overlapping_ticks_are_skipped(make_manager):
-    mgr, factory = make_manager([_vnf_fake("r1")])
+    mgr, factory = make_manager([_device_fake("r1")])
     mgr._tick_lock.acquire(blocking=False)
     try:
         mgr.tick()
@@ -200,7 +200,7 @@ def test_overlapping_ticks_are_skipped(make_manager):
 
 
 def test_force_poll_clears_next_due(make_manager):
-    mgr, _ = make_manager([_vnf_fake("r1")])
+    mgr, _ = make_manager([_device_fake("r1")])
     mgr._next_due["r1"] = 9999999999.0
     mgr.force_poll("r1", service_id="router-routing-table")
     assert "r1" not in mgr._next_due
@@ -263,7 +263,7 @@ class TestIntervalDecider:
 
 def test_polling_imports_flow(make_manager, root_svc):
     # smoke: real get status após um tick
-    mgr, factory = make_manager([_vnf_fake("r1")], services=[root_svc])
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
     mgr.tick()
     status = mgr.get_status()
     assert status["enabled"] is True

@@ -31,7 +31,7 @@ class EventType(Enum):
     CONFIG_CHANGED = auto()
     TOPOLOGY_CHANGED = auto()
     COMMAND_EXECUTED = auto()
-    VNF_STATUS_CHANGED = auto()
+    DEVICE_STATUS_CHANGED = auto()
     ALERT = auto()
     AN_TRIGGER = auto()
 

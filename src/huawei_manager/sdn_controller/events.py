@@ -69,8 +69,8 @@ class CommandExecutedPayload(BaseEventPayload):
 
 
 @dataclass
-class VnfStatusChangedPayload(BaseEventPayload):
-    """Payload para ``EventType.VNF_STATUS_CHANGED``."""
+class DeviceStatusChangedPayload(BaseEventPayload):
+    """Payload para ``EventType.DEVICE_STATUS_CHANGED``."""
 
     status: str
 

@@ -50,10 +50,10 @@ class Watcher:
     def is_active(self) -> bool:
         return self._active
 
-    def shutdown(self) -> None:
-        """Para o timer e finaliza o pool de threads."""
+    def shutdown(self, wait: bool = False) -> None:
+        """Para o timer e finaliza o pool de threads (wait=False = não bloqueia closeEvent)."""
         self.stop()
-        self._executor.shutdown(wait=True)
+        self._executor.shutdown(wait=wait)
 
     def _tick(self) -> None:
         if not self._active or self._scanning:

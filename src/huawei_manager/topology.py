@@ -1,11 +1,11 @@
 """
-topology.py — VNF Topology + Canvas (PySide6)
-==============================================
-Gerenciamento de VNFs via inventário local (vnf_inventory.json),
+topology.py — Device Topology + Canvas (PySide6)
+================================================
+Gerenciamento de Devices via inventário local (vnf_inventory.json),
 probe TCP real e simulação de status (modo mock).
 Canvas baseado em QGraphicsView / QGraphicsScene.
 
-O VNF selecionado no canvas é usado como alvo para conexão SSH via Netmiko.
+O Device selecionado no canvas é usado como alvo para conexão SSH via Netmiko.
 """
 from __future__ import annotations
 
@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as C
+from huawei_manager.device_models import Device
+from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology_effects import draw_background_grid, draw_sdn_bar
 from huawei_manager.topology_items import (
     ITEM_DATA_KEY,
@@ -36,8 +38,7 @@ from huawei_manager.topology_items import (
     _status_color,
     _to_qfont,
 )
-from huawei_manager.topology_nodes import _VNFNodeRect
-from huawei_manager.vnf_models import VNF
+from huawei_manager.topology_nodes import _DeviceNodeRect
 
 log = logging.getLogger("huawei.topology")
 
@@ -56,9 +57,9 @@ class _TopoView(QGraphicsView):
     def contextMenuEvent(self, event) -> None:
         item = self.itemAt(event.pos())
         if item:
-            vnf_id = item.data(ITEM_DATA_KEY)
-            if vnf_id is not None and vnf_id in self._canvas._vnf_map:
-                self._canvas._on_context_menu(event, self._canvas._vnf_map[vnf_id])
+            device_id = item.data(ITEM_DATA_KEY)
+            if device_id is not None and device_id in self._canvas._device_map:
+                self._canvas._on_context_menu(event, self._canvas._device_map[device_id])
                 return
         super().contextMenuEvent(event)
 
@@ -75,7 +76,7 @@ class TopologyCanvas(QWidget):
     """
     Canvas de topologia baseado em QGraphicsView / QGraphicsScene.
 
-    Renderiza VNFs num grid de 4 colunas com barra SDN no topo.
+    Renderiza Devices num grid de 4 colunas com barra SDN no topo.
     Suporta seleção, tooltip, menu de contexto e destaque hover.
     """
 
@@ -84,19 +85,19 @@ class TopologyCanvas(QWidget):
     def __init__(
         self,
         parent: QWidget | None = None,
-        on_select: Callable[[VNF], None] | None = None,
-        on_edit:   Callable[[VNF], None] | None = None,
-        on_delete: Callable[[VNF], None] | None = None,
+        on_select: Callable[[Device], None] | None = None,
+        on_edit:   Callable[[Device], None] | None = None,
+        on_delete: Callable[[Device], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._on_select = on_select
         self._edit_cb = on_edit
         self._delete_cb = on_delete
-        self._vnfs: list[VNF] = []
-        self._selected: VNF | None = None
+        self._devices: list[Device] = []
+        self._selected: Device | None = None
         self._access_level: str = "user"
-        self._vnf_map: dict[str, VNF] = {}
-        self._last_hover_vnf_id: str | None = None
+        self._device_map: dict[str, Device] = {}
+        self._last_hover_device_id: str | None = None
 
         self.setStyleSheet(f"background: {C.BG_BASE};")
         layout = QVBoxLayout(self)
@@ -123,17 +124,17 @@ class TopologyCanvas(QWidget):
         # tooltip text depende do nível → redesenha
         self._draw()
 
-    def update_vnfs(self, vnfs: list[VNF]) -> None:
-        """Atualiza a lista de VNFs e redesenha."""
-        if not vnfs and self._vnfs:
-            log.warning("update_vnfs: ignorando lista vazia (existem %d VNFs)", len(self._vnfs))
+    def update_devices(self, devices: list[Device]) -> None:
+        """Atualiza a lista de Devices e redesenha."""
+        if not devices and self._devices:
+            log.warning("update_devices: ignorando lista vazia (existem %d Devices)", len(self._devices))
             return
-        self._vnfs = vnfs
-        self._vnf_map = {v.id: v for v in vnfs}
+        self._devices = devices
+        self._device_map = {v.id: v for v in devices}
         self._draw()
 
-    def get_selected(self) -> VNF | None:
-        """Retorna o VNF atualmente selecionado ou None."""
+    def get_selected(self) -> Device | None:
+        """Retorna o Device atualmente selecionado ou None."""
         return self._selected
 
     def deselect(self) -> None:
@@ -141,17 +142,26 @@ class TopologyCanvas(QWidget):
         self._selected = None
         self._draw()
 
+    def set_device_status(self, device_id: str, status: str) -> None:
+        """Atualiza o status de um dispositivo (evento SDN) e redesenha."""
+        node = self._device_map.get(device_id)
+        if node is None:
+            log.warning("set_device_status: device %s nao encontrado no canvas", device_id)
+            return
+        node.status = status
+        self._draw()
+
     # ── Drawing ─────────────────────────────────────────────────────
 
     def _draw(self) -> None:
-        """Redesenha todo o canvas: barra SDN + nós VNF."""
+        """Redesenha todo o canvas: barra SDN + nós Device."""
         self._scene.clear()
-        self._vnf_map = {v.id: v for v in self._vnfs}
+        self._device_map = {v.id: v for v in self._devices}
 
         # Atualiza cor de fundo (pode ter mudado com o tema)
         self._scene.setBackgroundBrush(QBrush(QColor(C.BG_BASE)))
 
-        if not self._vnfs:
+        if not self._devices:
             self._draw_empty_state()
             return
 
@@ -159,15 +169,15 @@ class TopologyCanvas(QWidget):
         vw = self._view.viewport().width()
         vh = self._view.viewport().height()
         draw_background_grid(self._scene, vw, vh)
-        draw_sdn_bar(self._scene, vw, len(self._vnfs))
-        for vnf in self._vnfs:
-            x, y = positions.get(vnf.id, (0, 0))
-            self._draw_vnf_node(vnf, x, y)
+        draw_sdn_bar(self._scene, vw, len(self._devices))
+        for device in self._devices:
+            x, y = positions.get(device.id, (0, 0))
+            self._draw_device_node(device, x, y)
 
     def _layout(self) -> dict[str, tuple[float, float]]:
-        """Calcula posições dos nós VNF em grid de 4 colunas."""
+        """Calcula posições dos nós Device em grid de 4 colunas."""
         positions: dict[str, tuple[float, float]] = {}
-        n = len(self._vnfs)
+        n = len(self._devices)
         if n == 0:
             return positions
 
@@ -178,12 +188,12 @@ class TopologyCanvas(QWidget):
         start_x = (w - grid_w) / 2 + self.NODE_W / 2
         start_y = 100  # 8 px abaixo da SDN bar (bar_y=0 + bar_h=40 + gap=8 + nh/2=35)
 
-        for i, vnf in enumerate(self._vnfs):
+        for i, device in enumerate(self._devices):
             col = i % cols
             row = i // cols
             x = start_x + col * (self.NODE_W + pad_x)
             y = start_y + row * (self.NODE_H + pad_y)
-            positions[vnf.id] = (x, y)
+            positions[device.id] = (x, y)
 
         # Define scene rect para cobrir todos os itens
         max_y = start_y + (n // cols) * (self.NODE_H + pad_y) + self.NODE_H + 40
@@ -207,15 +217,15 @@ class TopologyCanvas(QWidget):
         txt.setPos(w / 2 - br.width() / 2, h / 2 - br.height() / 2)
         self._scene.addItem(txt)
 
-    def _draw_vnf_node(self, vnf: VNF, x: float, y: float) -> None:
-        """Desenha um nó VNF com sombra, glow de seleção, pulse de status."""
+    def _draw_device_node(self, device: Device, x: float, y: float) -> None:
+        """Desenha um nó Device com sombra, glow de seleção, pulse de status."""
         nw, nh = self.NODE_W, self.NODE_H
         is_selected = (self._selected is not None
-                       and self._selected.id == vnf.id)
-        admin = self._access_level in ("admin", "tecnico")
+                       and self._selected.id == device.id)
+        admin = role_meets(self._access_level, "tecnico")
 
-        type_color_str = _color_for(vnf)
-        st_color_str = _status_color(vnf, type_color_str)
+        type_color_str = _color_for(device)
+        st_color_str = _status_color(device, type_color_str)
         st_color_q = QColor(st_color_str)
 
         border_w = 3 if is_selected else 2
@@ -231,7 +241,7 @@ class TopologyCanvas(QWidget):
             glow_sel.setPen(QPen(QColor(st_color_str), 6))
             glow_sel.setBrush(Qt.BrushStyle.NoBrush)
             glow_sel.setOpacity(0.12)
-            glow_sel.setData(ITEM_DATA_KEY, vnf.id)
+            glow_sel.setData(ITEM_DATA_KEY, device.id)
             self._scene.addItem(glow_sel)
 
             sel = QGraphicsRectItem(
@@ -240,13 +250,13 @@ class TopologyCanvas(QWidget):
             )
             sel.setPen(QPen(st_color_q, 1.5, Qt.PenStyle.DashDotDotLine))
             sel.setBrush(Qt.BrushStyle.NoBrush)
-            sel.setData(ITEM_DATA_KEY, vnf.id)
+            sel.setData(ITEM_DATA_KEY, device.id)
             self._scene.addItem(sel)
 
         # ── Rect principal com sombra ───────────────────────────────
-        rect = _VNFNodeRect(
+        rect = _DeviceNodeRect(
             x - nw / 2, y - nh / 2, nw, nh,
-            vnf, self,
+            device, self,
             QBrush(fill_col), QBrush(hover_fill),
         )
         normal_pen = QPen(st_color_q, border_w)
@@ -261,7 +271,7 @@ class TopologyCanvas(QWidget):
         self._scene.addItem(rect)
 
         # Tooltip
-        rect.setToolTip(_build_tooltip_text(vnf, show_admin_info=admin))
+        rect.setToolTip(_build_tooltip_text(device, show_admin_info=admin))
 
         # ── Status dot — pulse ──────────────────────────────────────
         glow_dot = QGraphicsEllipseItem(
@@ -270,36 +280,36 @@ class TopologyCanvas(QWidget):
         glow_dot.setBrush(QBrush(st_color_q))
         glow_dot.setPen(Qt.PenStyle.NoPen)
         glow_dot.setOpacity(0.30)
-        glow_dot.setData(ITEM_DATA_KEY, vnf.id)
+        glow_dot.setData(ITEM_DATA_KEY, device.id)
         self._scene.addItem(glow_dot)
 
         dot = QGraphicsEllipseItem(x - nw / 2 + 4, y - nh / 2 + 4, 10, 10)
         dot.setBrush(QBrush(st_color_q))
         dot.setPen(Qt.PenStyle.NoPen)
-        dot.setData(ITEM_DATA_KEY, vnf.id)
+        dot.setData(ITEM_DATA_KEY, device.id)
         self._scene.addItem(dot)
 
         # ── Nome ────────────────────────────────────────────────────
-        name_item = QGraphicsSimpleTextItem(vnf.label())
+        name_item = QGraphicsSimpleTextItem(device.label())
         name_item.setBrush(QBrush(st_color_q))
         name_item.setFont(_to_qfont(C.FONT_MEDIUM_B))
         name_rect = name_item.boundingRect()
         name_item.setPos(x - name_rect.width() / 2, y - 18 - name_rect.height() / 2)
-        name_item.setData(ITEM_DATA_KEY, vnf.id)
+        name_item.setData(ITEM_DATA_KEY, device.id)
         self._scene.addItem(name_item)
 
         # ── Endereço ────────────────────────────────────────────────
-        addr = vnf.host if not admin else vnf.address()
+        addr = device.host if not admin else device.address()
         addr_item = QGraphicsSimpleTextItem(addr)
         addr_item.setBrush(QBrush(QColor(C.FG_DIM)))
         addr_item.setFont(_to_qfont(C.FONT_BODY))
         address_rect = addr_item.boundingRect()
         addr_item.setPos(x - address_rect.width() / 2, y + 2 - address_rect.height() / 2)
-        addr_item.setData(ITEM_DATA_KEY, vnf.id)
+        addr_item.setData(ITEM_DATA_KEY, device.id)
         self._scene.addItem(addr_item)
 
         # ── Label de tipo ───────────────────────────────────────────
-        type_label = vnf.type.replace("-", "\n")
+        type_label = device.type.replace("-", "\n")
         type_item = QGraphicsSimpleTextItem(type_label)
         type_item.setBrush(QBrush(QColor(type_color_str)))
         type_item.setFont(_to_qfont(C.FONT_XSMALL))
@@ -308,32 +318,32 @@ class TopologyCanvas(QWidget):
             x + nw / 2 - 8 - type_rect.width(),
             y + nh / 2 - 8 - type_rect.height(),
         )
-        type_item.setData(ITEM_DATA_KEY, vnf.id)
+        type_item.setData(ITEM_DATA_KEY, device.id)
         self._scene.addItem(type_item)
 
     # ── Event handlers ───────────────────────────────────────────────
 
-    def _on_click(self, vnf: VNF) -> None:
-        """Seleciona o VNF e chama o callback on_select."""
-        self._selected = vnf
+    def _on_click(self, device: Device) -> None:
+        """Seleciona o Device e chama o callback on_select."""
+        self._selected = device
         try:
             if self._on_select:
-                self._on_select(vnf)
+                self._on_select(device)
         except Exception:
-            log.exception("_on_click: on_select falhou para %s", vnf.id)
+            log.exception("_on_click: on_select falhou para %s", device.id)
         self._draw()
 
-    def _on_hover_enter(self, vnf: VNF) -> None:
-        """Registra o VNF sob o mouse (tooltip é nativo do Qt)."""
-        self._last_hover_vnf_id = vnf.id
+    def _on_hover_enter(self, device: Device) -> None:
+        """Registra o Device sob o mouse (tooltip é nativo do Qt)."""
+        self._last_hover_device_id = device.id
 
     def _on_hover_leave(self) -> None:
         """Limpa o registro de hover."""
-        self._last_hover_vnf_id = None
+        self._last_hover_device_id = None
 
-    def _on_context_menu(self, event, vnf: VNF) -> None:
+    def _on_context_menu(self, event, device: Device) -> None:
         """Exibe menu de contexto com editar/excluir (admin/tecnico)."""
-        can_edit = self._access_level in ("admin", "tecnico")
+        can_edit = role_meets(self._access_level, "tecnico")
         if not can_edit:
             return
 
@@ -366,6 +376,6 @@ class TopologyCanvas(QWidget):
 
         action = menu.exec(gpos)
         if action == edit_action and self._edit_cb:
-            self._edit_cb(vnf)
+            self._edit_cb(device)
         elif action == delete_action and self._delete_cb:
-            self._delete_cb(vnf)
+            self._delete_cb(device)

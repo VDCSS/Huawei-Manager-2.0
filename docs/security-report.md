@@ -37,9 +37,6 @@ O Huawei Manager implementa **6 camadas de segurança** que cobrem autenticaçã
 
 - **Decorator `@require_role`** em `authz.py` — protege operações do ControllerCore com verificação hierárquica
 - **`SessionTracker`** — timeout de inatividade configurável (default 300s), reseta para USER automaticamente
-- **NorthboundAPI** — cada endpoint tem role mínima definida em `_REQUIRED_ROLES`:
-  - `get_devices`, `get_topology`, `get_config`: USER
-  - `deploy_intent`, `get_audit_log`: TECNICO
 - **Lockout 30s** — 3 tentativas falhas de autenticação bloqueiam o diálogo
 
 ### 2.3 Testes (B1)
@@ -200,7 +197,7 @@ Nenhuma credencial (IP, porta, token, chave) aparece em logs INFO ou terminal:
 
 - Instanciado em `app.py` como `_security_timeline`
 - Eventos adicionados via `add_event()` em handlers
-- Acessível via `NorthboundAPI.get_events()`
+- Acessível via `_security_timeline` no app
 
 ---
 

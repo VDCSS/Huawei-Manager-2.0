@@ -25,7 +25,7 @@ FONT_UI_MEDIUM  = (_UI, 12)            # sidebar, botões, inputs
 FONT_UI_MEDIUM_B = (_UI, 12, "bold")
 
 # ─── FONTES — Código (Monospace) ───────────────────────────────────
-# Ainda usadas por topology.py (_VNFNodeRect, SDN bar, etc.)
+# Ainda usadas por topology.py (_DeviceNodeRect, SDN bar, etc.)
 FONT_XSMALL  = ("Consolas", 9)     # type_item no canvas
 FONT_BODY    = ("Consolas", 11)    # SDN bar count, address items
 FONT_LARGE   = ("Consolas", 13)    # código / output principal
