@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from huawei_manager.exceptions import SdnValidationError
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
 import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.device_models import Device
+from huawei_manager.exceptions import SdnValidationError
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import (
     DeviceConnectedPayload,
