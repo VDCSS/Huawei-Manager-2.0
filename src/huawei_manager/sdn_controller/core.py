@@ -20,7 +20,7 @@ from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import (
     DeviceConnectedPayload,
     DeviceErrorPayload,
-    VnfStatusChangedPayload,
+    DeviceStatusChangedPayload,
 )
 
 log = logging.getLogger("huawei.sdn.core")
@@ -114,7 +114,7 @@ class ControllerCore:
             self._event_queue.subscribe(EventType.DEVICE_DISCONNECTED, self._on_event)
             self._event_queue.subscribe(EventType.DEVICE_ERROR, self._on_event)
             self._event_queue.subscribe(EventType.CONFIG_CHANGED, self._on_event)
-            self._event_queue.subscribe(EventType.VNF_STATUS_CHANGED, self._on_event)
+            self._event_queue.subscribe(EventType.DEVICE_STATUS_CHANGED, self._on_event)
 
     # ── Gestao de dispositivos ─────────────────────────────────────────────
 
@@ -212,7 +212,7 @@ class ControllerCore:
         * ``DEVICE_DISCONNECTED`` — status → ``offline``.
         * ``DEVICE_ERROR`` — status → ``error``, metadata guarda o erro.
         * ``CONFIG_CHANGED`` — metadata registra ``last_config_change``.
-        * ``VNF_STATUS_CHANGED`` — status extraido de ``event.payload.status``.
+        * ``DEVICE_STATUS_CHANGED`` — status extraido de ``event.payload.status``.
 
         Eventos para dispositivos nao registrados sao ignorados.
         """
@@ -233,9 +233,9 @@ class ControllerCore:
                 with self._lock:
                     state.metadata["last_error"] = error_msg
 
-        elif event.type == EventType.VNF_STATUS_CHANGED:
+        elif event.type == EventType.DEVICE_STATUS_CHANGED:
             new_status: str | None = None
-            if isinstance(event.payload, VnfStatusChangedPayload):
+            if isinstance(event.payload, DeviceStatusChangedPayload):
                 new_status = event.payload.status
             if new_status:
                 with self._lock:
@@ -307,37 +307,37 @@ class ControllerCore:
 
     # ── Timer periodico ────────────────────────────────────────────────────
 
-    def sync_from_vnfs(
+    def sync_from_devices(
         self,
-        vnfs: list[Any],
+        devices: list[Any],
         publish_events: bool = True,
     ) -> None:
-        """Sincroniza o estado do ControllerCore com o inventario do vnf_models.
+        """Sincroniza o estado do ControllerCore com o inventario de Devices.
 
-        Registra VNFs do inventario que ainda nao estao no controlador.
+        Registra Devices do inventario que ainda nao estao no controlador.
         Nao remove dispositivos que existem no core mas nao no inventario
         (eles podem estar offline temporariamente).
 
         Args:
-            vnfs: Lista de objetos VNF do vnf_models (com .id, .host, .port, .type).
+            devices: Lista de objetos Device do device_models (com .id, .host, .port, .type).
             publish_events: Se False, evita publicar eventos durante o sync
                 para nao gerar feedback loop no drain queue.
         """
-        for vnf in vnfs:
-            if vnf.id not in self._devices:
+        for device in devices:
+            if device.id not in self._devices:
                 state = DeviceState(
-                    device_id=vnf.id,
-                    host=vnf.host,
-                    port=vnf.port,
-                    device_type=vnf.type or "unknown",
+                    device_id=device.id,
+                    host=device.host,
+                    port=device.port,
+                    device_type=device.type or "unknown",
                     status="unknown",
                 )
                 with self._lock:
-                    self._devices[vnf.id] = state
+                    self._devices[device.id] = state
                 if publish_events and self._event_queue is not None:
                     self._event_queue.put(
-                        Event(type=EventType.VNF_STATUS_CHANGED, source=vnf.id,
-                              payload=VnfStatusChangedPayload(status="unknown"))
+                        Event(type=EventType.DEVICE_STATUS_CHANGED, source=device.id,
+                              payload=DeviceStatusChangedPayload(status="unknown"))
                     )
 
     def start(self) -> None:

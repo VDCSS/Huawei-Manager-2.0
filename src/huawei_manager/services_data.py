@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # ── Tipos suportados ──────────────────────────────────────────────────
-VNF_TYPES = {
+DEVICE_TYPES = {
     "ROUTER":         "Roteador",
     "SWITCH":         "Switch",
     "FIREWALL":       "Firewall",
@@ -15,7 +15,7 @@ VNF_TYPES = {
     "AP":             "Access Point / Controladora WiFi",
 }
 
-VNF_CATEGORIES = {
+DEVICE_CATEGORIES = {
     "ROUTER": [
         "routing", "bgp", "ospf", "isis", "mpls", "interface",
         "vrf", "qos", "acl", "nat", "system", "security", "troubleshoot",
@@ -50,7 +50,7 @@ class ServiceDef:
     name: str
     description: str
     category: str
-    vnf_types: list[str]
+    device_types: list[str]
     cli_commands: list[str] = field(default_factory=list)
     yang_filter: str | None = None
     yang_source: str = "get"
@@ -86,20 +86,20 @@ def _svc(*args: Any, **kw: Any) -> ServiceDef:
         config = kw.pop("config", rest[1] if len(rest) > 1 else False)
         return ServiceDef(
             id=id_, name=name, description=desc,
-            category=cat, vnf_types=types,
+            category=cat, device_types=types,
             cli_commands=cmds or [desc],
             config_mode=config,
         )
     spec = _SvcSpec(**kw)
     return ServiceDef(
         id=spec.id, name=spec.name, description=spec.desc,
-        category=spec.cat, vnf_types=spec.types,
+        category=spec.cat, device_types=spec.types,
         cli_commands=spec.cmds or [spec.desc],
         config_mode=spec.config,
     )
 
 
-# VNF type shorthands para evitar linhas longas no catálogo
+# Device type shorthands para evitar linhas longas no catálogo
 _T_ALL = ['ROUTER', 'SWITCH', 'FIREWALL', 'LOAD-BALANCER', 'WAN-ACCEL', 'AP']
 
 

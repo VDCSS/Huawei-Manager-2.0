@@ -1,7 +1,7 @@
 """
-topology_nodes.py — VNF node graphics items for TopologyCanvas.
+topology_nodes.py — Device node graphics items for TopologyCanvas.
 ================================================================
-Custom QGraphicsRectItem representing a VNF node in the topology.
+Custom QGraphicsRectItem representing a Device node in the topology.
 Features rounded corners, hover pen toggling, and smooth paint.
 """
 from __future__ import annotations
@@ -15,25 +15,25 @@ from PySide6.QtWidgets import QGraphicsRectItem
 from huawei_manager.topology_items import ITEM_DATA_KEY
 
 if TYPE_CHECKING:
+    from huawei_manager.device_models import Device
     from huawei_manager.topology import TopologyCanvas
-    from huawei_manager.vnf_models import VNF
 
 _RADIUS = 6.0
 
 
-class _VNFNodeRect(QGraphicsRectItem):
-    """Rectângulo principal do nó VNF — rounded, clique, hover visual + pen."""
+class _DeviceNodeRect(QGraphicsRectItem):
+    """Rectângulo principal do nó Device — rounded, clique, hover visual + pen."""
 
     def __init__(
         self,
         x: float, y: float, w: float, h: float,
-        vnf: VNF,
+        device: Device,
         canvas: TopologyCanvas,
         normal_brush: QBrush,
         hover_brush: QBrush,
     ) -> None:
         super().__init__(x, y, w, h)
-        self._vnf = vnf
+        self._device = device
         self._canvas = canvas
         self._normal_brush = normal_brush
         self._hover_brush = hover_brush
@@ -41,7 +41,7 @@ class _VNFNodeRect(QGraphicsRectItem):
         self._hover_pen: QPen | None = None
         self.setAcceptHoverEvents(True)
         self.setBrush(normal_brush)
-        self.setData(ITEM_DATA_KEY, vnf.id)
+        self.setData(ITEM_DATA_KEY, device.id)
 
     # ── Public pen API ─────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ class _VNFNodeRect(QGraphicsRectItem):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            self._canvas._on_click(self._vnf)
+            self._canvas._on_click(self._device)
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -83,7 +83,7 @@ class _VNFNodeRect(QGraphicsRectItem):
         self.setBrush(self._hover_brush)
         if self._hover_pen is not None:
             self.setPen(self._hover_pen)
-        self._canvas._on_hover_enter(self._vnf)
+        self._canvas._on_hover_enter(self._device)
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event) -> None:

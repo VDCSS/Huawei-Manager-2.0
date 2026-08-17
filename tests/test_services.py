@@ -1,7 +1,7 @@
 from huawei_manager.services import (
     SERVICE_REGISTRY,
-    VNF_CATEGORIES,
-    VNF_TYPES,
+    DEVICE_CATEGORIES,
+    DEVICE_TYPES,
     execute_service,
     get_all_show_commands,
     get_categories_for,
@@ -16,7 +16,7 @@ class TestGetServicesFor:
     def test_router_returns_list(self):
         svcs = get_services_for("ROUTER")
         assert len(svcs) > 20
-        assert all("ROUTER" in s.vnf_types for s in svcs)
+        assert all("ROUTER" in s.device_types for s in svcs)
 
     def test_router_with_category(self):
         svcs = get_services_for("ROUTER", "routing")
@@ -169,15 +169,15 @@ class TestRegistryIntegrity:
         ids = [s.id for s in SERVICE_REGISTRY]
         assert len(ids) == len(set(ids))
 
-    def test_vnf_types_are_valid(self):
-        valid = set(VNF_TYPES.keys())
+    def test_device_types_are_valid(self):
+        valid = set(DEVICE_TYPES.keys())
         for s in SERVICE_REGISTRY:
-            for t in s.vnf_types:
+            for t in s.device_types:
                 assert t in valid, f"{s.id} has invalid type {t}"
 
-    def test_categories_in_vnf_categories(self):
+    def test_categories_in_device_categories(self):
         all_valid = set()
-        for cats in VNF_CATEGORIES.values():
+        for cats in DEVICE_CATEGORIES.values():
             all_valid.update(cats)
         for s in SERVICE_REGISTRY:
             assert s.category in all_valid, f"{s.id} has unknown category {s.category}"
@@ -190,7 +190,7 @@ class TestSvcFactory:
         assert svc.name == "Test"
         assert svc.description == "display x"
         assert svc.category == "system"
-        assert svc.vnf_types == ["ROUTER"]
+        assert svc.device_types == ["ROUTER"]
         assert svc.cli_commands == ["display x"]
         assert not svc.config_mode
 
@@ -200,7 +200,7 @@ class TestSvcFactory:
         assert svc.name == "Test"
         assert svc.description == "display x"
         assert svc.category == "system"
-        assert svc.vnf_types == ["ROUTER"]
+        assert svc.device_types == ["ROUTER"]
         assert svc.cli_commands == ["display x"]
         assert not svc.config_mode
 

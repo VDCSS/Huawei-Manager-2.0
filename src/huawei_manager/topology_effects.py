@@ -45,7 +45,7 @@ def draw_background_grid(
         y += spacing
 
 
-def draw_sdn_bar(scene: QGraphicsScene, view_width: int, vnf_count: int) -> None:
+def draw_sdn_bar(scene: QGraphicsScene, view_width: int, device_count: int) -> None:
     """Draw the SDN controller bar with glow, gradient, accent, and device counter.
 
     Parameters
@@ -54,8 +54,8 @@ def draw_sdn_bar(scene: QGraphicsScene, view_width: int, vnf_count: int) -> None
         The scene to draw into.
     view_width : int
         Width of the viewport (used to centre the bar).
-    vnf_count : int
-        Number of managed VNFs shown in the counter label.
+    device_count : int
+        Number of managed Devices shown in the counter label.
     """
     cw = view_width
     bar_w = max(cw - 40, 200)
@@ -108,7 +108,7 @@ def draw_sdn_bar(scene: QGraphicsScene, view_width: int, vnf_count: int) -> None
 
     # ── Contador ───────────────────────────────────────────────────
     counter_text = QGraphicsSimpleTextItem(
-        f"{vnf_count} dispositivo(s) gerenciado(s)",
+        f"{device_count} dispositivo(s) gerenciado(s)",
     )
     counter_text.setBrush(QBrush(QColor(C.FG_DIM)))
     counter_text.setFont(_to_qfont(C.FONT_BODY))

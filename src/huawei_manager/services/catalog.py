@@ -1,7 +1,7 @@
-# services.py — Lógica de execução de serviços VNF
+# services.py — Lógica de execução de serviços Device
 # ==================================================
 # Contém funções de busca, parse e execução de serviços.
-# Dados do catálogo (ServiceDef, SERVICE_REGISTRY, VNF_TYPES) em services_data.py.
+# Dados do catálogo (ServiceDef, SERVICE_REGISTRY, DEVICE_TYPES) em services_data.py.
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ import re
 from datetime import UTC, datetime
 
 from huawei_manager.services_data import (
+    DEVICE_CATEGORIES,  # noqa: F401 — re-exportado para backward compat
+    DEVICE_TYPES,  # noqa: F401 — re-exportado para backward compat
     SERVICE_REGISTRY,
-    VNF_CATEGORIES,  # noqa: F401 — re-exportado para backward compat
-    VNF_TYPES,  # noqa: F401 — re-exportado para backward compat
     ServiceDef,
 )
 from huawei_manager.utils import clean_output
@@ -25,19 +25,19 @@ log = logging.getLogger("huawei.services")
 #  SERVICE ACCESS FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════
 
-def get_services_for(vnf_type: str, category: str | None = None) -> list[ServiceDef]:
-    """Retorna serviços disponíveis para um tipo de VNF, opcionalmente filtrados por categoria."""
-    results = [s for s in SERVICE_REGISTRY if vnf_type.upper() in s.vnf_types]
+def get_services_for(device_type: str, category: str | None = None) -> list[ServiceDef]:
+    """Retorna serviços disponíveis para um tipo de Device, opcionalmente filtrados por categoria."""
+    results = [s for s in SERVICE_REGISTRY if device_type.upper() in s.device_types]
     if category:
         results = [s for s in results if s.category == category]
     return results
 
 
-def get_categories_for(vnf_type: str) -> list[str]:
-    """Retorna categorias disponíveis para um tipo de VNF."""
+def get_categories_for(device_type: str) -> list[str]:
+    """Retorna categorias disponíveis para um tipo de Device."""
     cats: dict[str, bool] = {}
     for s in SERVICE_REGISTRY:
-        if vnf_type.upper() in s.vnf_types:
+        if device_type.upper() in s.device_types:
             cats[s.category] = True
     return list(cats.keys())
 

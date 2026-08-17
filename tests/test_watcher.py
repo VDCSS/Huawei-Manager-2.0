@@ -94,7 +94,7 @@ class TestWatcher:
         w._active = True
         with patch.object(w._executor, "shutdown") as mock_shutdown:
             w.shutdown()
-        mock_shutdown.assert_called_once_with(wait=True)
+        mock_shutdown.assert_called_once_with(wait=False)
         assert w._active is False
         assert w._scanning is False
 

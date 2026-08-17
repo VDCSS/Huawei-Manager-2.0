@@ -1,4 +1,4 @@
-"""PollingManager — polling adaptativo por VNF (headless, sem Qt).
+"""PollingManager — polling adaptativo por Device (headless, sem Qt).
 
 Orquestra SSHSessionFactory + StabilityTracker + IntervalDecider.
 Fonte de devices online = snapshot do inventário (D6), nunca ControllerCore.
@@ -24,12 +24,12 @@ from huawei_manager.constants import (
     POLL_SERVICES,
     POLL_STABLE_MULTIPLIER,
 )
+from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
 from huawei_manager.services.catalog import get_service_by_id
-from huawei_manager.services.vnf_service import VnfService
+from huawei_manager.services.device_service import DeviceService
 from huawei_manager.services_data import ServiceDef
 from huawei_manager.utils import clean_output
-from huawei_manager.vnf_models import VNF
 
 log = logging.getLogger("huawei.polling")
 
@@ -175,14 +175,14 @@ class PollingManager:
     def __init__(
         self,
         factory: SSHSessionFactory,
-        vnf_service: VnfService,
+        device_service: DeviceService,
         enabled: bool = True,
         poll_services: list[str] | None = None,
         max_devices: int = POLL_MAX_DEVICES,
         max_workers: int = POLL_MAX_WORKERS,
     ) -> None:
         self._factory = factory
-        self._vnf_service = vnf_service
+        self._device_service = device_service
         self._enabled = enabled
         self._poll_services = list(poll_services) if poll_services else list(POLL_SERVICES)
         self._max_devices = max_devices
@@ -218,8 +218,8 @@ class PollingManager:
     def _tick_impl(self) -> None:
         try:
             now = time.time()
-            vnfs = self._vnf_service.load_inventory()
-            online = [v for v in vnfs if v.status == "online"][: self._max_devices]
+            devices = self._device_service.load_inventory()
+            online = [v for v in devices if v.status == "online"][: self._max_devices]
             with self._next_due_lock:
                 next_due = dict(self._next_due)
             due = [v for v in online if now >= next_due.get(v.id, 0)]
@@ -235,32 +235,32 @@ class PollingManager:
         finally:
             self._factory.purge_expired()
 
-    def _poll_device(self, vnf: VNF) -> None:
+    def _poll_device(self, device: Device) -> None:
         try:
-            svcs = self._matching_services(vnf)
+            svcs = self._matching_services(device)
             if not svcs:
                 return
-            ssb = self._factory.get(vnf)
+            ssb = self._factory.get(device)
             if ssb is None:
                 # Falha de conexão/validação — backoff p/ não martelar
-                self._set_next_due(vnf.id, POLL_DEFAULT_INTERVAL)
+                self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
                 return
             cmds = [c for s in svcs for c in (s.cli_commands or [])]
             out = ssb.send_service_commands(cmds)
             if _is_error_string(out):
-                log.warning("device %s erro-como-string — instável", vnf.id)
-                self._decider.next_interval(vnf.id, False)
-                self._set_next_due(vnf.id, POLL_MIN_INTERVAL)
+                log.warning("device %s erro-como-string — instável", device.id)
+                self._decider.next_interval(device.id, False)
+                self._set_next_due(device.id, POLL_MIN_INTERVAL)
                 return
             norm = _normalize_output(out)
             sha = hashlib.sha256(norm.encode("utf-8")).hexdigest()
-            stable = self._tracker.record(vnf.id, sha)
-            interval = self._decider.next_interval(vnf.id, stable)
-            self._set_next_due(vnf.id, interval)
+            stable = self._tracker.record(device.id, sha)
+            interval = self._decider.next_interval(device.id, stable)
+            self._set_next_due(device.id, interval)
         except Exception:
-            log.exception("device %s skip", vnf.id)
-            self._factory.release(vnf.id)
-            self._set_next_due(vnf.id, POLL_DEFAULT_INTERVAL)
+            log.exception("device %s skip", device.id)
+            self._factory.release(device.id)
+            self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
 
     def _set_next_due(self, device_id: str, interval: float) -> None:
         # Anchora no tempo DE CONCLUSÃO, não no início do tick: device lento
@@ -268,11 +268,11 @@ class PollingManager:
         with self._next_due_lock:
             self._next_due[device_id] = time.time() + interval
 
-    def _matching_services(self, vnf: VNF) -> list[ServiceDef]:
-        vtype = vnf.type.upper()
+    def _matching_services(self, device: Device) -> list[ServiceDef]:
+        vtype = device.type.upper()
         return [
             s for s in (get_service_by_id(i) for i in self._poll_services)
-            if s is not None and vtype in s.vnf_types
+            if s is not None and vtype in s.device_types
         ]
 
     def next_due_min(self) -> float | None:

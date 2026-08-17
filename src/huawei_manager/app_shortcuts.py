@@ -77,7 +77,7 @@ class ShortcutsMixin(QObject):
             self._write(self._svc_output, "")
 
     def _on_ctrl_q(self) -> None:
-        self._on_close()
+        self.close()
 
     def _on_ctrl_shift_a(self) -> None:
         self._show_auth_dialog()
@@ -85,7 +85,7 @@ class ShortcutsMixin(QObject):
     def _on_f5(self) -> None:
         page = self._current_page
         if page == "topology":
-            self._spawn_io(self._refresh_vnfs)
+            self._spawn_io(self._refresh_devices)
         elif page == "services":
             self._refresh_service_list()
         else:

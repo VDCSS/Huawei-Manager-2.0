@@ -16,7 +16,7 @@ from huawei_manager.sdn_controller.session_factory import (
 )
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.vault_backends.base import SecretsBackend
-from huawei_manager.vnf_models import VNF
+from huawei_manager.device_models import Device
 
 
 class _FakeBackend(SecretsBackend):
@@ -34,9 +34,9 @@ class _FakeBackend(SecretsBackend):
         self._data[key] = value
 
 
-def _vnf(**overrides: object) -> VNF:
+def _device(**overrides: object) -> Device:
     base: dict[str, object] = {
-        "id": "vnf-001-router",
+        "id": "dev-001-router",
         "name": "R1",
         "host": "10.0.0.1",
         "port": 22,
@@ -45,7 +45,7 @@ def _vnf(**overrides: object) -> VNF:
         "password": "secret",
     }
     base.update(overrides)
-    return VNF(**base)
+    return Device(**base)
 
 
 @pytest.fixture
@@ -65,39 +65,39 @@ def factory(audit_logger):
 
 
 def test_factory_creates_per_device_session(factory):
-    s1 = factory.factory.get(_vnf(id="vnf-1-a", name="A", host="10.0.0.1"))
-    s2 = factory.factory.get(_vnf(id="vnf-2-b", name="B", host="10.0.0.2"))
+    s1 = factory.factory.get(_device(id="dev-1-a", name="A", host="10.0.0.1"))
+    s2 = factory.factory.get(_device(id="dev-2-b", name="B", host="10.0.0.2"))
     assert s1 is not None and s2 is not None
     assert s1 is not s2
     assert factory.factory.active_sessions == 2
 
 
 def test_factory_skips_missing_credentials(factory):
-    assert factory.factory.get(_vnf(host="")) is None
-    assert factory.factory.get(_vnf(username="")) is None
-    assert factory.factory.get(_vnf(password="", ssh_key="")) is None
+    assert factory.factory.get(_device(host="")) is None
+    assert factory.factory.get(_device(username="")) is None
+    assert factory.factory.get(_device(password="", ssh_key="")) is None
     assert factory.factory.active_sessions == 0
 
 
 def test_factory_never_falls_back_to_global_creds(factory):
     # Backend fake NÃO tem ROUTER_*; VNF incompleto → None e NENHUMA
     # consulta ao backend (sem fallback global — regressão B4)
-    assert factory.factory.get(_vnf(password="", ssh_key="")) is None
+    assert factory.factory.get(_device(password="", ssh_key="")) is None
     assert factory.backend.get_calls == []
 
 
 def test_factory_reuses_cached_session(factory):
-    vnf = _vnf()
-    s1 = factory.factory.get(vnf)
-    s2 = factory.factory.get(vnf)
+    device = _device()
+    s1 = factory.factory.get(device)
+    s2 = factory.factory.get(device)
     assert s1 is s2
     assert len(factory.overrides) == 1
 
 
 def test_factory_maps_override_port(factory):
-    factory.factory.get(_vnf(port=22))
-    factory.factory.get(_vnf(id="vnf-2-b", name="B", host="10.0.0.2", port=0))
-    factory.factory.get(_vnf(id="vnf-3-c", name="C", host="10.0.0.3", port=2222))
+    factory.factory.get(_device(port=22))
+    factory.factory.get(_device(id="dev-2-b", name="B", host="10.0.0.2", port=0))
+    factory.factory.get(_device(id="dev-3-c", name="C", host="10.0.0.3", port=2222))
     assert factory.overrides[0]["override_port"] == 22
     # port 0/None → 22 (D21/D22: nunca cai no fallback global)
     assert factory.overrides[1]["override_port"] == 22
@@ -114,11 +114,11 @@ def test_connect_failure_does_not_poison_pool(audit_logger):
     fac = SSHSessionFactory(
         _FakeBackend(), audit_logger, session_builder=failing_builder,
     )
-    vnf = _vnf()
-    assert fac.get(vnf) is None
+    device = _device()
+    assert fac.get(device) is None
     assert fac.active_sessions == 0
     # 2ª chamada tenta de novo — não reusa sessão morta
-    assert fac.get(vnf) is None
+    assert fac.get(device) is None
 
 
 def test_purge_expired_closes_idle_sessions(audit_logger):
@@ -128,7 +128,7 @@ def test_purge_expired_closes_idle_sessions(audit_logger):
         session_builder=lambda _b, _a, **k: ssb,
         ttl_seconds=0.001,
     )
-    fac.get(_vnf())
+    fac.get(_device())
     assert fac.active_sessions == 1
     time.sleep(0.01)
     fac.purge_expired()
@@ -137,11 +137,11 @@ def test_purge_expired_closes_idle_sessions(audit_logger):
 
 
 def test_release_and_dispose(factory):
-    v1 = _vnf(id="vnf-1-a", name="A", host="10.0.0.1")
-    v2 = _vnf(id="vnf-2-b", name="B", host="10.0.0.2")
+    v1 = _device(id="dev-1-a", name="A", host="10.0.0.1")
+    v2 = _device(id="dev-2-b", name="B", host="10.0.0.2")
     s1 = factory.factory.get(v1)
     s2 = factory.factory.get(v2)
-    factory.factory.release("vnf-1-a")
+    factory.factory.release("dev-1-a")
     assert factory.factory.active_sessions == 1
     s1.disconnect.assert_called()
     factory.factory.dispose()
@@ -151,7 +151,7 @@ def test_release_and_dispose(factory):
 
 def test_ui_session_untouched(factory):
     # VNF completo: factory NUNCA consulta backend (ROUTER_* não usado)
-    factory.factory.get(_vnf())
+    factory.factory.get(_device())
     assert factory.backend.get_calls == []
 
 

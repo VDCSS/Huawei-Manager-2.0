@@ -1,7 +1,7 @@
-"""DeviceDialog — formulário de cadastro/edição de VNF.
+"""DeviceDialog — formulário de cadastro/edição de Device.
 
 Uso:
-    dialog = DeviceDialog(parent, vnf=vnf_existente, vnf_types=["ROUTER", ...])
+    dialog = DeviceDialog(parent, device=device_existente, device_types=["ROUTER", ...])
     if dialog.exec():
         data = dialog.get_data()
 """
@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 import huawei_manager.constants as C
 
 if TYPE_CHECKING:
-    from huawei_manager.vnf_models import VNF
+    from huawei_manager.device_models import Device
 
 # Definição dos campos do formulário (nome_chave, rótulo, é_secreto)
 FIELD_DEFINITIONS: list[tuple[str, str, bool]] = [
@@ -61,32 +61,32 @@ def _style_input(placeholder: str = "", is_secret: bool = False) -> QLineEdit:
 
 
 class DeviceDialog(QDialog):
-    """Formulário modal para cadastrar ou editar um dispositivo VNF.
+    """Formulário modal para cadastrar ou editar um dispositivo.
 
     Args:
         parent: Widget pai (opcional).
-        vnf: VNF existente para edição (None = cadastro novo).
-        vnf_types: Lista de tipos de VNF para o combobox.
+        device: Device existente para edição (None = cadastro novo).
+        device_types: Lista de tipos de Device para o combobox.
     """
 
     def __init__(
         self,
         parent: QWidget | None = None,
-        vnf: VNF | None = None,
-        vnf_types: list[str] | None = None,
+        device: Device | None = None,
+        device_types: list[str] | None = None,
     ) -> None:
         super().__init__(parent)
-        self._vnf = vnf
-        self._vnf_types = vnf_types or []
+        self._device = device
+        self._device_types = device_types or []
         self._form_fields: dict[str, QLineEdit] = {}
         self._type_cb: QComboBox | None = None
 
         self._build_ui()
-        if vnf is not None:
-            self._populate(vnf)
+        if device is not None:
+            self._populate(device)
 
     def _build_ui(self) -> None:
-        is_editing = self._vnf is not None
+        is_editing = self._device is not None
         self.setWindowTitle(
             "Editar Dispositivo" if is_editing else "Cadastrar Dispositivo"
         )
@@ -113,7 +113,7 @@ class DeviceDialog(QDialog):
         layout.addWidget(type_row)
         type_layout.addWidget(_style_label("Tipo:"))
         self._type_cb = QComboBox(self)
-        self._type_cb.addItems(self._vnf_types)
+        self._type_cb.addItems(self._device_types)
         self._type_cb.setStyleSheet(
             f"QComboBox {{ background: {C.BG_INPUT}; color: {C.NEON_CYAN}; "
             f"border: 1px solid {C.BORDER_NRM}; border-radius: 3px; "
@@ -180,19 +180,19 @@ class DeviceDialog(QDialog):
 
         self.setModal(True)
 
-    def _populate(self, vnf: VNF) -> None:
-        """Preenche os campos com dados de um VNF existente."""
-        self._name_entry.setText(vnf.name)
+    def _populate(self, device: Device) -> None:
+        """Preenche os campos com dados de um Device existente."""
+        self._name_entry.setText(device.name)
         if self._type_cb is not None:
-            idx = self._type_cb.findText(vnf.type)
+            idx = self._type_cb.findText(device.type)
             if idx >= 0:
                 self._type_cb.setCurrentIndex(idx)
-        self._form_fields["host"].setText(vnf.host)
-        self._form_fields["port"].setText(str(vnf.port))
-        self._form_fields["username"].setText(vnf.username)
-        self._form_fields["password"].setText(vnf.password)
-        self._form_fields["ssh_key"].setText(vnf.ssh_key)
-        self._form_fields["location"].setText(vnf.location)
+        self._form_fields["host"].setText(device.host)
+        self._form_fields["port"].setText(str(device.port))
+        self._form_fields["username"].setText(device.username)
+        self._form_fields["password"].setText(device.password)
+        self._form_fields["ssh_key"].setText(device.ssh_key)
+        self._form_fields["location"].setText(device.location)
 
     def _on_save(self) -> None:
         """Valida os campos e aceita o diálogo se válidos."""

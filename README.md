@@ -11,7 +11,7 @@
 ### SSH / CLI
 - Sessão segura via **Netmiko** (paramiko) com autenticação por chave ED25519 ou senha
 - Execução de comandos `show` e `configure` com timeout configurável e retry automático
-- Editor de comandos com 14 templates pré-definidos por tipo de dispositivo
+- Editor de comandos com 21 templates pré-definidos por tipo de dispositivo
 - Streaming de output em tempo real com cancelamento do processo ativo
 
 ### Catálogo de Serviços (144 comandos)
@@ -68,7 +68,7 @@ src/huawei_manager/
 ├── constants.py        # Cores, fontes (Inter/Consolas), filtros CLI
 ├── exceptions.py       # Custom exceptions (Sócrates session)
 │
-├── pages/              # PageBuilder — 8 abas da interface
+├── pages/              # PageBuilder — 10 abas da interface
 │   ├── __init__.py     # Re-exporta PageBuilder
 │   ├── builder.py      # _build_*_page methods + PageBuilder class
 │   ├── cmd.py          # PageBuilder mixin — Command Editor page
@@ -128,7 +128,7 @@ src/huawei_manager/
 │       └── style.py
 
 agents/                 # Scans externos (raiz do projeto)
-tests/                  # 549 testes pytest (headless, QT_QPA_PLATFORM=offscreen)
+tests/                  # 924 testes pytest (headless, QT_QPA_PLATFORM=offscreen)
 .github/workflows/      # CI: ruff → pytest → pyright
 Makefile                # install, run, test, lint, typecheck, coverage
 ```
@@ -188,6 +188,7 @@ ROUTER_HOSTKEY_VERIFY=false
 SECRETS_BACKEND=env
 # Chave AES-256-GCM (obrigatória se SECRETS_BACKEND=crypto)
 # SECRETS_KEY=sua-chave-32-bytes
+# VNF_ENCRYPT_KEY: auto-gerada no primeiro boot se ausente (fail-closed sem ela)
 ```
 
 ---
@@ -216,6 +217,12 @@ make ci              # lint + test + typecheck (pipeline completa)
 make encrypt-env     # Criptografa .env → .env.enc
 make decrypt-env     # Descriptografa .env.enc → .env
 
+### Rotação de senha (D7) — passo manual
+1. Troque a senha no dispositivo físico (console/SSH administrativo), fora do Huawei Manager.
+2. Atualize `ROUTER_PASSWORD`/`TECNICO_PASSWORD` no `.env` (vazios = aguardando rotação).
+3. Regenerar o arquivo criptografado: `make encrypt-env` (exige `SECRETS_KEY`).
+4. Não commite senha em texto puro: `vnf_inventory.json` não persiste `password` (fail-closed no save).
+
 # Manutenção
 make reinstall       # pip install -e . (após git pull)
 make uninstall       # Remove atalho, ícone e comando do sistema
@@ -234,7 +241,7 @@ make clean           # Remove caches (__pycache__, .pytest_cache, .ruff_cache)
 | 🌐 **Roteamento** | Tabela de roteamento, BGP, OSPF |
 | 📡 **ARP** | Tabela ARP via CLI |
 | 💻 **Info do Sistema** | Versão, CPU, memória, interfaces, LLDP |
-| ⌨ **Editor de Comandos** | Editor CLI com 14 templates, streaming de output |
+| ⌨ **Editor de Comandos** | Editor CLI com 21 templates, streaming de output |
 | 💾 **Backup** | Backup da running-config para arquivo |
 | ⚡ **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
 | 🔧 **Manutenção** | Dev tools, scans de agentes, setup |

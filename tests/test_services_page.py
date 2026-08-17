@@ -16,7 +16,7 @@ def _make_svc(**overrides):
     svc.description = overrides.get("description", "test cmd <p1>")
     svc.category = overrides.get("category", "config-bgp")
     svc.config_mode = overrides.get("config_mode", True)
-    svc.vnf_types = overrides.get("vnf_types", ["ROUTER"])
+    svc.device_types = overrides.get("device_types", ["ROUTER"])
     return svc
 
 
@@ -40,11 +40,11 @@ def _make_mixin(**attrs) -> PageBuilderServicesMixin:
         _svc_cat_var="Todas as Categorias",
         _svc_cat_cb=MagicMock(),
         _svc_listbox=MagicMock(),
-        _svc_vnf_lbl=MagicMock(),
+        _svc_device_lbl=MagicMock(),
         _svc_type_lbl=MagicMock(),
         _svc_status_lbl=MagicMock(),
         _svc_param_entries={},
-        _target_vnf=None,
+        _target_device=None,
         _access_level="user",
         _page_layout=lambda p: p.layout(),
         _write=MagicMock(),

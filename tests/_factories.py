@@ -2,12 +2,12 @@
 from unittest.mock import MagicMock
 
 
-def make_vnf(**overrides):
-    """Factory for creating VNF instances with sensible defaults."""
-    from huawei_manager.vnf_models import VNF
+def make_device(**overrides):
+    """Factory for creating Device instances with sensible defaults."""
+    from huawei_manager.device_models import Device
 
     defaults = dict(
-        id="vnf-001-test",
+        id="dev-001-test",
         name="test-device",
         host="10.0.0.1",
         port=22,
@@ -19,7 +19,10 @@ def make_vnf(**overrides):
         status="unknown",
     )
     defaults.update(overrides)
-    return VNF(**defaults)
+    return Device(**defaults)
+
+
+make_vnf = make_device
 
 
 def make_dispatch():

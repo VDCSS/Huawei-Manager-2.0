@@ -27,7 +27,7 @@ class TestEventType:
         assert EventType.CONFIG_CHANGED is not None
         assert EventType.TOPOLOGY_CHANGED is not None
         assert EventType.COMMAND_EXECUTED is not None
-        assert EventType.VNF_STATUS_CHANGED is not None
+        assert EventType.DEVICE_STATUS_CHANGED is not None
 
     def test_has_alert_and_an_trigger(self):
         assert EventType.ALERT is not None
@@ -242,7 +242,7 @@ class TestEventPriority:
         assert ev.priority == 0
 
     def test_low_priority(self):
-        ev = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        ev = Event(type=EventType.DEVICE_STATUS_CHANGED, source="gw-01", priority=20)
         assert ev.priority == 20
 
 
@@ -261,7 +261,7 @@ class TestEventQueuePriorityOrder:
     def test_low_priority_comes_last(self):
         eq = EventQueue()
         normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
-        low = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        low = Event(type=EventType.DEVICE_STATUS_CHANGED, source="gw-01", priority=20)
         eq.put(normal)
         eq.put(low)
         assert eq.get() is normal
@@ -281,7 +281,7 @@ class TestEventQueuePriorityOrder:
 
     def test_critical_preempts_all(self):
         eq = EventQueue()
-        low = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        low = Event(type=EventType.DEVICE_STATUS_CHANGED, source="gw-01", priority=20)
         normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
         alert = Event(type=EventType.ALERT, source="gw-01", priority=0)
         eq.put(low)
@@ -294,7 +294,7 @@ class TestEventQueuePriorityOrder:
 
     def test_poll_returns_priority_ordered(self):
         eq = EventQueue()
-        low = Event(type=EventType.VNF_STATUS_CHANGED, source="gw-01", priority=20)
+        low = Event(type=EventType.DEVICE_STATUS_CHANGED, source="gw-01", priority=20)
         alert = Event(type=EventType.ALERT, source="gw-01", priority=0)
         normal = Event(type=EventType.DEVICE_CONNECTED, source="gw-01", priority=10)
         eq.put(low)
@@ -368,7 +368,7 @@ class TestEventQueuePriorityConcurrency:
             for i in range(2):
                 eq.put(
                     Event(
-                        type=EventType.VNF_STATUS_CHANGED,
+                        type=EventType.DEVICE_STATUS_CHANGED,
                         source=f"vnf-{i}",
                         priority=20,
                     )
