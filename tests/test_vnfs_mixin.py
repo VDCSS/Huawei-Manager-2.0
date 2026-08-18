@@ -516,28 +516,24 @@ class TestShowDeviceDialog:
 
 class TestSshEventSource:
     def test_connect_event_uses_device_id(self):
-        from huawei_manager.sdn_controller.event_queue import Event
-        from huawei_manager.sdn_controller.events import DEVICE_CONNECTED
-        from huawei_manager.sdn_controller.event_queue import EventPriority
+        from huawei_manager.sdn_controller.event_queue import Event, EventType
 
         device = _make_device(id="dev-r1")
         event = Event(
-            type=DEVICE_CONNECTED,
-            priority=EventPriority.HIGH,
+            type=EventType.DEVICE_CONNECTED,
+            priority=10,
             payload={"device_id": device.id, "name": device.name},
             source=device.id,
         )
         assert event.source == "dev-r1"
 
     def test_disconnect_event_uses_device_id(self):
-        from huawei_manager.sdn_controller.event_queue import Event
-        from huawei_manager.sdn_controller.events import DEVICE_DISCONNECTED
-        from huawei_manager.sdn_controller.event_queue import EventPriority
+        from huawei_manager.sdn_controller.event_queue import Event, EventType
 
         device = _make_device(id="dev-r1")
         event = Event(
-            type=DEVICE_DISCONNECTED,
-            priority=EventPriority.HIGH,
+            type=EventType.DEVICE_DISCONNECTED,
+            priority=10,
             payload={"device_id": device.id, "name": device.name},
             source=device.id,
         )
