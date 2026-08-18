@@ -29,6 +29,7 @@ fi
 
 cd "$PROJECT_ROOT"
 export SECRETS_KEY="$KEY"
+rm -f "$OUTPUT"
 python3 -c "
 import json, os, sys
 from huawei_manager.vault import CryptoEnvBackend
