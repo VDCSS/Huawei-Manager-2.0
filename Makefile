@@ -96,3 +96,4 @@ ci: lint test typecheck
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__
 	find . -name '*.pyc' -delete
+	find . -name '*,cover' -delete
