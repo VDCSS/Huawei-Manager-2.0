@@ -158,8 +158,9 @@ class PageBuilderServicesMixin:
     def _build_services_page(self: AppCoreProtocol) -> None:
         p = self._make_page("services")
         self._page_title(p, "Catalogo de Servicos", C.NEON_AMBER,
-                         "Comandos SHOW e CONFIG por tipo de device "
-                         "(ROUTER | SWITCH | FIREWALL | \u2026)")
+                         "Servi\u00e7os de configura\u00e7\u00e3o por tipo de device "
+                         "(ROUTER | SWITCH | \u2026) \u2014 comandos show e consultas: "
+                         "use o Editor de Comandos")
 
         self._build_services_info_row(p)
         self._build_services_filter_row(p)
