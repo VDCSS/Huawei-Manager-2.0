@@ -48,6 +48,7 @@ THEME = {
     "BG_SIDEBAR": BG_SIDEBAR, "BG_INPUT":   BG_INPUT,
     "NEON_CYAN":  NEON_CYAN,  "NEON_MAG":   NEON_MAG,
     "NEON_PURP":  NEON_PURP,  "NEON_AMBER": NEON_AMBER,
+    "NEON_RED":   NEON_RED,
     "FG_MAIN":    FG_MAIN,    "FG_DIM":     FG_DIM,
     "FG_CODE":    FG_CODE,    "BORDER_NRM": BORDER_NRM,
 }
@@ -61,7 +62,8 @@ BG_INPUT_L    = "#fafafe"
 NEON_CYAN_L   = "#0098a0"
 NEON_MAG_L    = "#a030c0"
 NEON_PURP_L   = "#5a20c0"
-NEON_AMBER_L  = "#b07000"
+NEON_AMBER_L  = "#8a5a00"
+NEON_RED_L    = "#c62828"
 
 FG_MAIN_L     = "#1a1a2e"
 FG_DIM_L      = "#6a6a8a"
@@ -74,6 +76,7 @@ LIGHT_THEME = {
     "BG_SIDEBAR": BG_SIDEBAR_L, "BG_INPUT":   BG_INPUT_L,
     "NEON_CYAN":  NEON_CYAN_L,  "NEON_MAG":   NEON_MAG_L,
     "NEON_PURP":  NEON_PURP_L,  "NEON_AMBER": NEON_AMBER_L,
+    "NEON_RED":   NEON_RED_L,
     "FG_MAIN":    FG_MAIN_L,    "FG_DIM":     FG_DIM_L,
     "FG_CODE":    FG_CODE_L,    "BORDER_NRM": BORDER_NRM_L,
 }
@@ -88,7 +91,7 @@ def set_theme(name: str) -> None:
     """Swap all module-level colour constants to the named palette."""
     global _active_theme
     global BG_BASE, BG_CARD, BG_SIDEBAR, BG_INPUT
-    global NEON_CYAN, NEON_MAG, NEON_PURP, NEON_AMBER
+    global NEON_CYAN, NEON_MAG, NEON_PURP, NEON_AMBER, NEON_RED
     global FG_MAIN, FG_DIM, FG_CODE, BORDER_NRM
 
     pal = LIGHT_THEME if name == "light" else DARK_THEME
@@ -101,6 +104,7 @@ def set_theme(name: str) -> None:
     NEON_MAG   = pal["NEON_MAG"]
     NEON_PURP  = pal["NEON_PURP"]
     NEON_AMBER = pal["NEON_AMBER"]
+    NEON_RED   = pal["NEON_RED"]
     FG_MAIN    = pal["FG_MAIN"]
     FG_DIM     = pal["FG_DIM"]
     FG_CODE    = pal["FG_CODE"]

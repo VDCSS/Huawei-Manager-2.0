@@ -121,7 +121,7 @@ class NeonButton(QPushButton):
 
     def _apply_style(self) -> None:
         if self._active:
-            bg = "#1a1a3a"
+            bg = _C.BG_INPUT
             fg = self._color
             accent = f"border-left: 4px solid {self._color};"
         else:
@@ -141,7 +141,7 @@ class NeonButton(QPushButton):
                 font: {_css_font(_C.FONT_UI_MEDIUM)};
             }}
             NeonButton:hover {{
-                background-color: #1a1a3e;
+                background-color: {_C.BG_INPUT};
                 color: {self._color if not self._active else fg};
             }}
         """)
