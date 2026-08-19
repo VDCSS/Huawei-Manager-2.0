@@ -246,7 +246,7 @@ make clean           # Remove caches (__pycache__, .pytest_cache, .ruff_cache)
 | ⚡ **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
 | 🔧 **Manutenção** | Dev tools, scans de agentes, setup |
 
-Atalhos de teclado: `Ctrl+1..9` navega pelas abas, `Ctrl+Tab` avança, `Ctrl+Shift+Tab` volta.
+Atalhos de teclado: `Ctrl+1..9` navega pelas 9 primeiras abas, `Ctrl+0` abre a aba Serviços, `Ctrl+Tab` avança, `Ctrl+Shift+Tab` volta.
 
 ---
 

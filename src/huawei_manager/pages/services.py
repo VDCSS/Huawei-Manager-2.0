@@ -107,7 +107,8 @@ class PageBuilderServicesMixin:
         card_layout.addWidget(split, stretch=1)
 
         left = QWidget(split)
-        left.setFixedWidth(280)
+        left.setMinimumWidth(240)
+        left.setMaximumWidth(340)
         left.setStyleSheet(f"background: {C.BG_INPUT};")
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)

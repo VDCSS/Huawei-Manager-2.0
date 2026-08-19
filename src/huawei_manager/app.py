@@ -14,6 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QBoxLayout,
     QFrame,
     QHBoxLayout,
@@ -398,7 +399,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
             lbl = QLabel(cat_label, cat_w)
             lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
-                              f"font: 9px 'Inter';")
+                              f"font: {C.FONT_CAPTION}px 'Inter';")
             cat_layout.addWidget(lbl)
 
             for key, icon_char, label, color in items:
@@ -449,14 +450,14 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         lbl = QLabel("Huawei Manager  \u2022  v2.0.0", foot)
         lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
-                          f"font: 9px 'Inter';")
+                          f"font: {C.FONT_CAPTION}px 'Inter';")
         foot_layout.addWidget(lbl)
 
         foot_layout.addStretch()
 
         self.clock_lbl = QLabel(foot)
         self.clock_lbl.setStyleSheet(f"color: {C.NEON_PURP}; background: {C.BG_SIDEBAR}; "
-                                     f"font: 9px 'Inter';")
+                                     f"font: {C.FONT_CAPTION}px 'Inter';")
         foot_layout.addWidget(self.clock_lbl, alignment=Qt.AlignmentFlag.AlignRight)
 
         parent_layout.addWidget(foot)
@@ -521,14 +522,45 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
     def _toggle_theme(self) -> None:
         if self._theme_toggling:
             return
+        # Salvar estado de conexão antes do rebuild
+        status_lbl = getattr(self, "status_lbl", None)
+        status_dot = getattr(self, "status_dot", None)
+        conn_btn = getattr(self, "conn_btn", None)
+        conn_text = status_lbl.text() if status_lbl else "Desconectado"
+        conn_color = status_dot.styleSheet() if status_dot else f"color: {C.NEON_CYAN};"
+        conn_btn_text = conn_btn.text() if conn_btn else "  CONECTAR  "
+        conn_disabled = conn_btn.isEnabled() is False if conn_btn else False
+        active_page = self._current_page
+
         self._theme_toggling = True
         self._theme = "light" if self._theme == "dark" else "dark"
         set_theme(self._theme)
         apply_theme(self._theme)
+        # Feedback visual durante rebuild
+        if status_lbl:
+            status_lbl.setText("Reconstruindo tema…")
+        QApplication.processEvents()
         self._rebuild_ui()
-        icon = "\u263c" if self._theme == "dark" else "\u263e"
-        self.theme_btn.setText(icon)
-        self.theme_btn.setEnabled(False)
+
+        # Restaurar estado de conexão (defensivo para mocks em testes)
+        set_status = getattr(self, "_set_status", None)
+        set_conn_btn = getattr(self, "_set_conn_btn", None)
+        color = conn_color.replace("color: ", "").split(";")[0] if "color:" in conn_color else C.NEON_CYAN
+        if set_status:
+            set_status(conn_text, color)
+        if set_conn_btn:
+            set_conn_btn(text=conn_btn_text, disabled=conn_disabled)
+        if active_page and active_page in self.pages:
+            self._show_page(active_page)
+            # Reativar botão da aba
+            btn = self._nav_buttons.get(active_page)
+            if btn:
+                btn._activate()
+                self._active_btn = btn
+        theme_btn = getattr(self, "theme_btn", None)
+        if theme_btn:
+            theme_btn.setText("\u263c" if self._theme == "dark" else "\u263e")
+            theme_btn.setEnabled(False)
         QTimer.singleShot(1500, self._unlock_theme)
 
     def _unlock_theme(self) -> None:

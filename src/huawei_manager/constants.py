@@ -24,12 +24,18 @@ _UI = "Inter"
 FONT_UI_MEDIUM  = (_UI, 12)            # sidebar, botões, inputs
 FONT_UI_MEDIUM_B = (_UI, 12, "bold")
 
+# Escala de fontes da UI (px) — 4 passos
+FONT_CAPTION = 11
+FONT_BODY    = 12
+FONT_SUBHEAD = 14
+FONT_TITLE   = 16
+
 # ─── FONTES — Código (Monospace) ───────────────────────────────────
 # Ainda usadas por topology.py (_DeviceNodeRect, SDN bar, etc.)
-FONT_XSMALL  = ("Consolas", 9)     # type_item no canvas
-FONT_BODY    = ("Consolas", 11)    # SDN bar count, address items
-FONT_LARGE   = ("Consolas", 13)    # código / output principal
-FONT_H1      = ("Consolas", 16)    # SDN bar symbol
+FONT_XSMALL     = ("Consolas", 9)       # type_item no canvas
+FONT_CANVAS_BODY = ("Consolas", 11)     # SDN bar count, address items
+FONT_LARGE      = ("Consolas", 13)      # código / output principal
+FONT_H1         = ("Consolas", 16)      # SDN bar symbol
 
 FONT_MEDIUM_B = ("Consolas", 12, "bold")   # name_item no canvas
 FONT_LARGE_B  = ("Consolas", 13, "bold")   # SDN bar label

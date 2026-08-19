@@ -9,6 +9,7 @@ import threading
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -51,7 +52,7 @@ class PageBuilderManutencaoMixin:
                          "Testes + Agentes + Setup")
 
         top = QWidget(p)
-        top_layout = QHBoxLayout(top)
+        top_layout = QGridLayout(top)
         top_layout.setContentsMargins(0, 0, 0, 0)
         self._page_layout(p).addWidget(top)
         self._page_layout(p).addSpacing(12)
@@ -71,7 +72,7 @@ class PageBuilderManutencaoMixin:
         """)
         grp_dev_layout = QHBoxLayout(grp_dev)
         grp_dev_layout.setContentsMargins(4, 4, 4, 4)
-        top_layout.addWidget(grp_dev)
+        top_layout.addWidget(grp_dev, 0, 0)
 
         btn_lint = action_button(grp_dev, "\u2699  Lint",
                                  lambda: self._run_dev_cmd("lint"), C.NEON_CYAN)
@@ -104,7 +105,7 @@ class PageBuilderManutencaoMixin:
         """)
         grp_agents_layout = QHBoxLayout(grp_agents)
         grp_agents_layout.setContentsMargins(4, 4, 4, 4)
-        top_layout.addWidget(grp_agents)
+        top_layout.addWidget(grp_agents, 0, 1)
 
         btn_agents = action_button(grp_agents, "\U0001f50d  Agora",
                                    lambda: self._run_agents(), C.NEON_PURP)
@@ -129,7 +130,7 @@ class PageBuilderManutencaoMixin:
         """)
         grp_mode_layout = QHBoxLayout(grp_mode)
         grp_mode_layout.setContentsMargins(4, 4, 4, 4)
-        top_layout.addWidget(grp_mode)
+        top_layout.addWidget(grp_mode, 1, 0)
 
         mode_text = "Real" if not self._mock_mode else "Mock"
         mode_color = C.NEON_CYAN if not self._mock_mode else C.NEON_AMBER
@@ -152,7 +153,7 @@ class PageBuilderManutencaoMixin:
         """)
         grp_setup_layout = QHBoxLayout(grp_setup)
         grp_setup_layout.setContentsMargins(4, 4, 4, 4)
-        top_layout.addWidget(grp_setup)
+        top_layout.addWidget(grp_setup, 1, 1)
 
         btn_check = action_button(grp_setup, "\U0001f4cb  Check",
                                   lambda: self._run_setup("check"), C.NEON_AMBER)
@@ -211,7 +212,7 @@ class PageBuilderManutencaoMixin:
             rb.setStyleSheet(f"""
                 QRadioButton {{
                     color: {fcol}; background: {C.BG_CARD};
-                    font: 10px 'Inter'; spacing: 2px;
+                    font: {C.FONT_CAPTION}px 'Inter'; spacing: 2px;
                 }}
                 QRadioButton::indicator {{ width: 12px; height: 12px; }}
             """)

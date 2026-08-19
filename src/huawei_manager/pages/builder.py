@@ -25,6 +25,7 @@ from huawei_manager.pages.manutencao import PageBuilderManutencaoMixin
 from huawei_manager.pages.services import PageBuilderServicesMixin
 from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
+from huawei_manager.widgets.elide_label import ElideLabel
 from huawei_manager.widgets.neon_button import action_button
 from huawei_manager.widgets.neon_entry import neon_entry, output_text
 
@@ -57,12 +58,13 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
     def _page_title(self, parent: QWidget, title: str, color: str, subtitle: str = "") -> None:
         lbl = QLabel(title, parent)
-        lbl.setStyleSheet(f"color: {color}; font: bold 16px 'Inter'; padding: 0px; margin: 0px;")
+        lbl.setStyleSheet(f"color: {color}; font: bold {C.FONT_TITLE}px 'Inter'; padding: 0px; margin: 0px;")
         parent.layout().addWidget(lbl)
         if subtitle:
             sub = QLabel(subtitle, parent)
-            sub.setStyleSheet(f"color: {C.FG_DIM}; font: 11px 'Inter'; padding: 0px 0px 8px 0px;")
+            sub.setStyleSheet(f"color: {C.FG_DIM}; font: {C.FONT_SUBHEAD}px 'Inter'; padding: 0px;")
             parent.layout().addWidget(sub)
+        parent.layout().addSpacing(8)
 
     def _css_label(self, color: str, bg: str = "", font_size: int = 12, bold: bool = False) -> str:
         weight = "bold" if bold else "normal"
@@ -223,7 +225,6 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
         ctrl = QWidget(p)
         ctrl.setStyleSheet(f"background: {C.BG_CARD};")
-        ctrl.setMaximumHeight(40)
         ctrl_layout = QHBoxLayout(ctrl)
         ctrl_layout.setContentsMargins(0, 0, 0, 0)
         self._page_layout(p).addWidget(ctrl)
@@ -253,8 +254,9 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
         ctrl_layout.addStretch()
 
-        self._device_info_lbl = QLabel("  Nenhum device selecionado", ctrl)
+        self._device_info_lbl = ElideLabel("  Nenhum device selecionado", ctrl)
         self._device_info_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
+        self._device_info_lbl.setMinimumWidth(220)
         ctrl_layout.addWidget(self._device_info_lbl)
         ctrl_layout.addSpacing(8)
 
@@ -346,7 +348,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
             QTextEdit {{
                 background: {C.BG_BASE}; color: {C.FG_CODE};
                 border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                padding: 4px; font: 10px 'Inter';
+                padding: 4px; font: {C.FONT_CAPTION}px 'Inter';
             }}
         """)
         self._dash_audit_text.setMinimumHeight(80)

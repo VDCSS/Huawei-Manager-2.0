@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 
+import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.authz import role_meets
@@ -119,7 +120,7 @@ class DevicesMixin:
             self._device_info_lbl.setText("  Nenhum device selecionado")
         if self._sb.is_alive():
             self._sb.disconnect()
-            self._set_status("Desconectado")
+            self._set_status("Desconectado", C.NEON_RED)
             self._set_conn_btn()
             self._event_queue.put(Event(EventType.DEVICE_DISCONNECTED,
                                         source="device",

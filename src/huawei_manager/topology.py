@@ -175,15 +175,16 @@ class TopologyCanvas(QWidget):
             self._draw_device_node(device, x, y)
 
     def _layout(self) -> dict[str, tuple[float, float]]:
-        """Calcula posições dos nós Device em grid de 4 colunas."""
+        """Calcula posições dos nós Device em grade adaptativa (máx. 4 colunas)."""
         positions: dict[str, tuple[float, float]] = {}
         n = len(self._devices)
         if n == 0:
             return positions
 
         w = self._view.viewport().width() or 800
-        cols = 4
+        vh = self._view.viewport().height() or 400
         pad_x, pad_y = 24, 24
+        cols = max(1, min(4, (w - pad_x) // (self.NODE_W + pad_x)))
         grid_w = cols * self.NODE_W + (cols - 1) * pad_x
         start_x = (w - grid_w) / 2 + self.NODE_W / 2
         start_y = 100  # 8 px abaixo da SDN bar (bar_y=0 + bar_h=40 + gap=8 + nh/2=35)
@@ -197,7 +198,7 @@ class TopologyCanvas(QWidget):
 
         # Define scene rect para cobrir todos os itens
         max_y = start_y + (n // cols) * (self.NODE_H + pad_y) + self.NODE_H + 40
-        self._scene.setSceneRect(0, 0, max(w, 800), max(float(max_y), 400.0))
+        self._scene.setSceneRect(0, 0, w, max(float(max_y), float(vh)))
 
         return positions
 
@@ -302,7 +303,7 @@ class TopologyCanvas(QWidget):
         addr = device.host if not admin else device.address()
         addr_item = QGraphicsSimpleTextItem(addr)
         addr_item.setBrush(QBrush(QColor(C.FG_DIM)))
-        addr_item.setFont(_to_qfont(C.FONT_BODY))
+        addr_item.setFont(_to_qfont(C.FONT_CANVAS_BODY))
         address_rect = addr_item.boundingRect()
         addr_item.setPos(x - address_rect.width() / 2, y + 2 - address_rect.height() / 2)
         addr_item.setData(ITEM_DATA_KEY, device.id)

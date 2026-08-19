@@ -111,7 +111,7 @@ def draw_sdn_bar(scene: QGraphicsScene, view_width: int, device_count: int) -> N
         f"{device_count} dispositivo(s) gerenciado(s)",
     )
     counter_text.setBrush(QBrush(QColor(C.FG_DIM)))
-    counter_text.setFont(_to_qfont(C.FONT_BODY))
+    counter_text.setFont(_to_qfont(C.FONT_CANVAS_BODY))
     counter_rect = counter_text.boundingRect()
     counter_text.setPos(
         bar_x + bar_w - 20 - counter_rect.width(),

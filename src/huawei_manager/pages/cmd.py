@@ -23,16 +23,26 @@ from huawei_manager.widgets.neon_entry import output_text, styled_text
 
 
 class _CmdReturnFilter(QObject):
-    """Event filter for cmd_editor: Enter runs command, Shift+Enter inserts newline."""
+    """Event filter for cmd_editor: Enter runs command, Shift+Enter inserts newline.
+
+    Also handles ShortcutOverride to prevent global Return shortcut from stealing the key.
+    """
 
     def __init__(self, app_ref: object) -> None:
         super().__init__()
         self.app = app_ref
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        if event.type() == QEvent.Type.KeyPress:
-            from PySide6.QtCore import Qt as _Qt
+        from PySide6.QtCore import Qt as _Qt
 
+        if event.type() == QEvent.Type.ShortcutOverride:
+            # Accept Return/Enter to prevent global QShortcut("Return") from firing
+            if event.key() == _Qt.Key.Key_Return or event.key() == _Qt.Key.Key_Enter:
+                event.accept()
+                return True
+            return super().eventFilter(obj, event)
+
+        if event.type() == QEvent.Type.KeyPress:
             if event.key() == _Qt.Key.Key_Return or event.key() == _Qt.Key.Key_Enter:
                 if event.modifiers() & _Qt.KeyboardModifier.ShiftModifier:
                     cursor = obj.textCursor() if hasattr(obj, "textCursor") else None
@@ -67,7 +77,8 @@ class PageBuilderCmdMixin:
 
         # Left: template list
         left = QWidget(split_w)
-        left.setFixedWidth(260)
+        left.setMinimumWidth(200)
+        left.setMaximumWidth(320)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left.setStyleSheet(f"background: {C.BG_INPUT};")

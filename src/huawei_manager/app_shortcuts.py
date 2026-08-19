@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QTextEdit
+from PySide6.QtWidgets import QTextEdit, QWidget
 
 import huawei_manager.constants as C
 
@@ -23,11 +23,15 @@ class ShortcutsMixin(QObject):
         QShortcut(QKeySequence("Ctrl+Shift+Tab"), parent).activated.connect(
             self._on_ctrl_shift_tab)
         QShortcut(QKeySequence("Escape"), parent).activated.connect(self._on_escape)
-        for i, key in enumerate(self._PAGE_KEYS[:9], 1):
-            QShortcut(QKeySequence(f"Ctrl+{i}"), parent).activated.connect(
-                lambda _chk, k=key: self._show_page(k))
+        for i, key in enumerate(self._PAGE_KEYS, 1):
+            seq = "Ctrl+0" if i == 10 else f"Ctrl+{i}"
+            QShortcut(QKeySequence(seq), parent).activated.connect(
+                lambda *args, k=key: self._show_page(k))
 
     def _on_enter(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         focus = self.focusWidget()
         if isinstance(focus, QTextEdit):
             return
@@ -51,15 +55,24 @@ class ShortcutsMixin(QObject):
             self._run(lambda: self._do_backup(fmt))
 
     def _on_ctrl_shift_enter(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         if self._current_page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
                 self._run(lambda: self._exec_config(cmd))
 
     def _on_ctrl_d(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         self._toggle_connect()
 
     def _on_ctrl_l(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         page = self._current_page
         if page == "config" and self.out_config is not None:
             self._write(self.out_config, "")
@@ -77,12 +90,21 @@ class ShortcutsMixin(QObject):
             self._write(self._svc_output, "")
 
     def _on_ctrl_q(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         self.close()
 
     def _on_ctrl_shift_a(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         self._show_auth_dialog()
 
     def _on_f5(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         page = self._current_page
         if page == "topology":
             self._spawn_io(self._refresh_devices)
@@ -92,6 +114,9 @@ class ShortcutsMixin(QObject):
             self._on_enter()
 
     def _on_ctrl_tab(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         if not self._current_page:
             return
         try:
@@ -101,6 +126,9 @@ class ShortcutsMixin(QObject):
             self._show_page(self._PAGE_KEYS[0])
 
     def _on_ctrl_shift_tab(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         if not self._current_page:
             return
         try:
@@ -110,4 +138,7 @@ class ShortcutsMixin(QObject):
             self._show_page(self._PAGE_KEYS[0])
 
     def _on_escape(self) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
         self._on_ctrl_l()
