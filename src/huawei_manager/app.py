@@ -253,7 +253,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         self._page_container = QStackedWidget(self.content)
         self._page_container.setStyleSheet(
-            f"background: {C.BG_CARD}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
+            f"background: {C.BG_CARD}; border-radius: 4px;")
         self.content_layout.addWidget(self._page_container, stretch=1)
 
         self._build_sidebar()

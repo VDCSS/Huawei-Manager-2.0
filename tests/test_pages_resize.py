@@ -9,7 +9,15 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from PySide6.QtWidgets import QApplication, QScrollArea, QStackedWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QLabel,
+    QScrollArea,
+    QSizePolicy,
+    QStackedWidget,
+    QWidget,
+)
 
 from huawei_manager.pages.builder import PageBuilder
 from huawei_manager.widgets.neon_button import ActionButton
@@ -182,3 +190,65 @@ class TestTopologyBarResize:
         assert builder._device_info_lbl.isVisible()
         assert builder._device_info_lbl.geometry().width() > 0
         assert builder._device_info_lbl.geometry().right() <= page.width() + 1
+
+
+class TestBackupEntryResize:
+    def _make_backup_builder(self) -> PageBuilder:
+        builder = _make_builder()
+        builder._choose_backup_dir = MagicMock()
+        builder._do_backup = MagicMock()
+        return builder
+
+    def test_entry_width_and_expanding_policy(self):
+        builder = self._make_backup_builder()
+        builder._build_backup_page()
+        page = builder._page_container.widget(0)
+        _show_page(builder)
+
+        entry = builder._backup_entry
+        assert entry.minimumWidth() == 24 * 8
+        assert entry.maximumWidth() == 24 * 14
+        policy = entry.sizePolicy()
+        assert policy.horizontalPolicy() == QSizePolicy.Policy.Expanding
+        assert policy.verticalPolicy() == QSizePolicy.Policy.Fixed
+        assert entry.isVisible()
+        assert entry.geometry().right() <= page.width() + 1
+
+
+class TestDashboardStretch:
+    def _make_dash_builder(self) -> PageBuilder:
+        builder = _make_builder()
+        builder._spawn_io = MagicMock()
+        builder._refresh_devices = MagicMock()
+        builder._show_page = MagicMock()
+        return builder
+
+    def _find_card(self, page: QWidget, title: str) -> QFrame:
+        for card in page.findChildren(QFrame):
+            labels = [lbl.text() for lbl in card.findChildren(QLabel)]
+            if any(title in t for t in labels):
+                return card
+        raise AssertionError(f"card {title!r} not found")
+
+    def test_row1_stretch_3_card4_stretch_2(self):
+        builder = self._make_dash_builder()
+        builder._build_home_page()
+        page = builder._page_container.widget(0)
+        _show_page(builder)
+
+        layout = page.layout()
+        assert layout is not None
+
+        row1 = self._find_card(page, "CONEXAO").parentWidget()
+        card4 = self._find_card(page, "ATALHOS RAPIDOS")
+        assert layout.stretch(layout.indexOf(row1)) == 3
+        assert layout.stretch(layout.indexOf(card4)) == 2
+
+    def test_audit_text_min_height_60(self):
+        builder = self._make_dash_builder()
+        builder._build_home_page()
+        page = builder._page_container.widget(0)
+        _show_page(builder)
+
+        assert builder._dash_audit_text.minimumHeight() == 60
+        assert builder._dash_audit_text.geometry().height() > 0

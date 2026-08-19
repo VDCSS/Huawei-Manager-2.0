@@ -170,7 +170,8 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         ctrl_layout.addWidget(dest_lbl)
         ctrl_layout.addSpacing(8)
 
-        self._backup_entry = neon_entry(ctrl, width=44)
+        self._backup_entry = neon_entry(ctrl, width=24)
+        self._backup_entry.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.backup_path = os.path.expanduser("~")
         self._backup_entry.setText(self.backup_path)
         self._backup_entry.textChanged.connect(lambda t: setattr(self, 'backup_path', t))
@@ -286,7 +287,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         row1 = QWidget(p)
         row1_layout = QHBoxLayout(row1)
         row1_layout.setContentsMargins(0, 0, 0, 0)
-        self._page_layout(p).addWidget(row1, stretch=1)
+        self._page_layout(p).addWidget(row1, stretch=3)
         self._page_layout(p).addSpacing(10)
 
         def _make_card(parent: QWidget) -> QFrame:
@@ -351,7 +352,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
                 padding: 4px; font: {C.FONT_CAPTION}px 'Inter';
             }}
         """)
-        self._dash_audit_text.setMinimumHeight(80)
+        self._dash_audit_text.setMinimumHeight(60)
         card3._clayout.addWidget(self._dash_audit_text, stretch=1)
 
         # Card: Atalhos Rapidos (full width)
@@ -360,7 +361,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         card4_layout = QVBoxLayout(card4)
         card4_layout.setContentsMargins(12, 10, 12, 10)
         card4._clayout = card4_layout
-        self._page_layout(p).addWidget(card4)
+        self._page_layout(p).addWidget(card4, stretch=2)
 
         _card_title(card4, "\u2328 ATALHOS RAPIDOS", C.NEON_PURP)
 
