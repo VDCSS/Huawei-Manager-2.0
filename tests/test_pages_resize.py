@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QFrame,
     QLabel,
-    QScrollArea,
+    QListWidget,
     QSizePolicy,
     QStackedWidget,
     QWidget,
@@ -71,8 +71,9 @@ class TestCmdPageResize:
         page = builder._page_container.widget(0)
         _show_page(builder)
 
-        scroll = page.findChild(QScrollArea)
-        left = scroll.parentWidget()
+        tpl_list = page.findChild(QListWidget)
+        assert tpl_list is not None, "QListWidget not found in cmd page"
+        left = tpl_list.parentWidget()
         assert left.minimumWidth() == 200
         assert left.maximumWidth() == 320
 
@@ -92,7 +93,6 @@ class TestServicesPageResize:
     def test_left_panel_flexible_bounds(self):
         builder = _make_builder()
         builder._build_services_page()
-        page = builder._page_container.widget(0)
         _show_page(builder)
 
         left = builder._svc_listbox.parentWidget()
@@ -247,7 +247,6 @@ class TestDashboardStretch:
     def test_audit_text_min_height_60(self):
         builder = self._make_dash_builder()
         builder._build_home_page()
-        page = builder._page_container.widget(0)
         _show_page(builder)
 
         assert builder._dash_audit_text.minimumHeight() == 60

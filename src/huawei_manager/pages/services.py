@@ -126,6 +126,9 @@ class PageBuilderServicesMixin:
                 border: none; font: 12px 'Inter';
                 outline: none;
             }}
+            QListWidget:focus {{
+                border: 1px solid {C.NEON_CYAN};
+            }}
             QListWidget::item:selected {{
                 background: {C.NEON_PURP}; color: white;
             }}

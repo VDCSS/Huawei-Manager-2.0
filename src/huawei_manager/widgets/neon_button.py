@@ -53,6 +53,9 @@ class ActionButton(QPushButton):
                 color: {_C.BG_BASE};
                 border: 1px solid {self._color};
             }}
+            ActionButton:focus {{
+                border-color: {self._color};
+            }}
         """)
         self.setCursor(Qt.CursorShape.PointingHandCursor if not self._disabled else Qt.CursorShape.ArrowCursor)
 
@@ -143,6 +146,9 @@ class NeonButton(QPushButton):
             NeonButton:hover {{
                 background-color: {_C.BG_INPUT};
                 color: {self._color if not self._active else fg};
+            }}
+            NeonButton:focus {{
+                border-left: 4px solid {self._color};
             }}
         """)
 

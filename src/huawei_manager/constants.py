@@ -8,12 +8,12 @@ BG_INPUT    = "#1a1a30"
 
 NEON_CYAN  = "#00e5ff"
 NEON_MAG   = "#e040fb"
-NEON_PURP  = "#7c4dff"
+NEON_PURP  = "#8f6bff"
 NEON_AMBER = "#ffab00"
 NEON_RED   = "#ff4d4d"
 
 FG_MAIN    = "#e0e0ff"
-FG_DIM     = "#6a6a9a"
+FG_DIM     = "#8a8abe"
 FG_CODE    = "#c8c8ff"
 
 BORDER_NRM = "#2a2a4a"

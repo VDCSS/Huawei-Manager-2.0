@@ -98,6 +98,9 @@ QListWidget {
     font-family: "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
+QListWidget:focus {
+    border-color: #00e5ff;
+}
 QListWidget::item:selected {
     background-color: #00e5ff;
     color: #0d0d1a;
@@ -346,6 +349,9 @@ QListWidget {
     outline: none;
     font-family: "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
+}
+QListWidget:focus {
+    border-color: #0098a0;
 }
 QListWidget::item:selected {
     background-color: #0098a0;

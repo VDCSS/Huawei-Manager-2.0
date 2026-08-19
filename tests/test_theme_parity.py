@@ -86,3 +86,84 @@ class TestNeonButtonThemeAware:
         css = btn.styleSheet()
         assert f"background-color: {C.BG_INPUT}" in css.split("hover")[1]
         assert "#1a1a3e" not in css
+
+    def test_focus_rule_border_left(self):
+        QApplication.instance() or QApplication([])
+        btn = NeonButton(None, "x", None, C.NEON_CYAN)
+        btn._apply_style()
+        css = btn.styleSheet()
+        assert "NeonButton:focus" in css
+        assert "border-left: 4px solid" in css
+
+    def test_action_button_focus_border_color(self):
+        from huawei_manager.widgets.neon_button import ActionButton
+        QApplication.instance() or QApplication([])
+        btn = ActionButton(None, "x", None, C.NEON_CYAN)
+        btn._apply_style()
+        css = btn.styleSheet()
+        assert "ActionButton:focus" in css
+        assert "border-color:" in css
+
+
+class TestContrastAA:
+    def test_fg_dim_contrast_aa_on_dark(self):
+        assert _contrast(C.FG_DIM, C.BG_BASE) >= 4.5
+
+    def test_neon_purp_contrast_aa_on_dark(self):
+        assert _contrast(C.NEON_PURP, C.BG_BASE) >= 4.5
+
+    def test_fg_dim_light_contrast_aa_on_white(self):
+        assert _contrast(C.FG_DIM_L, C.BG_CARD_L) >= 4.5
+
+    def test_neon_purp_light_contrast_aa_on_white(self):
+        assert _contrast(C.NEON_PURP_L, C.BG_CARD_L) >= 4.5
+
+
+class TestFocusRules:
+    def test_themes_qss_listwidget_focus_paired(self):
+        from huawei_manager.themes import QSS_DARK, QSS_LIGHT
+        assert "QListWidget:focus" in QSS_DARK
+        assert "border-color: #00e5ff" in QSS_DARK
+        assert "QListWidget:focus" in QSS_LIGHT
+        assert "border-color: #0098a0" in QSS_LIGHT
+
+    def test_services_qss_listwidget_focus_paired(self):
+        import huawei_manager.pages.services as svc
+        import inspect
+        source = inspect.getsource(svc.PageBuilderServicesMixin._build_services_split)
+        assert "QListWidget:focus" in source
+        assert "border:" in source and "NEON_CYAN" in source
+
+
+class TestTemplatesAccessible:
+    def test_cmd_templates_use_qlistwidget(self):
+        from huawei_manager.pages.builder import PageBuilder
+        from huawei_manager.widgets.neon_button import ActionButton
+        from PySide6.QtWidgets import QListWidget, QStackedWidget
+        from PySide6.QtCore import Qt
+        from unittest.mock import MagicMock
+        QApplication.instance() or QApplication([])
+        builder = PageBuilder()
+        builder._page_container = QStackedWidget()
+        builder._access_level = "user"
+        builder._target_device = None
+        builder._run = MagicMock()
+        builder._get_editor_cmd = MagicMock(return_value="display version")
+        builder._exec_cmd = MagicMock()
+        builder._exec_config = MagicMock()
+        builder._build_cmd_page()
+        page = builder._page_container.widget(0)
+        tpl_list = page.findChild(QListWidget)
+        assert tpl_list is not None
+        assert tpl_list.count() > 0
+        assert tpl_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
+
+
+class TestNoPixelSize:
+    def test_no_setpixelsize_in_src(self):
+        import subprocess
+        result = subprocess.run(
+            ["grep", "-rn", "pixelSize", "src/huawei_manager/"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 1, f"pixelSize found: {result.stdout}"

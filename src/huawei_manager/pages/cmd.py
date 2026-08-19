@@ -8,8 +8,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QScrollArea,
-    QSizePolicy,
+    QListWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -89,33 +88,25 @@ class PageBuilderCmdMixin:
         tpl_header.setStyleSheet(self._css_label(C.FG_DIM, C.BG_INPUT, 10, True))
         left_layout.addWidget(tpl_header)
 
-        scroll = QScrollArea(left)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(f"background: {C.BG_INPUT}; border: none;")
-        left_layout.addWidget(scroll, stretch=1)
-
-        tpl_inner = QWidget()
-        tpl_inner.setStyleSheet(f"background: {C.BG_INPUT};")
-        tpl_inner_layout = QVBoxLayout(tpl_inner)
-        tpl_inner_layout.setContentsMargins(0, 0, 0, 0)
-        tpl_inner_layout.setSpacing(0)
-        scroll.setWidget(tpl_inner)
-
-        self._tpl_selected: QLabel | None = None
-
-        def _on_tpl_click(name: str, cmd: str) -> None:
-            if self._tpl_selected is not None:
-                self._tpl_selected.setStyleSheet(
-                    self._css_label(C.NEON_CYAN, C.BG_INPUT, 12))
-            for child in tpl_inner.findChildren(QLabel):
-                if child.text() == name:
-                    self._tpl_selected = child
-                    child.setStyleSheet(
-                        f"color: white; background: {C.NEON_PURP}; "
-                        f"padding: 2px 8px; font: bold 12px 'Inter';")
-                    break
-            self._cmd_editor.setPlainText(cmd)
+        self._tpl_listbox = QListWidget(left)
+        self._tpl_listbox.setStyleSheet(f"""
+            QListWidget {{
+                background: {C.BG_INPUT}; color: {C.NEON_CYAN};
+                border: none; font: 12px 'Inter';
+                outline: none;
+            }}
+            QListWidget:focus {{
+                border: 1px solid {C.NEON_CYAN};
+            }}
+            QListWidget::item:selected {{
+                background: {C.NEON_PURP}; color: white;
+            }}
+            QListWidget::item:hover {{
+                background: #2a2a4a;
+            }}
+        """)
+        self._tpl_listbox.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        left_layout.addWidget(self._tpl_listbox, stretch=1)
 
         self._tpl_cmd_map: dict[str, str] = {}
         for name in CMD_TEMPLATES:
@@ -131,15 +122,10 @@ class PageBuilderCmdMixin:
                 self._tpl_cmd_map[svc_name] = cmd
 
         for name in sorted(self._tpl_cmd_map.keys()):
-            lbl = QLabel(name, tpl_inner)
-            lbl.setStyleSheet(self._css_label(C.NEON_CYAN, C.BG_INPUT, 12))
-            lbl.setCursor(Qt.CursorShape.PointingHandCursor)
-            lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            tpl_inner_layout.addWidget(lbl)
-            cmd = self._tpl_cmd_map[name]
-            lbl.mousePressEvent = lambda _e, _n=name, _c=cmd: _on_tpl_click(_n, _c)
+            self._tpl_listbox.addItem(name)
 
-        tpl_inner_layout.addStretch()
+        self._tpl_listbox.currentRowChanged.connect(self._on_tpl_select)
+        self._tpl_listbox.itemActivated.connect(self._on_tpl_activate)
 
         # Right: editor + output
         right = QWidget(split_w)
@@ -191,3 +177,18 @@ class PageBuilderCmdMixin:
 
         self.out_cmd = output_text(right)
         right_layout.addWidget(self.out_cmd, stretch=1)
+
+    def _on_tpl_select(self, row: int) -> None:
+        """Atualiza o editor quando a seleção muda (navegação por teclado)."""
+        if row >= 0:
+            name = self._tpl_listbox.item(row).text()
+            cmd = self._tpl_cmd_map.get(name)
+            if cmd:
+                self._cmd_editor.setPlainText(cmd)
+
+    def _on_tpl_activate(self, item) -> None:
+        """Enter/Space ativa o template (acessibilidade por teclado)."""
+        name = item.text()
+        cmd = self._tpl_cmd_map.get(name)
+        if cmd:
+            self._cmd_editor.setPlainText(cmd)
