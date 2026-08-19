@@ -24,7 +24,7 @@ class TestTheme:
 class TestFonts:
     def test_canvas_font_body_is_tuple(self):
         assert isinstance(FONT_CANVAS_BODY, tuple)
-        assert len(FONT_CANVAS_BODY) == 2
+        assert len(FONT_CANVAS_BODY) >= 2  # (family, size) or (family, size, fallback)
 
     def test_canvas_font_sizes_are_positive(self):
         for f in [FONT_CANVAS_BODY, FONT_H1]:

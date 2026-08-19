@@ -19,12 +19,18 @@ FG_CODE    = "#c8c8ff"
 BORDER_NRM = "#2a2a4a"
 
 # ─── FONTES — UI (Proporcional) ──────────────────────────────────────
-_UI = "Inter"
+_FONT_UI_FAMILY       = "IBM Plex Sans"
+_FONT_UI_TITLE_FAMILY = "Space Grotesk"
+_FONT_MONO_FAMILY     = "JetBrains Mono"
+_FALLBACK_UI          = "Inter"
+_FALLBACK_MONO        = "Consolas"
 
-FONT_UI_MEDIUM  = (_UI, 12)            # sidebar, botões, inputs
-FONT_UI_MEDIUM_B = (_UI, 12, "bold")
+FONT_UI_MEDIUM        = (_FONT_UI_FAMILY, 12, _FALLBACK_UI)           # sidebar, botões, inputs
+FONT_UI_MEDIUM_B      = (_FONT_UI_FAMILY, 12, "bold", _FALLBACK_UI)
+FONT_UI_TITLE         = (_FONT_UI_TITLE_FAMILY, 16, _FALLBACK_UI)    # títulos de página/seção
+FONT_UI_TITLE_B       = (_FONT_UI_TITLE_FAMILY, 16, "bold", _FALLBACK_UI)
 
-# Escala de fontes da UI (px) — 4 passos
+# Escala de fontes da UI (pt) — 4 passos
 FONT_CAPTION = 11
 FONT_BODY    = 12
 FONT_SUBHEAD = 14
@@ -34,14 +40,13 @@ FONT_TITLE   = 16
 BACKUP_FMT_TEXT = "Texto (.txt)"
 
 # ─── FONTES — Código (Monospace) ───────────────────────────────────
-# Ainda usadas por topology.py (_DeviceNodeRect, SDN bar, etc.)
-FONT_XSMALL     = ("Consolas", 9)       # type_item no canvas
-FONT_CANVAS_BODY = ("Consolas", 11)     # SDN bar count, address items
-FONT_LARGE      = ("Consolas", 13)      # código / output principal
-FONT_H1         = ("Consolas", 16)      # SDN bar symbol
+FONT_XSMALL      = (_FONT_MONO_FAMILY, 9, _FALLBACK_MONO)      # type_item no canvas
+FONT_CANVAS_BODY = (_FONT_MONO_FAMILY, 11, _FALLBACK_MONO)     # SDN bar count, address items
+FONT_LARGE       = (_FONT_MONO_FAMILY, 13, _FALLBACK_MONO)     # código / output principal
+FONT_H1          = (_FONT_MONO_FAMILY, 16, _FALLBACK_MONO)     # SDN bar symbol
 
-FONT_MEDIUM_B = ("Consolas", 12, "bold")   # name_item no canvas
-FONT_LARGE_B  = ("Consolas", 13, "bold")   # SDN bar label
+FONT_MEDIUM_B    = (_FONT_MONO_FAMILY, 12, "bold", _FALLBACK_MONO)  # name_item no canvas
+FONT_LARGE_B     = (_FONT_MONO_FAMILY, 13, "bold", _FALLBACK_MONO)  # SDN bar label
 
 THEME = {
     "BG_BASE":    BG_BASE,    "BG_CARD":    BG_CARD,

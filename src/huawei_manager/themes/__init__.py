@@ -2,7 +2,7 @@ QSS_DARK = """
 QWidget {
     background-color: #0d0d1a;
     color: #e0e0ff;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QPushButton {
@@ -11,7 +11,7 @@ QPushButton {
     border: 1px solid #00e5ff;
     border-radius: 6px;
     padding: 6px 16px;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QPushButton:hover {
@@ -33,7 +33,7 @@ QLineEdit {
     border-bottom: 2px solid #00e5ff;
     border-radius: 4px;
     padding: 4px 8px;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QLineEdit:focus {
@@ -50,7 +50,7 @@ QTextEdit {
     border: 1px solid #2a2a4a;
     border-radius: 4px;
     padding: 4px;
-    font-family: "Consolas", "Courier New", monospace;
+    font-family: "JetBrains Mono", "Consolas", "Courier New", monospace;
     font-size: 10pt;
 }
 QLabel {
@@ -62,7 +62,7 @@ QLabel[dim="true"] {
 }
 QLabel[code="true"] {
     color: #c8c8ff;
-    font-family: "Consolas", "Courier New", monospace;
+    font-family: "JetBrains Mono", "Consolas", "Courier New", monospace;
 }
 QComboBox {
     background-color: #13132b;
@@ -70,7 +70,7 @@ QComboBox {
     border: 1px solid #2a2a4a;
     border-radius: 4px;
     padding: 4px 8px;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QComboBox:hover {
@@ -95,7 +95,7 @@ QListWidget {
     border: 1px solid #2a2a4a;
     border-radius: 4px;
     outline: none;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QListWidget:focus {
@@ -254,7 +254,7 @@ QSS_LIGHT = """
 QWidget {
     background-color: #f0f0f8;
     color: #1a1a2e;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QPushButton {
@@ -263,7 +263,7 @@ QPushButton {
     border: 1px solid #0098a0;
     border-radius: 6px;
     padding: 6px 16px;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QPushButton:hover {
@@ -285,7 +285,7 @@ QLineEdit {
     border-bottom: 2px solid #0098a0;
     border-radius: 4px;
     padding: 4px 8px;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QLineEdit:focus {
@@ -302,7 +302,7 @@ QTextEdit {
     border: 1px solid #c0c0d0;
     border-radius: 4px;
     padding: 4px;
-    font-family: "Consolas", "Courier New", monospace;
+    font-family: "JetBrains Mono", "Consolas", "Courier New", monospace;
     font-size: 10pt;
 }
 QLabel {
@@ -314,7 +314,7 @@ QLabel[dim="true"] {
 }
 QLabel[code="true"] {
     color: #2a2a40;
-    font-family: "Consolas", "Courier New", monospace;
+    font-family: "JetBrains Mono", "Consolas", "Courier New", monospace;
 }
 QComboBox {
     background-color: #ffffff;
@@ -322,7 +322,7 @@ QComboBox {
     border: 1px solid #c0c0d0;
     border-radius: 4px;
     padding: 4px 8px;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QComboBox:hover {
@@ -347,7 +347,7 @@ QListWidget {
     border: 1px solid #c0c0d0;
     border-radius: 4px;
     outline: none;
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 QListWidget:focus {

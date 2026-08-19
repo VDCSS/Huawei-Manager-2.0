@@ -10,10 +10,16 @@ ICONS_DIR = $(HOME)/.local/share/icons/hicolor
 APPS_DIR  = $(HOME)/.local/share/applications
 BIN_DIR   = $(HOME)/.local/bin
 COMP_DIR  = $(HOME)/.local/share/bash-completion/completions
+FONTS_DIR = $(HOME)/.local/share/fonts
 DESKTOP   = share/huawei-manager.desktop
 
+# Google Fonts URLs
+IBM_PLEX_SANS_URL = https://github.com/google/fonts/raw/main/ofl/ibmplexsans/IBMPlexSans%5Bwght%5D.ttf
+SPACE_GROTESK_URL = https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf
+JETBRAINS_MONO_URL = https://github.com/google/fonts/raw/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf
+
 # ── Instalação completa (primeira vez) ──────────────────────────
-install: venv pip-install install-icon install-desktop install-shell
+install: venv pip-install install-fonts install-icon install-desktop install-shell
 	@echo "✔ Huawei Manager instalado."
 	@echo "  Procure 'Huawei Manager' no menu ou digite 'huawei manager'."
 
@@ -59,7 +65,24 @@ install-shell:
 	@echo "  Recarregue o shell: exec bash"
 	@echo "  Teste: huawei<TAB> → huawei manager"
 
-# ── Desinstalação ───────────────────────────────────────────────
+# ── Fontes Google Fonts ───────────────────────────────────────────
+install-fonts:
+	mkdir -p $(FONTS_DIR)
+	# IBM Plex Sans
+	wget -q -O /tmp/IBMPlexSans.ttf "$(IBM_PLEX_SANS_URL)" && \
+		cp /tmp/IBMPlexSans.ttf $(FONTS_DIR)/IBMPlexSans.ttf && \
+		echo "✔ IBM Plex Sans instalada"
+	# Space Grotesk
+	wget -q -O /tmp/SpaceGrotesk.ttf "$(SPACE_GROTESK_URL)" && \
+		cp /tmp/SpaceGrotesk.ttf $(FONTS_DIR)/SpaceGrotesk.ttf && \
+		echo "✔ Space Grotesk instalada"
+	# JetBrains Mono
+	wget -q -O /tmp/JetBrainsMono.ttf "$(JETBRAINS_MONO_URL)" && \
+		cp /tmp/JetBrainsMono.ttf $(FONTS_DIR)/JetBrainsMono.ttf && \
+		echo "✔ JetBrains Mono instalada"
+	fc-cache -f $(FONTS_DIR) 2>/dev/null || true
+	@echo "✔ Fontes Google Fonts instaladas e cache atualizado."
+
 uninstall:
 	rm -f $(APPS_DIR)/$(DESKTOP)
 	rm -f $(ICONS_DIR)/48x48/apps/huawei-manager.png
