@@ -269,7 +269,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         )
         self._page_layout(p).addWidget(self._topo_canvas, stretch=1)
 
-        self._device_status_lbl = QLabel("Inventario: vnf_inventory.json", p)
+        self._device_status_lbl = QLabel("Invent\u00e1rio: 0 devices", p)
         self._device_status_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_CARD, 10))
         self._page_layout(p).addWidget(self._device_status_lbl)
         self._page_layout(p).addSpacing(4)

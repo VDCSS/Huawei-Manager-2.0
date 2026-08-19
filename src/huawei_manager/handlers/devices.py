@@ -46,6 +46,8 @@ class DevicesMixin:
         if self._topo_canvas is not None:
             self._topo_canvas.set_access(self._access_level)
             self._topo_canvas.update_devices(devices)
+        if self._device_status_lbl is not None:
+            self._device_status_lbl.setText(f"Invent\u00e1rio: {len(devices)} devices")
 
     def _show_device_dialog(self: AppCoreProtocol, device: Device | None = None) -> None:
         if not self._require_access("tecnico"):

@@ -111,8 +111,10 @@ class PageBuilderManutencaoMixin:
                                    lambda: self._run_agents(), C.NEON_PURP)
         grp_agents_layout.addWidget(btn_agents)
         grp_agents_layout.addSpacing(4)
-        self._watcher_btn = action_button(grp_agents, "\U0001f504  Auto: ON",
-                                          self._toggle_watcher, C.NEON_CYAN)
+        self._watcher_btn = action_button(
+            grp_agents,
+            f"\U0001f504  Auto: {'ON' if self._watcher.is_active else 'OFF'}",
+            self._toggle_watcher, C.NEON_CYAN)
         grp_agents_layout.addWidget(self._watcher_btn)
 
         # ── Group: MODO ──
