@@ -180,7 +180,6 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._build_layout()
         self._setup_bindings()
         self._show_page("home")
-        self._init_topology_backend()
 
     def _init_common_attrs(self) -> None:
         """Garante que todos os atributos dos mixins existem antes do uso."""

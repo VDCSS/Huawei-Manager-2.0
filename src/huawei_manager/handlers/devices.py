@@ -15,9 +15,6 @@ log = logging.getLogger(__name__)
 
 
 class DevicesMixin:
-    def _init_topology_backend(self: AppCoreProtocol) -> None:
-        self._dispatch(lambda: None)
-
     def _refresh_devices(self: AppCoreProtocol) -> None:
         lock = self._devices_lock
         if lock is not None and not lock.acquire(blocking=False):

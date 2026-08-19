@@ -272,8 +272,6 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         self._page_title(p, "Dashboard", C.NEON_CYAN,
                          "Painel de controle — conectividade, Devices, operacoes recentes")
 
-        self._dash_labels: dict[str, QLabel] = {}
-
         row1 = QWidget(p)
         row1_layout = QHBoxLayout(row1)
         row1_layout.setContentsMargins(0, 0, 0, 0)
