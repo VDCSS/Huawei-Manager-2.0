@@ -99,7 +99,6 @@ class TestShortcutGuards:
         mixin.out_backup = MagicMock()
         mixin._svc_output = MagicMock()
         mixin._route_filter_cb = MagicMock()
-        mixin._backup_fmt_cb = MagicMock()
         mixin.focusWidget = MagicMock(return_value=None)  # Mock focusWidget
         return mixin
 

@@ -51,8 +51,7 @@ class ShortcutsMixin(QObject):
             if cmd:
                 self._run(lambda: self._exec_cmd(cmd))
         elif page == "backup":
-            fmt = self._backup_fmt_cb.currentText()
-            self._run(lambda: self._do_backup(fmt))
+            self._run(lambda: self._do_backup(C.BACKUP_FMT_TEXT))
 
     def _on_ctrl_shift_enter(self) -> None:
         overlay = getattr(self, "_auth_overlay", None)

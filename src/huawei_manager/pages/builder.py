@@ -195,19 +195,9 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         fmt_layout.addWidget(fmt_lbl)
         fmt_layout.addSpacing(8)
 
-        self._backup_fmt_cb = QComboBox(fmt_frame)
-        self._backup_fmt_cb.setEditable(False)
-        self._backup_fmt_cb.addItems(["Texto (CLI)"])
-        self._backup_fmt_cb.setStyleSheet(f"""
-            QComboBox {{ background: {C.BG_INPUT}; color: {C.NEON_CYAN};
-                         border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                         padding: 4px 8px; font: 11px 'Inter'; }}
-            QComboBox::drop-down {{ border: none; }}
-            QComboBox QAbstractItemView {{ background: {C.BG_INPUT};
-                                           color: {C.NEON_CYAN};
-                                           selection-background-color: {C.NEON_PURP}; }}
-        """)
-        fmt_layout.addWidget(self._backup_fmt_cb)
+        self._backup_fmt_lbl = QLabel(f"Formato: {C.BACKUP_FMT_TEXT}", fmt_frame)
+        self._backup_fmt_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
+        fmt_layout.addWidget(self._backup_fmt_lbl)
         fmt_layout.addStretch()
 
         self.out_backup = output_text(p)
@@ -215,7 +205,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         self._page_layout(p).addSpacing(10)
         btn = action_button(p, "\U0001f4be  Fazer Backup",
                             lambda: self._run(
-                                lambda fmt=self._backup_fmt_cb.currentText(): self._do_backup(fmt)), C.NEON_PURP)
+                                lambda: self._do_backup(C.BACKUP_FMT_TEXT)), C.NEON_PURP)
         self._page_layout(p).addWidget(btn)
 
     # ── Topology ──────────────────────────────────────────────────────
@@ -232,7 +222,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
         admin_label = "\U0001f512  Acesso"
         if role_meets(self._access_level, "tecnico"):
-            admin_label = "\U0001f513  Admin" if self._access_level == "admin" else "\U0001f6e0  Tecnico"
+            admin_label = "\U0001f513  Sair (Admin)" if self._access_level == "admin" else "\U0001f6e0  Sair (Tecnico)"
         self._admin_btn = action_button(ctrl, admin_label,
                                         self._show_auth_dialog, C.NEON_PURP)
         ctrl_layout.addWidget(self._admin_btn)

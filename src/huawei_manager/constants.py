@@ -30,6 +30,9 @@ FONT_BODY    = 12
 FONT_SUBHEAD = 14
 FONT_TITLE   = 16
 
+# Único formato de backup suportado (running-config → .txt)
+BACKUP_FMT_TEXT = "Texto (.txt)"
+
 # ─── FONTES — Código (Monospace) ───────────────────────────────────
 # Ainda usadas por topology.py (_DeviceNodeRect, SDN bar, etc.)
 FONT_XSMALL     = ("Consolas", 9)       # type_item no canvas
