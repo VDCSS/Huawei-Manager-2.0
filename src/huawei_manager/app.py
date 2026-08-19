@@ -315,7 +315,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         badge_layout.setSpacing(0)
 
         self.status_dot = QLabel("\u25cf", badge)
-        self.status_dot.setStyleSheet(f"color: {C.NEON_PURP}; background: {C.BG_BASE}; "
+        self.status_dot.setStyleSheet(f"color: {C.NEON_RED}; background: {C.BG_BASE}; "
                                       f"font: 16px 'Inter';")
         badge_layout.addWidget(self.status_dot)
         badge_layout.addSpacing(4)
