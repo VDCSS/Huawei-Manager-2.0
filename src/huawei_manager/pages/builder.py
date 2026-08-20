@@ -25,6 +25,7 @@ from huawei_manager.pages.manutencao import PageBuilderManutencaoMixin
 from huawei_manager.pages.services import PageBuilderServicesMixin
 from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
+from huawei_manager.widgets.elide_label import ElideLabel
 from huawei_manager.widgets.neon_button import action_button
 from huawei_manager.widgets.neon_entry import neon_entry, output_text
 
@@ -57,12 +58,13 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
     def _page_title(self, parent: QWidget, title: str, color: str, subtitle: str = "") -> None:
         lbl = QLabel(title, parent)
-        lbl.setStyleSheet(f"color: {color}; font: bold 16px 'Inter'; padding: 0px; margin: 0px;")
+        lbl.setStyleSheet(f"color: {color}; font: bold {C.FONT_TITLE}px 'Inter'; padding: 0px; margin: 0px;")
         parent.layout().addWidget(lbl)
         if subtitle:
             sub = QLabel(subtitle, parent)
-            sub.setStyleSheet(f"color: {C.FG_DIM}; font: 11px 'Inter'; padding: 0px 0px 8px 0px;")
+            sub.setStyleSheet(f"color: {C.FG_DIM}; font: {C.FONT_SUBHEAD}px 'Inter'; padding: 0px;")
             parent.layout().addWidget(sub)
+        parent.layout().addSpacing(8)
 
     def _css_label(self, color: str, bg: str = "", font_size: int = 12, bold: bool = False) -> str:
         weight = "bold" if bold else "normal"
@@ -168,7 +170,8 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         ctrl_layout.addWidget(dest_lbl)
         ctrl_layout.addSpacing(8)
 
-        self._backup_entry = neon_entry(ctrl, width=44)
+        self._backup_entry = neon_entry(ctrl, width=24)
+        self._backup_entry.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.backup_path = os.path.expanduser("~")
         self._backup_entry.setText(self.backup_path)
         self._backup_entry.textChanged.connect(lambda t: setattr(self, 'backup_path', t))
@@ -192,19 +195,9 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         fmt_layout.addWidget(fmt_lbl)
         fmt_layout.addSpacing(8)
 
-        self._backup_fmt_cb = QComboBox(fmt_frame)
-        self._backup_fmt_cb.setEditable(False)
-        self._backup_fmt_cb.addItems(["Texto (CLI)"])
-        self._backup_fmt_cb.setStyleSheet(f"""
-            QComboBox {{ background: {C.BG_INPUT}; color: {C.NEON_CYAN};
-                         border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                         padding: 4px 8px; font: 11px 'Inter'; }}
-            QComboBox::drop-down {{ border: none; }}
-            QComboBox QAbstractItemView {{ background: {C.BG_INPUT};
-                                           color: {C.NEON_CYAN};
-                                           selection-background-color: {C.NEON_PURP}; }}
-        """)
-        fmt_layout.addWidget(self._backup_fmt_cb)
+        self._backup_fmt_lbl = QLabel(f"Formato: {C.BACKUP_FMT_TEXT}", fmt_frame)
+        self._backup_fmt_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
+        fmt_layout.addWidget(self._backup_fmt_lbl)
         fmt_layout.addStretch()
 
         self.out_backup = output_text(p)
@@ -212,7 +205,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         self._page_layout(p).addSpacing(10)
         btn = action_button(p, "\U0001f4be  Fazer Backup",
                             lambda: self._run(
-                                lambda fmt=self._backup_fmt_cb.currentText(): self._do_backup(fmt)), C.NEON_PURP)
+                                lambda: self._do_backup(C.BACKUP_FMT_TEXT)), C.NEON_PURP)
         self._page_layout(p).addWidget(btn)
 
     # ── Topology ──────────────────────────────────────────────────────
@@ -223,14 +216,13 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
         ctrl = QWidget(p)
         ctrl.setStyleSheet(f"background: {C.BG_CARD};")
-        ctrl.setMaximumHeight(40)
         ctrl_layout = QHBoxLayout(ctrl)
         ctrl_layout.setContentsMargins(0, 0, 0, 0)
         self._page_layout(p).addWidget(ctrl)
 
         admin_label = "\U0001f512  Acesso"
         if role_meets(self._access_level, "tecnico"):
-            admin_label = "\U0001f513  Admin" if self._access_level == "admin" else "\U0001f6e0  Tecnico"
+            admin_label = "\U0001f513  Sair (Admin)" if self._access_level == "admin" else "\U0001f6e0  Sair (Tecnico)"
         self._admin_btn = action_button(ctrl, admin_label,
                                         self._show_auth_dialog, C.NEON_PURP)
         ctrl_layout.addWidget(self._admin_btn)
@@ -253,8 +245,9 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
         ctrl_layout.addStretch()
 
-        self._device_info_lbl = QLabel("  Nenhum device selecionado", ctrl)
+        self._device_info_lbl = ElideLabel("  Nenhum device selecionado", ctrl)
         self._device_info_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
+        self._device_info_lbl.setMinimumWidth(220)
         ctrl_layout.addWidget(self._device_info_lbl)
         ctrl_layout.addSpacing(8)
 
@@ -266,7 +259,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         )
         self._page_layout(p).addWidget(self._topo_canvas, stretch=1)
 
-        self._device_status_lbl = QLabel("Inventario: vnf_inventory.json", p)
+        self._device_status_lbl = QLabel("Invent\u00e1rio: 0 devices", p)
         self._device_status_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_CARD, 10))
         self._page_layout(p).addWidget(self._device_status_lbl)
         self._page_layout(p).addSpacing(4)
@@ -279,12 +272,10 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         self._page_title(p, "Dashboard", C.NEON_CYAN,
                          "Painel de controle — conectividade, Devices, operacoes recentes")
 
-        self._dash_labels: dict[str, QLabel] = {}
-
         row1 = QWidget(p)
         row1_layout = QHBoxLayout(row1)
         row1_layout.setContentsMargins(0, 0, 0, 0)
-        self._page_layout(p).addWidget(row1, stretch=1)
+        self._page_layout(p).addWidget(row1, stretch=3)
         self._page_layout(p).addSpacing(10)
 
         def _make_card(parent: QWidget) -> QFrame:
@@ -346,10 +337,10 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
             QTextEdit {{
                 background: {C.BG_BASE}; color: {C.FG_CODE};
                 border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                padding: 4px; font: 10px 'Inter';
+                padding: 4px; font: {C.FONT_CAPTION}px 'Inter';
             }}
         """)
-        self._dash_audit_text.setMinimumHeight(80)
+        self._dash_audit_text.setMinimumHeight(60)
         card3._clayout.addWidget(self._dash_audit_text, stretch=1)
 
         # Card: Atalhos Rapidos (full width)
@@ -358,7 +349,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         card4_layout = QVBoxLayout(card4)
         card4_layout.setContentsMargins(12, 10, 12, 10)
         card4._clayout = card4_layout
-        self._page_layout(p).addWidget(card4)
+        self._page_layout(p).addWidget(card4, stretch=2)
 
         _card_title(card4, "\u2328 ATALHOS RAPIDOS", C.NEON_PURP)
 

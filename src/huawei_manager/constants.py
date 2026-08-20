@@ -8,37 +8,52 @@ BG_INPUT    = "#1a1a30"
 
 NEON_CYAN  = "#00e5ff"
 NEON_MAG   = "#e040fb"
-NEON_PURP  = "#7c4dff"
+NEON_PURP  = "#8f6bff"
 NEON_AMBER = "#ffab00"
 NEON_RED   = "#ff4d4d"
 
 FG_MAIN    = "#e0e0ff"
-FG_DIM     = "#6a6a9a"
+FG_DIM     = "#8a8abe"
 FG_CODE    = "#c8c8ff"
 
 BORDER_NRM = "#2a2a4a"
 
 # ─── FONTES — UI (Proporcional) ──────────────────────────────────────
-_UI = "Inter"
+_FONT_UI_FAMILY       = "IBM Plex Sans"
+_FONT_UI_TITLE_FAMILY = "Space Grotesk"
+_FONT_MONO_FAMILY     = "JetBrains Mono"
+_FALLBACK_UI          = "Inter"
+_FALLBACK_MONO        = "Consolas"
 
-FONT_UI_MEDIUM  = (_UI, 12)            # sidebar, botões, inputs
-FONT_UI_MEDIUM_B = (_UI, 12, "bold")
+FONT_UI_MEDIUM        = (_FONT_UI_FAMILY, 12, _FALLBACK_UI)           # sidebar, botões, inputs
+FONT_UI_MEDIUM_B      = (_FONT_UI_FAMILY, 12, "bold", _FALLBACK_UI)
+FONT_UI_TITLE         = (_FONT_UI_TITLE_FAMILY, 16, _FALLBACK_UI)    # títulos de página/seção
+FONT_UI_TITLE_B       = (_FONT_UI_TITLE_FAMILY, 16, "bold", _FALLBACK_UI)
+
+# Escala de fontes da UI (pt) — 4 passos
+FONT_CAPTION = 11
+FONT_BODY    = 12
+FONT_SUBHEAD = 14
+FONT_TITLE   = 16
+
+# Único formato de backup suportado (running-config → .txt)
+BACKUP_FMT_TEXT = "Texto (.txt)"
 
 # ─── FONTES — Código (Monospace) ───────────────────────────────────
-# Ainda usadas por topology.py (_DeviceNodeRect, SDN bar, etc.)
-FONT_XSMALL  = ("Consolas", 9)     # type_item no canvas
-FONT_BODY    = ("Consolas", 11)    # SDN bar count, address items
-FONT_LARGE   = ("Consolas", 13)    # código / output principal
-FONT_H1      = ("Consolas", 16)    # SDN bar symbol
+FONT_XSMALL      = (_FONT_MONO_FAMILY, 9, _FALLBACK_MONO)      # type_item no canvas
+FONT_CANVAS_BODY = (_FONT_MONO_FAMILY, 11, _FALLBACK_MONO)     # SDN bar count, address items
+FONT_LARGE       = (_FONT_MONO_FAMILY, 13, _FALLBACK_MONO)     # código / output principal
+FONT_H1          = (_FONT_MONO_FAMILY, 16, _FALLBACK_MONO)     # SDN bar symbol
 
-FONT_MEDIUM_B = ("Consolas", 12, "bold")   # name_item no canvas
-FONT_LARGE_B  = ("Consolas", 13, "bold")   # SDN bar label
+FONT_MEDIUM_B    = (_FONT_MONO_FAMILY, 12, "bold", _FALLBACK_MONO)  # name_item no canvas
+FONT_LARGE_B     = (_FONT_MONO_FAMILY, 13, "bold", _FALLBACK_MONO)  # SDN bar label
 
 THEME = {
     "BG_BASE":    BG_BASE,    "BG_CARD":    BG_CARD,
     "BG_SIDEBAR": BG_SIDEBAR, "BG_INPUT":   BG_INPUT,
     "NEON_CYAN":  NEON_CYAN,  "NEON_MAG":   NEON_MAG,
     "NEON_PURP":  NEON_PURP,  "NEON_AMBER": NEON_AMBER,
+    "NEON_RED":   NEON_RED,
     "FG_MAIN":    FG_MAIN,    "FG_DIM":     FG_DIM,
     "FG_CODE":    FG_CODE,    "BORDER_NRM": BORDER_NRM,
 }
@@ -52,7 +67,8 @@ BG_INPUT_L    = "#fafafe"
 NEON_CYAN_L   = "#0098a0"
 NEON_MAG_L    = "#a030c0"
 NEON_PURP_L   = "#5a20c0"
-NEON_AMBER_L  = "#b07000"
+NEON_AMBER_L  = "#8a5a00"
+NEON_RED_L    = "#c62828"
 
 FG_MAIN_L     = "#1a1a2e"
 FG_DIM_L      = "#6a6a8a"
@@ -65,6 +81,7 @@ LIGHT_THEME = {
     "BG_SIDEBAR": BG_SIDEBAR_L, "BG_INPUT":   BG_INPUT_L,
     "NEON_CYAN":  NEON_CYAN_L,  "NEON_MAG":   NEON_MAG_L,
     "NEON_PURP":  NEON_PURP_L,  "NEON_AMBER": NEON_AMBER_L,
+    "NEON_RED":   NEON_RED_L,
     "FG_MAIN":    FG_MAIN_L,    "FG_DIM":     FG_DIM_L,
     "FG_CODE":    FG_CODE_L,    "BORDER_NRM": BORDER_NRM_L,
 }
@@ -79,7 +96,7 @@ def set_theme(name: str) -> None:
     """Swap all module-level colour constants to the named palette."""
     global _active_theme
     global BG_BASE, BG_CARD, BG_SIDEBAR, BG_INPUT
-    global NEON_CYAN, NEON_MAG, NEON_PURP, NEON_AMBER
+    global NEON_CYAN, NEON_MAG, NEON_PURP, NEON_AMBER, NEON_RED
     global FG_MAIN, FG_DIM, FG_CODE, BORDER_NRM
 
     pal = LIGHT_THEME if name == "light" else DARK_THEME
@@ -92,6 +109,7 @@ def set_theme(name: str) -> None:
     NEON_MAG   = pal["NEON_MAG"]
     NEON_PURP  = pal["NEON_PURP"]
     NEON_AMBER = pal["NEON_AMBER"]
+    NEON_RED   = pal["NEON_RED"]
     FG_MAIN    = pal["FG_MAIN"]
     FG_DIM     = pal["FG_DIM"]
     FG_CODE    = pal["FG_CODE"]

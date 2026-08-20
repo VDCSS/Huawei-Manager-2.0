@@ -41,6 +41,7 @@ class AppStateMixin:
             self._mock_mode = False
             self._watcher.stop()
             self._rebuild_page("topology")
+            self._set_status("Sess\u00e3o expirada \u2014 acesso user", C.NEON_AMBER)
             log.info("Acesso: timeout de sessao — resetado para user")
 
     def _set_status(self, text: str, color: str) -> None:

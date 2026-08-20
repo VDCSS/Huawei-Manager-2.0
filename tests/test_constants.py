@@ -2,7 +2,11 @@ from huawei_manager.constants import (
     CLI_FILTERS,
     CMD_TEMPLATES,
     FONT_BODY,
+    FONT_CANVAS_BODY,
+    FONT_CAPTION,
     FONT_H1,
+    FONT_SUBHEAD,
+    FONT_TITLE,
     THEME,
 )
 from huawei_manager.services import DEVICE_CATEGORIES, DEVICE_TYPES
@@ -18,13 +22,21 @@ class TestTheme:
 
 
 class TestFonts:
-    def test_font_body_is_tuple(self):
-        assert isinstance(FONT_BODY, tuple)
-        assert len(FONT_BODY) == 2
+    def test_canvas_font_body_is_tuple(self):
+        assert isinstance(FONT_CANVAS_BODY, tuple)
+        assert len(FONT_CANVAS_BODY) >= 2  # (family, size) or (family, size, fallback)
 
-    def test_font_sizes_are_positive(self):
-        for f in [FONT_BODY, FONT_H1]:
+    def test_canvas_font_sizes_are_positive(self):
+        for f in [FONT_CANVAS_BODY, FONT_H1]:
             assert f[1] > 0
+
+    def test_ui_scale_is_positive_ints(self):
+        for size in [FONT_CAPTION, FONT_BODY, FONT_SUBHEAD, FONT_TITLE]:
+            assert isinstance(size, int)
+            assert size > 0
+
+    def test_ui_scale_is_ascending(self):
+        assert FONT_CAPTION < FONT_BODY < FONT_SUBHEAD < FONT_TITLE
 
 
 class TestCLIFilters:

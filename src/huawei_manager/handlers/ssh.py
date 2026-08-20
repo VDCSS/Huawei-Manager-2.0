@@ -29,7 +29,7 @@ class SshMixin:
     def _toggle_connect(self: AppCoreProtocol) -> None:
         if self._sb.is_alive():
             self._sb.disconnect()
-            self._set_status("Desconectado", C.NEON_PURP)
+            self._set_status("Desconectado", C.NEON_RED)
             self._set_conn_btn()
             device = self._get_selected_device()
             device_id = device.id if device else "user"

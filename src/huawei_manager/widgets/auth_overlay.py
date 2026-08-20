@@ -27,6 +27,7 @@ class AuthOverlay(QWidget):
         attempts_so_far: int = 0,
     ) -> None:
         super().__init__(parent)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.on_result = on_result
         self._max_attempts = admin_max_attempts
         self._lockout_secs = admin_lockout_secs

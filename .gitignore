@@ -31,3 +31,4 @@ scripts/wayland_diag.py
 *.cover
 *,cover
 graphify-out/
+thoughts/

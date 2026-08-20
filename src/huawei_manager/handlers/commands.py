@@ -115,8 +115,8 @@ class CommandsMixin:
     def _do_backup(self: AppCoreProtocol, fmt: str = "") -> None:
         """Salva a running-config em arquivo TXT e registra na auditoria.
 
-        fmt deve ser extraido da UI (self._backup_fmt_cb) ANTES de
-        chamar este metodo (roda na IO thread).
+        fmt vem da constante C.BACKUP_FMT_TEXT (único formato suportado),
+        extraído na UI thread antes de chamar este método (roda na IO thread).
         """
         self._session_tracker.touch()
         assert fmt, "_do_backup: fmt must be extracted from UI before calling"

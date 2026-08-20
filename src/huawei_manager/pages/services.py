@@ -107,7 +107,8 @@ class PageBuilderServicesMixin:
         card_layout.addWidget(split, stretch=1)
 
         left = QWidget(split)
-        left.setFixedWidth(280)
+        left.setMinimumWidth(240)
+        left.setMaximumWidth(340)
         left.setStyleSheet(f"background: {C.BG_INPUT};")
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -124,6 +125,9 @@ class PageBuilderServicesMixin:
                 background: {C.BG_INPUT}; color: {C.NEON_CYAN};
                 border: none; font: 12px 'Inter';
                 outline: none;
+            }}
+            QListWidget:focus {{
+                border: 1px solid {C.NEON_CYAN};
             }}
             QListWidget::item:selected {{
                 background: {C.NEON_PURP}; color: white;
@@ -157,8 +161,9 @@ class PageBuilderServicesMixin:
     def _build_services_page(self: AppCoreProtocol) -> None:
         p = self._make_page("services")
         self._page_title(p, "Catalogo de Servicos", C.NEON_AMBER,
-                         "Comandos SHOW e CONFIG por tipo de device "
-                         "(ROUTER | SWITCH | FIREWALL | \u2026)")
+                         "Servi\u00e7os de configura\u00e7\u00e3o por tipo de device "
+                         "(ROUTER | SWITCH | \u2026) \u2014 comandos show e consultas: "
+                         "use o Editor de Comandos")
 
         self._build_services_info_row(p)
         self._build_services_filter_row(p)

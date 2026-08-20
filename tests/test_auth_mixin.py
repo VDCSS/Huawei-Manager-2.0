@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from PySide6.QtWidgets import QMessageBox
+
 from huawei_manager.handlers.auth import AuthMixin
 
 
@@ -72,10 +74,25 @@ class TestShowAuthDialog:
 
     def test_logout_when_not_user(self):
         mixin = _make_mixin(_access_level="admin")
-        with patch("huawei_manager.handlers.auth.log"):
+        with (
+            patch("huawei_manager.handlers.auth.log"),
+            patch("huawei_manager.handlers.auth.QMessageBox.question",
+                  return_value=QMessageBox.StandardButton.Yes),
+        ):
             mixin._show_auth_dialog()
         assert mixin._access_level == "user"
         mixin._session_tracker.set_role.assert_called_once()
+
+    def test_logout_cancelled_keeps_session(self):
+        mixin = _make_mixin(_access_level="admin")
+        with (
+            patch("huawei_manager.handlers.auth.log"),
+            patch("huawei_manager.handlers.auth.QMessageBox.question",
+                  return_value=QMessageBox.StandardButton.No),
+        ):
+            mixin._show_auth_dialog()
+        assert mixin._access_level == "admin"
+        mixin._session_tracker.set_role.assert_not_called()
 
     def test_blocks_when_overlay_visible(self):
         overlay = MagicMock()

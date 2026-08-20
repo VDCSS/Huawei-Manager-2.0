@@ -90,7 +90,7 @@ def output_text(parent: QWidget | None = None, **kw) -> QTextEdit:
             font: {size}pt '{family}';
         }}
         QTextEdit:read-only {{
-            color: #b0b0d0;
+            color: {_C.FG_CODE};
         }}
     """
     ed.setStyleSheet(base_style)

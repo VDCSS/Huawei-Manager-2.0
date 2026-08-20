@@ -1,5 +1,6 @@
 import logging
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from huawei_manager.themes import QSS_DARK, QSS_LIGHT
@@ -11,6 +12,9 @@ _current_theme: str = ""
 def get_app() -> QApplication:
     app = QApplication.instance()
     if app is None:
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
         app = QApplication([])
     assert isinstance(app, QApplication)
     return app

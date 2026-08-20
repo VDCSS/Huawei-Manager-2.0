@@ -21,6 +21,14 @@ class AuthMixin:
     # ══════════════════════════════════════════════════════════════════
     def _show_auth_dialog(self: AppCoreProtocol) -> None:
         if self._access_level != "user":
+            resp = QMessageBox.question(
+                None, "Sair da sess\u00e3o",
+                "Deseja realmente sair da sess\u00e3o atual?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if resp != QMessageBox.StandardButton.Yes:
+                return
             self._access_level = "user"
             self._session_tracker.set_role(Role.USER)
             self._sb.set_access_role("user")
