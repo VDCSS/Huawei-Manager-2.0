@@ -12,13 +12,86 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 BOLD='\033[1m'
 
+# Google Fonts URLs
+IBM_PLEX_SANS_URL="https://github.com/google/fonts/raw/main/ofl/ibmplexsans/IBMPlexSans%5Bwght%5D.ttf"
+SPACE_GROTESK_URL="https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf"
+JETBRAINS_MONO_URL="https://github.com/google/fonts/raw/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
+
 info()  { echo -e "${CYAN}INFO${NC}  $1"; }
 ok()    { echo -e "${GREEN}OK${NC}    $1"; }
 warn()  { echo -e "${YELLOW}WARN${NC}  $1"; }
 err()   { echo -e "${RED}ERRO${NC}  $1"; }
 header(){ echo -e "\n${BOLD}$1${NC}"; echo "────────────────────────────────────────"; }
 
+usage() {
+    cat <<EOF
+Huawei Manager 2.0 — Setup
+
+Uso: $0 [opções]
+
+Opções:
+  --dev       Instala com ferramentas de desenvolvimento (padrão)
+  --prod      Instala apenas dependências de produção
+  --fonts     Instala fontes Google Fonts (IBM Plex Sans, Space Grotesk, JetBrains Mono)
+  --help      Mostra esta mensagem
+
+Exemplos:
+  $0              # Instalação completa (dev + fonts)
+  $0 --prod       # Apenas dependências de produção
+  $0 --prod --fonts  # Produção + fontes
+  $0 reset        # Limpa e reinstala
+  $0 check        # Diagnóstico do ambiente
+EOF
+}
+
+install_deps() {
+    local mode="$1"
+    header "Dependências"
+    $PIP install --upgrade pip -q
+    if [ "$mode" = "prod" ]; then
+        $PIP install -r "$SCRIPT_DIR/requirements/prod.txt" -q
+        ok "Dependências de produção instaladas"
+    else
+        $PIP install -e ".[dev]" -q
+        ok "Dependências de desenvolvimento instaladas"
+    fi
+}
+
+install_fonts() {
+    header "Fontes Google Fonts"
+    local FONTS_DIR="$HOME/.local/share/fonts"
+    mkdir -p "$FONTS_DIR"
+
+    echo "Baixando fontes Google Fonts..."
+    wget -q -O /tmp/IBMPlexSans.ttf "$IBM_PLEX_SANS_URL" 2>/dev/null && \
+        cp /tmp/IBMPlexSans.ttf "$FONTS_DIR/IBMPlexSans.ttf" && \
+        ok "IBM Plex Sans" || warn "IBM Plex Sans — download falhou (ignorado)"
+    wget -q -O /tmp/SpaceGrotesk.ttf "$SPACE_GROTESK_URL" 2>/dev/null && \
+        cp /tmp/SpaceGrotesk.ttf "$FONTS_DIR/SpaceGrotesk.ttf" && \
+        ok "Space Grotesk" || warn "Space Grotesk — download falhou (ignorado)"
+    wget -q -O /tmp/JetBrainsMono.ttf "$JETBRAINS_MONO_URL" 2>/dev/null && \
+        cp /tmp/JetBrainsMono.ttf "$FONTS_DIR/JetBrainsMono.ttf" && \
+        ok "JetBrains Mono" || warn "JetBrains Mono — download falhou (ignorado)"
+
+    fc-cache -f "$FONTS_DIR" 2>/dev/null || true
+    ok "Fontes instaladas (falhas individuais foram ignoradas)."
+}
+
 install_mode() {
+    local dep_mode="dev"
+    local do_fonts=true
+
+    # Parse arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --dev)   dep_mode="dev"; shift ;;
+            --prod)  dep_mode="prod"; shift ;;
+            --fonts) do_fonts=true; shift ;;
+            --help)  usage; exit 0 ;;
+            *)       err "Opção desconhecida: $1"; usage; exit 1 ;;
+        esac
+    done
+
     header "Pré-requisitos"
     command -v python3 >/dev/null || { err "python3 não encontrado"; exit 1; }
     python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)" \
@@ -31,10 +104,11 @@ install_mode() {
     python3 -m venv "$VENV"
     ok ".venv criado"
 
-    header "Dependências"
-    $PIP install --upgrade pip -q
-    $PIP install -e ".[dev]" -q
-    ok "pip install concluído"
+    install_deps "$dep_mode"
+
+    if [ "$do_fonts" = true ]; then
+        install_fonts
+    fi
 
     header "Ícone"
     ICONS_DIR="$HOME/.local/share/icons/hicolor"
@@ -69,6 +143,7 @@ install_mode() {
 
     echo ""
     ok "${BOLD}Setup completo${NC}"
+    echo "  Modo:     $dep_mode"
     echo "  Execute:  $VENV/bin/huawei-manager"
     echo "  Ou digite: huawei manager"
 }
@@ -128,11 +203,12 @@ check_mode() {
 }
 
 case "${1:-install}" in
-    install) install_mode ;;
+    install) shift; install_mode "$@" ;;
+    --help)  usage; exit 0 ;;
     reset)   reset_mode ;;
     check)   check_mode ;;
     *)
-        echo "Uso: $0 {install|reset|check}"
+        echo "Uso: $0 {install [--dev|--prod] [--fonts]|reset|check|--help}"
         exit 1
         ;;
 esac

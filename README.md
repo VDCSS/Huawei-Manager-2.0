@@ -161,14 +161,41 @@ git clone https://github.com/VDCSS/Huawei-Manager-2.0.git
 cd Huawei-Manager-2.0
 cp .env.example .env
 # Edite .env com as credenciais do seu ambiente
-make install
 ```
 
-`make install` faz tudo:
-1. Cria `.venv` e instala o pacote com `pip install -e ".[dev]"`
-2. Instala o ícone em `~/.local/share/icons/`
-3. Instala o `.desktop` entry no menu de aplicações
-4. Instala o comando `huawei` com tab complete
+### Desenvolvimento (recomendado)
+
+```bash
+make install          # ou: bash setup/setup.sh --dev
+```
+
+1. Cria `.venv`, instala pacote com `pip install -e ".[dev]"`
+2. Instala fontes Inter/Consolas em `~/.local/share/fonts/` (tolerante a falhas)
+3. Instala ícone, atalho `.desktop` e comando `huawei` com tab complete
+
+### Produção (usuários finais)
+
+```bash
+make install-prod     # ou: bash setup/setup.sh --prod
+```
+
+Instala apenas dependências de runtime (`requirements/prod.txt`) — sem ferramentas de dev.
+
+### Scripts setup/setup.sh
+
+```bash
+bash setup/setup.sh              # dev + fonts (padrão)
+bash setup/setup.sh --prod       # apenas runtime
+bash setup/setup.sh --fonts      # apenas fontes
+bash setup/setup.sh --help       # ajuda
+```
+
+### Reinstalação
+
+```bash
+make reinstall        # dev: pip install -e .
+make reinstall-prod   # produção: pip install -r requirements/prod.txt
+```
 
 ---
 
@@ -224,7 +251,8 @@ make decrypt-env     # Descriptografa .env.enc → .env
 4. Não commite senha em texto puro: `vnf_inventory.json` não persiste `password` (fail-closed no save).
 
 # Manutenção
-make reinstall       # pip install -e . (após git pull)
+make reinstall       # pip install -e . (após git pull, dev)
+make reinstall-prod  # pip install -r requirements/prod.txt (produção)
 make uninstall       # Remove atalho, ícone e comando do sistema
 make clean           # Remove caches (__pycache__, .pytest_cache, .ruff_cache)
 ```

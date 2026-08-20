@@ -1,5 +1,6 @@
-.PHONY: install run test lint typecheck clean \
-        install-desktop install-icon install-shell uninstall reinstall
+.PHONY: install install-prod run test lint typecheck clean \
+        install-desktop install-icon install-shell install-fonts \
+        uninstall reinstall reinstall-prod
 
 VENV      = .venv
 PY        = $(VENV)/bin/python3
@@ -29,6 +30,14 @@ venv:
 pip-install:
 	$(PIP) install -e ".[dev]"
 
+# ── Instalação produção (usuários finais, sem ferramentas de dev) ──
+install-prod: venv pip-install-prod install-fonts install-icon install-desktop install-shell
+	@echo "✔ Huawei Manager instalado (produção)."
+	@echo "  Procure 'Huawei Manager' no menu ou digite 'huawei manager'."
+
+pip-install-prod:
+	$(PIP) install -r requirements/prod.txt
+
 # ── Execução ────────────────────────────────────────────────────
 run:
 	$(HUAWEI)
@@ -36,6 +45,9 @@ run:
 # ── Reinstalação (após git pull) ────────────────────────────────
 reinstall:
 	$(PIP) install -e .
+
+reinstall-prod: pip-install-prod
+	@echo "✔ Dependências de produção atualizadas."
 
 # ── Desktop Entry ───────────────────────────────────────────────
 install-desktop: install-icon
@@ -68,20 +80,18 @@ install-shell:
 # ── Fontes Google Fonts ───────────────────────────────────────────
 install-fonts:
 	mkdir -p $(FONTS_DIR)
-	# IBM Plex Sans
-	wget -q -O /tmp/IBMPlexSans.ttf "$(IBM_PLEX_SANS_URL)" && \
+	@echo "Baixando fontes Google Fonts..."
+	@wget -q -O /tmp/IBMPlexSans.ttf "$(IBM_PLEX_SANS_URL)" 2>/dev/null && \
 		cp /tmp/IBMPlexSans.ttf $(FONTS_DIR)/IBMPlexSans.ttf && \
-		echo "✔ IBM Plex Sans instalada"
-	# Space Grotesk
-	wget -q -O /tmp/SpaceGrotesk.ttf "$(SPACE_GROTESK_URL)" && \
+		echo "  ✔ IBM Plex Sans" || echo "  ⚠ IBM Plex Sans — download falhou (ignorado)"
+	@wget -q -O /tmp/SpaceGrotesk.ttf "$(SPACE_GROTESK_URL)" 2>/dev/null && \
 		cp /tmp/SpaceGrotesk.ttf $(FONTS_DIR)/SpaceGrotesk.ttf && \
-		echo "✔ Space Grotesk instalada"
-	# JetBrains Mono
-	wget -q -O /tmp/JetBrainsMono.ttf "$(JETBRAINS_MONO_URL)" && \
+		echo "  ✔ Space Grotesk" || echo "  ⚠ Space Grotesk — download falhou (ignorado)"
+	@wget -q -O /tmp/JetBrainsMono.ttf "$(JETBRAINS_MONO_URL)" 2>/dev/null && \
 		cp /tmp/JetBrainsMono.ttf $(FONTS_DIR)/JetBrainsMono.ttf && \
-		echo "✔ JetBrains Mono instalada"
-	fc-cache -f $(FONTS_DIR) 2>/dev/null || true
-	@echo "✔ Fontes Google Fonts instaladas e cache atualizado."
+		echo "  ✔ JetBrains Mono" || echo "  ⚠ JetBrains Mono — download falhou (ignorado)"
+	@fc-cache -f $(FONTS_DIR) 2>/dev/null || true
+	@echo "✔ Fontes instaladas (falhas individuais foram ignoradas)."
 
 uninstall:
 	rm -f $(APPS_DIR)/$(DESKTOP)
