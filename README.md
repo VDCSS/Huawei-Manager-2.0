@@ -156,45 +156,95 @@ Makefile                # install, run, test, lint, typecheck, coverage
 
 ## Instalação
 
+### Passo a passo rápido
+
 ```bash
+# 1. Clone e entre no diretório
 git clone https://github.com/VDCSS/Huawei-Manager-2.0.git
 cd Huawei-Manager-2.0
+
+# 2. Configure variáveis de ambiente
 cp .env.example .env
-# Edite .env com as credenciais do seu ambiente
+# Edite .env com suas credenciais (veja seção Configuração)
+
+# 3. Instale (escolha um modo)
 ```
 
-### Desenvolvimento (recomendado)
+---
+
+### Modo Desenvolvimento (recomendado para contribuidores)
 
 ```bash
-make install          # ou: bash setup/setup.sh --dev
+make install
+# ou equivalente:
+bash setup/setup.sh --dev
 ```
 
-1. Cria `.venv`, instala pacote com `pip install -e ".[dev]"`
-2. Instala fontes Inter/Consolas em `~/.local/share/fonts/` (tolerante a falhas)
-3. Instala ícone, atalho `.desktop` e comando `huawei` com tab complete
+**O que faz:**
+1. Cria `.venv/` com Python 3.12+
+2. Instala **todas dependências** via `pip install -e ".[dev]"`:
+   - **Core (8)**: PySide6, netmiko, cryptography, pyyaml, python-dotenv, bcrypt, **hvac, boto3**
+   - **Dev (5)**: pytest, pytest-cov, pytest-qt, ruff, pyright
+3. Baixa fontes (Inter, Space Grotesk, JetBrains Mono) em `~/.local/share/fonts/` — tolerante a falhas
+4. Instala ícone em `~/.local/share/icons/`
+5. Instala `.desktop` em `~/.local/share/applications/`
+6. Instala comando `huawei` com tab-completion em `~/.local/bin/`
 
-### Produção (usuários finais)
+---
+
+### Modo Produção (para usuários finais / servidores)
 
 ```bash
-make install-prod     # ou: bash setup/setup.sh --prod
+make install-prod
+# ou equivalente:
+bash setup/setup.sh --prod
 ```
 
-Instala apenas dependências de runtime (`requirements/prod.txt`) — sem ferramentas de dev.
+**O que faz:** Igual ao modo dev, mas **apenas dependências de runtime** (8 pacotes core via `requirements/prod.txt`), **sem ferramentas de dev**.
 
-### Scripts setup/setup.sh
+---
+
+### Backends opcionais de segredos (Vault / AWS)
+
+Se usar `SECRETS_BACKEND=vault` ou `aws` no `.env`, instale o extra correspondente:
+
+```bash
+# HashiCorp Vault
+pip install -e ".[vault]"    # instala hvac
+# ou: pip install hvac~=2.2.0
+
+# AWS Secrets Manager
+pip install -e ".[aws]"      # instala boto3
+# ou: pip install boto3~=1.35.0
+```
+
+> **Nota:** `hvac` e `boto3` já estão em `requirements/prod.txt` desde a v2.x — se instalou via `make install` ou `make install-prod`, **já estão disponíveis**. Os comandos acima são para instalação avulsa ou ambientes sem Makefile.
+
+---
+
+### Flags do script `setup/setup.sh`
 
 ```bash
 bash setup/setup.sh              # dev + fonts (padrão)
-bash setup/setup.sh --prod       # apenas runtime
-bash setup/setup.sh --fonts      # apenas fontes
-bash setup/setup.sh --help       # ajuda
+bash setup/setup.sh --dev        # desenvolvimento (com ferramentas de dev)
+bash setup/setup.sh --prod       # produção (apenas runtime)
+bash setup/setup.sh --fonts      # apenas fontes Google Fonts
+bash setup/setup.sh --help       # mostra ajuda
 ```
 
-### Reinstalação
+---
+
+### Reinstalação / Atualização
 
 ```bash
-make reinstall        # dev: pip install -e .
-make reinstall-prod   # produção: pip install -r requirements/prod.txt
+# Após git pull — modo desenvolvimento
+make reinstall
+
+# Após git pull — modo produção
+make reinstall-prod
+
+# Limpar caches
+make clean
 ```
 
 ---
