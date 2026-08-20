@@ -178,6 +178,8 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._session_timer.start(30000)  # check every 30s
 
         self._build_layout()
+        # Command Palette (Ctrl+K) - lazy init
+        self._command_palette = None
         self._setup_bindings()
         self._show_page("home")
 
@@ -566,6 +568,16 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._theme_toggling = False
         if self.theme_btn is not None:
             self.theme_btn.setEnabled(True)
+
+    def _toggle_command_palette(self) -> None:
+        """Mostra/esconde a Command Palette (Ctrl+K)."""
+        if self._command_palette is None:
+            from huawei_manager.widgets.command_palette import CommandPalette, create_default_commands
+            self._command_palette = CommandPalette(self, create_default_commands(self))
+        if self._command_palette.isVisible():
+            self._command_palette.hide()
+        else:
+            self._command_palette.show()
 
     def _rebuild_ui(self) -> None:
         # 1. Parar todos os timers antes de destruir widgets

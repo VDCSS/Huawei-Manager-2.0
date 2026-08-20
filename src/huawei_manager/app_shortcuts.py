@@ -23,6 +23,7 @@ class ShortcutsMixin(QObject):
         QShortcut(QKeySequence("Ctrl+Shift+Tab"), parent).activated.connect(
             self._on_ctrl_shift_tab)
         QShortcut(QKeySequence("Escape"), parent).activated.connect(self._on_escape)
+        QShortcut(QKeySequence("Ctrl+K"), parent).activated.connect(self._toggle_command_palette)
         for i, key in enumerate(self._PAGE_KEYS, 1):
             seq = "Ctrl+0" if i == 10 else f"Ctrl+{i}"
             QShortcut(QKeySequence(seq), parent).activated.connect(
@@ -141,3 +142,7 @@ class ShortcutsMixin(QObject):
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         self._on_ctrl_l()
+
+    def _toggle_command_palette(self) -> None:
+        """Override in app to show/hide command palette (Ctrl+K)."""
+        pass
