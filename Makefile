@@ -37,7 +37,7 @@ install-prod: venv pip-install-prod install-fonts install-icon install-desktop i
 
 pip-install-prod:
 	$(PIP) install -r requirements/prod.txt
-	$(PIP) install .
+	$(PIP) install . --no-deps
 
 # ── Execução ────────────────────────────────────────────────────
 run:
@@ -45,10 +45,9 @@ run:
 
 # ── Reinstalação (após git pull) ────────────────────────────────
 reinstall:
-	$(PIP) install -e .
+	$(PIP) install -e ".[dev]"
 
 reinstall-prod: pip-install-prod
-	$(PIP) install .
 	@echo "✔ Dependências de produção atualizadas e pacote reinstalado."
 
 # ── Desktop Entry ───────────────────────────────────────────────
@@ -131,6 +130,6 @@ ci: lint test typecheck
 
 # ── Limpeza ─────────────────────────────────────────────────────
 clean:
-	rm -rf .pytest_cache .ruff_cache __pycache__ .venv
+	rm -rf .pytest_cache .ruff_cache __pycache__ .venv logs htmlcov .coverage
 	find . -name '*.pyc' -delete
 	find . -name '*,cover' -delete

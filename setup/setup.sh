@@ -50,7 +50,7 @@ install_deps() {
     $PIP install --upgrade pip -q
     if [ "$mode" = "prod" ]; then
         $PIP install -r "$SCRIPT_DIR/requirements/prod.txt" -q
-        $PIP install . --no-deps -q
+        cd "$SCRIPT_DIR" && $PIP install . --no-deps -q
         ok "Dependências de produção instaladas + pacote"
     else
         $PIP install -e ".[dev]" -q
