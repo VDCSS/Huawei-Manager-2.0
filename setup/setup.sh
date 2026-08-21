@@ -50,7 +50,8 @@ install_deps() {
     $PIP install --upgrade pip -q
     if [ "$mode" = "prod" ]; then
         $PIP install -r "$SCRIPT_DIR/requirements/prod.txt" -q
-        ok "Dependências de produção instaladas"
+        $PIP install . --no-deps -q
+        ok "Dependências de produção instaladas + pacote"
     else
         $PIP install -e ".[dev]" -q
         ok "Dependências de desenvolvimento instaladas"
@@ -59,6 +60,7 @@ install_deps() {
 
 install_fonts() {
     header "Fontes Google Fonts"
+    command -v wget >/dev/null || { warn "wget não encontrado; pulando fontes"; return 0; }
     local FONTS_DIR="$HOME/.local/share/fonts"
     mkdir -p "$FONTS_DIR"
 
@@ -101,8 +103,12 @@ install_mode() {
     ok "python3 $(python3 --version | cut -d' ' -f2)"
 
     header "Virtual environment"
-    python3 -m venv "$VENV"
-    ok ".venv criado"
+    if [ -f "$VENV/bin/python3" ]; then
+        ok ".venv já existe — reutilizando"
+    else
+        python3 -m venv "$VENV"
+        ok ".venv criado"
+    fi
 
     install_deps "$dep_mode"
 

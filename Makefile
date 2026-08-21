@@ -37,6 +37,7 @@ install-prod: venv pip-install-prod install-fonts install-icon install-desktop i
 
 pip-install-prod:
 	$(PIP) install -r requirements/prod.txt
+	$(PIP) install .
 
 # ── Execução ────────────────────────────────────────────────────
 run:
@@ -47,13 +48,14 @@ reinstall:
 	$(PIP) install -e .
 
 reinstall-prod: pip-install-prod
-	@echo "✔ Dependências de produção atualizadas."
+	$(PIP) install .
+	@echo "✔ Dependências de produção atualizadas e pacote reinstalado."
 
 # ── Desktop Entry ───────────────────────────────────────────────
 install-desktop: install-icon
 	sed 's|__EXEC_PATH__|$(abspath $(VENV))/bin/huawei-manager|g' \
-		$(DESKTOP) > $(APPS_DIR)/$(DESKTOP)
-	chmod 644 $(APPS_DIR)/$(DESKTOP)
+		$(DESKTOP) > $(APPS_DIR)/huawei-manager.desktop
+	chmod 644 $(APPS_DIR)/huawei-manager.desktop
 	update-desktop-database $(APPS_DIR) 2>/dev/null || true
 	@echo "✔ Atalho de menu instalado."
 
@@ -67,6 +69,7 @@ install-icon:
 
 # ── Shell dispatcher "huawei manager" + tab complete ────────────
 install-shell:
+	mkdir -p $(BIN_DIR)
 	sed 's|__VENV_DIR__|$(abspath $(VENV))|g' share/shell/huawei > $(BIN_DIR)/huawei
 	chmod 755 $(BIN_DIR)/huawei
 	install -Dm 644 share/shell/completion/huawei $(COMP_DIR)/huawei
@@ -79,6 +82,7 @@ install-shell:
 
 # ── Fontes Google Fonts ───────────────────────────────────────────
 install-fonts:
+	@command -v wget >/dev/null || { echo "wget não encontrado; pulando fontes"; exit 0; }
 	mkdir -p $(FONTS_DIR)
 	@echo "Baixando fontes Google Fonts..."
 	@wget -q -O /tmp/IBMPlexSans.ttf "$(IBM_PLEX_SANS_URL)" 2>/dev/null && \
@@ -94,7 +98,7 @@ install-fonts:
 	@echo "✔ Fontes instaladas (falhas individuais foram ignoradas)."
 
 uninstall:
-	rm -f $(APPS_DIR)/$(DESKTOP)
+	rm -f $(APPS_DIR)/huawei-manager.desktop
 	rm -f $(ICONS_DIR)/48x48/apps/huawei-manager.png
 	rm -f $(ICONS_DIR)/256x256/apps/huawei-manager.png
 	rm -f $(BIN_DIR)/huawei
@@ -127,6 +131,6 @@ ci: lint test typecheck
 
 # ── Limpeza ─────────────────────────────────────────────────────
 clean:
-	rm -rf .pytest_cache .ruff_cache __pycache__
+	rm -rf .pytest_cache .ruff_cache __pycache__ .venv
 	find . -name '*.pyc' -delete
 	find . -name '*,cover' -delete
