@@ -96,8 +96,8 @@ install_mode() {
 
     header "Pré-requisitos"
     command -v python3 >/dev/null || { err "python3 não encontrado"; exit 1; }
-    python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)" \
-        || { err "Python 3.12+ necessário"; exit 1; }
+    python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" \
+        || { err "Python 3.10+ necessário"; exit 1; }
     python3 -m venv -h >/dev/null 2>&1 \
         || { err "Módulo venv não disponível"; exit 1; }
     ok "python3 $(python3 --version | cut -d' ' -f2)"
@@ -185,7 +185,7 @@ check_mode() {
     }
 
     check "python3" "command -v python3"
-    check "python3 >= 3.12" 'python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)"'
+    check "python3 >= 3.10" 'python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"'
     check ".venv existe" "test -f $VENV/bin/python3"
     check "entry point huawei-manager" "test -f $VENV/bin/huawei-manager"
     check "import huawei_manager" "$PY -c \"from huawei_manager import main\""
