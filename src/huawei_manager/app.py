@@ -572,7 +572,10 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
     def _toggle_command_palette(self) -> None:
         """Mostra/esconde a Command Palette (Ctrl+K)."""
         if self._command_palette is None:
-            from huawei_manager.widgets.command_palette import CommandPalette, create_default_commands
+            from huawei_manager.widgets.command_palette import (
+                CommandPalette,
+                create_default_commands,
+            )
             self._command_palette = CommandPalette(self, create_default_commands(self))
         if self._command_palette.isVisible():
             self._command_palette.hide()

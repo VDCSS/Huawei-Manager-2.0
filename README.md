@@ -182,8 +182,9 @@ bash setup/setup.sh --dev
 
 **O que faz:**
 1. Cria `.venv/` com Python 3.12+
-2. Instala **todas dependências** via `pip install -e ".[dev]"`:
-   - **Core (8)**: PySide6, netmiko, cryptography, pyyaml, python-dotenv, bcrypt, **hvac, boto3**
+2. Instala **todas dependências** via `pip install -e ".[dev,vault,aws]"`:
+   - **Core (6)**: PySide6, netmiko, cryptography, pyyaml, python-dotenv, bcrypt
+   - **Extras (2)**: hvac, boto3 (via `[vault,aws]`)
    - **Dev (5)**: pytest, pytest-cov, pytest-qt, ruff, pyright
 3. Baixa fontes (Inter, Space Grotesk, JetBrains Mono) em `~/.local/share/fonts/` — tolerante a falhas
 4. Instala ícone em `~/.local/share/icons/`
@@ -200,7 +201,7 @@ make install-prod
 bash setup/setup.sh --prod
 ```
 
-**O que faz:** Igual ao modo dev, mas **apenas dependências de runtime** (8 pacotes core via `requirements/prod.txt`), **sem ferramentas de dev**.
+**O que faz:** Igual ao modo dev, mas **apenas dependências de runtime** (6 core + 2 extras via `pip install -e ".[vault,aws]"`), **sem ferramentas de dev**.
 
 ---
 

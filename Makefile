@@ -28,7 +28,7 @@ venv:
 	python3 -m venv $(VENV)
 
 pip-install:
-	$(PIP) install -e ".[dev]"
+	$(PIP) install -e ".[dev,vault,aws]"
 
 # ── Instalação produção (usuários finais, sem ferramentas de dev) ──
 install-prod: venv pip-install-prod install-fonts install-icon install-desktop install-shell
@@ -36,8 +36,7 @@ install-prod: venv pip-install-prod install-fonts install-icon install-desktop i
 	@echo "  Procure 'Huawei Manager' no menu ou digite 'huawei manager'."
 
 pip-install-prod:
-	$(PIP) install -r requirements/prod.txt
-	$(PIP) install . --no-deps
+	$(PIP) install -e ".[vault,aws]"
 
 # ── Execução ────────────────────────────────────────────────────
 run:
@@ -45,7 +44,7 @@ run:
 
 # ── Reinstalação (após git pull) ────────────────────────────────
 reinstall:
-	$(PIP) install -e ".[dev]"
+	$(PIP) install -e ".[dev,vault,aws]"
 
 reinstall-prod: pip-install-prod
 	@echo "✔ Dependências de produção atualizadas e pacote reinstalado."

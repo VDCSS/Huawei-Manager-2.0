@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from _factories import make_device as _make_device_factory
+from ._factories import make_device as _make_device_factory
 from huawei_manager.handlers.dashboard import DashboardMixin
 
 

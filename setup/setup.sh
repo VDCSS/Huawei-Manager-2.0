@@ -49,12 +49,11 @@ install_deps() {
     header "Dependências"
     $PIP install --upgrade pip -q
     if [ "$mode" = "prod" ]; then
-        $PIP install -r "$SCRIPT_DIR/requirements/prod.txt" -q
-        cd "$SCRIPT_DIR" && $PIP install . --no-deps -q
-        ok "Dependências de produção instaladas + pacote"
+        $PIP install -e ".[vault,aws]" -q
+        ok "Dependências de produção instaladas (core + vault + aws extras)"
     else
-        $PIP install -e ".[dev]" -q
-        ok "Dependências de desenvolvimento instaladas"
+        $PIP install -e ".[dev,vault,aws]" -q
+        ok "Dependências de desenvolvimento instaladas (core + vault + aws + dev extras)"
     fi
 }
 
@@ -96,8 +95,8 @@ install_mode() {
 
     header "Pré-requisitos"
     command -v python3 >/dev/null || { err "python3 não encontrado"; exit 1; }
-    python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" \
-        || { err "Python 3.10+ necessário"; exit 1; }
+    python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)" \
+        || { err "Python 3.12+ necessário"; exit 1; }
     python3 -m venv -h >/dev/null 2>&1 \
         || { err "Módulo venv não disponível"; exit 1; }
     ok "python3 $(python3 --version | cut -d' ' -f2)"
@@ -108,6 +107,22 @@ install_mode() {
     else
         python3 -m venv "$VENV"
         ok ".venv criado"
+    fi
+
+    # Check PySide6 system dependencies (needed on fresh Ubuntu)
+    header "Dependências de sistema (PySide6)"
+    local MISSING_SYSDEPS=()
+    for pkg in libxcb-cursor-dev libxkbcommon-x11-dev; do
+        if dpkg -s "$pkg" >/dev/null 2>&1; then
+            ok "$pkg"
+        else
+            MISSING_SYSDEPS+=("$pkg")
+            err "$pkg — não encontrado"
+        fi
+    done
+    if [ ${#MISSING_SYSDEPS[@]} -gt 0 ]; then
+        warn "Instale com: sudo apt install ${MISSING_SYSDEPS[*]}"
+        warn "PySide6 pode falhar sem esses pacotes."
     fi
 
     install_deps "$dep_mode"
@@ -185,7 +200,7 @@ check_mode() {
     }
 
     check "python3" "command -v python3"
-    check "python3 >= 3.10" 'python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"'
+    check "python3 >= 3.12" 'python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)"'
     check ".venv existe" "test -f $VENV/bin/python3"
     check "entry point huawei-manager" "test -f $VENV/bin/huawei-manager"
     check "import huawei_manager" "$PY -c \"from huawei_manager import main\""

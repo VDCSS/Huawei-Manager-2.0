@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from unittest.mock import ANY, MagicMock, patch
 
-from _factories import make_device as _make_device
+from ._factories import make_device as _make_device
 from huawei_manager.handlers.ssh import SshMixin
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 log = logging.getLogger("huawei.vault")
@@ -56,4 +56,4 @@ class SecretsBackend:
     def _record_rotation(self) -> None:
         ts = _TS_FILE
         if ts:
-            ts.write_text(datetime.now(timezone.utc).isoformat())
+            ts.write_text(datetime.now(UTC).isoformat())

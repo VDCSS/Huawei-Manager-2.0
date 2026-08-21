@@ -49,13 +49,13 @@ class TestCiWorkflowActionPins:
                 f"{expected_ref} ausente em ci.yml; encontrado: {uses}"
             )
 
-    def test_setup_python_keeps_python_3_10(self) -> None:
-        """O workflow deve continuar fixando python-version 3.10."""
+    def test_setup_python_uses_3_12(self) -> None:
+        """O workflow deve fixar python-version 3.12."""
         setup_step = next(
             step
             for step in _ci_steps()
             if step.get("uses", "").startswith("actions/setup-python")
         )
-        assert setup_step["with"]["python-version"] == "3.10", (
-            "python-version do setup-python deve permanecer 3.10"
+        assert setup_step["with"]["python-version"] == "3.12", (
+            "python-version do setup-python deve ser 3.12"
         )
