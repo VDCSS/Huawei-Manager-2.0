@@ -1,7 +1,7 @@
 """Tests for SecurityTimeline — event categories, filters, severity."""
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -20,7 +20,7 @@ def timeline() -> SecurityTimeline:
 
 @pytest.fixture
 def sample_events() -> list[SecurityEvent]:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     return [
         SecurityEvent(
             timestamp=now - timedelta(hours=2),
@@ -72,7 +72,7 @@ class TestSecurityEvent:
     """SecurityEvent must store event data."""
 
     def test_create_event(self):
-        ts = datetime.now(UTC)
+        ts = datetime.now(timezone.utc)
         ev = SecurityEvent(
             timestamp=ts,
             category="auth",
@@ -86,7 +86,7 @@ class TestSecurityEvent:
         assert ev.device == "R1"
 
     def test_event_defaults(self):
-        ts = datetime.now(UTC)
+        ts = datetime.now(timezone.utc)
         ev = SecurityEvent(
             timestamp=ts,
             category="auth",
@@ -253,7 +253,7 @@ class TestCriticalEvents:
 
     def test_non_critical_not_flagged(self):
         ev = SecurityEvent(
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
             category="info",
             severity="info",
             device="R1",
@@ -318,7 +318,7 @@ class TestEdgeCases:
     def test_duplicate_id(self, timeline: SecurityTimeline):
         """Adding event with same ID twice should overwrite."""
         ev = SecurityEvent(
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
             category="auth",
             severity="low",
             device="R1",
@@ -328,7 +328,7 @@ class TestEdgeCases:
         )
         timeline.add_event(ev)
         ev2 = SecurityEvent(
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
             category="auth",
             severity="critical",
             device="R1",

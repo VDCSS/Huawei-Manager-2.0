@@ -35,7 +35,7 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -118,7 +118,7 @@ class _TimedCtx:
         """Calcula duracao, monta AuditEntry e escreve no log."""
         ms = (time.monotonic() - self._t0) * 1000
         self._logger._write(AuditEntry(
-            timestamp   = datetime.now(UTC).isoformat(),
+            timestamp   = datetime.now(timezone.utc).isoformat(),
             op          = self._op,
             user        = self._user,
             host        = self._host,
@@ -270,7 +270,7 @@ class AuditLogger:
     ) -> None:
         """Registra uma operação diretamente (sem medir tempo)."""
         self._write(AuditEntry(
-            timestamp   = datetime.now(UTC).isoformat(),
+            timestamp   = datetime.now(timezone.utc).isoformat(),
             op          = op,
             user        = user,
             host        = host,

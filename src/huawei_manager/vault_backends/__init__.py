@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from huawei_manager.vault_backends.backends_aws import AWSBackend
@@ -87,7 +87,7 @@ def rotate_ssh_key(
             f"  Deploy no router: {'✔' if deployed else '✘'}\n"
             f"  Backend vault   : {backend.backend_name}\n"
             f"{push_msg}\n"
-            f"  Timestamp       : {datetime.now(UTC).isoformat()}"
+            f"  Timestamp       : {datetime.now(timezone.utc).isoformat()}"
         )
 
     except Exception as exc:
