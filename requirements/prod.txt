@@ -1,8 +1,0 @@
-PySide6~=6.8.1
-netmiko~=4.4.0
-cryptography~=44.0.0
-pyyaml~=6.0.2
-python-dotenv~=1.0.1
-bcrypt~=4.2.1
-hvac~=2.2.0
-boto3~=1.35.0
