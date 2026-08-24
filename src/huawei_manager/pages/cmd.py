@@ -92,7 +92,7 @@ class PageBuilderCmdMixin:
         self._tpl_listbox.setStyleSheet(f"""
             QListWidget {{
                 background: {C.BG_INPUT}; color: {C.NEON_CYAN};
-                border: none; font: 12px 'Inter';
+                border: none; font: 12px {C.FONT_UI_FAMILY};
                 outline: none;
             }}
             QListWidget:focus {{
@@ -162,7 +162,7 @@ class PageBuilderCmdMixin:
         self._sysview_var = False
         sysview_cb = QCheckBox("system-view", abar)
         sysview_cb.setStyleSheet(f"""
-            QCheckBox {{ color: {C.FG_DIM}; background: {C.BG_INPUT}; font: 11px 'Inter'; }}
+            QCheckBox {{ color: {C.FG_DIM}; background: {C.BG_INPUT}; font: 11px {C.FONT_UI_FAMILY}; }}
             QCheckBox::indicator {{ width: 14px; height: 14px; }}
         """)
         sysview_cb.stateChanged.connect(lambda s: setattr(self, '_sysview_var', bool(s)))

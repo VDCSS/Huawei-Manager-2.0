@@ -20,7 +20,7 @@ _ENTRY_STYLE = f"""QLineEdit {{
     border: 1px solid {_C.BORDER_NRM};
     border-radius: 4px;
     padding: 6px 10px;
-    font: 13px 'Inter';
+    font: 13px {_C.FONT_UI_FAMILY};
 }}"""
 
 
@@ -68,7 +68,8 @@ class AuthOverlay(QWidget):
         self._close_btn = QPushButton("\u2715", self._card)
         self._close_btn.setFixedSize(28, 28)
         self._close_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {_C.FG_DIM}; border: none; font: 14px 'Inter'; }}"
+            f"QPushButton {{ background: transparent; color: {_C.FG_DIM};"
+            f" border: none; font: 14px {_C.FONT_UI_FAMILY}; }}"
             f"QPushButton:hover {{ color: {_C.NEON_CYAN}; }}")
         self._close_btn.clicked.connect(self.close_)
         header.addWidget(self._close_btn)
@@ -76,7 +77,7 @@ class AuthOverlay(QWidget):
 
         title = QLabel("Acesso Restrito", self._card)
         title.setStyleSheet(
-            f"color: {_C.NEON_CYAN}; font: bold 18px 'Inter'; background: transparent; border: none;")
+            f"color: {_C.NEON_CYAN}; font: bold 18px {_C.FONT_UI_FAMILY}; background: transparent; border: none;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(title)
 
@@ -94,7 +95,7 @@ class AuthOverlay(QWidget):
         self._error_lbl = QLabel("", self._card)
         self._error_lbl.setWordWrap(True)
         self._error_lbl.setStyleSheet(
-            "color: #ff4444; background: transparent; border: none; font: 12px 'Inter';")
+            "color: #ff4444; background: transparent; border: none; font: 12px {_C.FONT_UI_FAMILY};")
         self._error_lbl.hide()
         card_layout.addWidget(self._error_lbl)
 
@@ -104,7 +105,7 @@ class AuthOverlay(QWidget):
         self._auth_btn.setStyleSheet(
             f"QPushButton {{ background: {_C.BG_CARD}; color: {_C.NEON_CYAN}; "
             f"border: 1px solid {_C.NEON_CYAN}; border-radius: 6px; "
-            f"padding: 8px 24px; font: bold 13px 'Inter'; }}"
+            f"padding: 8px 24px; font: bold 13px {_C.FONT_UI_FAMILY}; }}"
             f"QPushButton:hover {{ background: {_C.NEON_CYAN}; color: {_C.BG_CARD}; }}")
         self._auth_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._auth_btn.clicked.connect(self._verify)

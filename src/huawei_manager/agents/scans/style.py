@@ -47,7 +47,7 @@ def scan(root: Path) -> AgentResult:
             continue
         rel = fpath.relative_to(root)
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 # Pula Qt event overrides — não podem ser snake_case
                 if node.name in QT_EVENT_OVERRIDES:
                     pass

@@ -47,7 +47,7 @@ def _collect_definitions(tree: ast.AST) -> set[str]:
     """Coleta todos os nomes definidos (funções, classes, imports, assignments)."""
     defined: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             defined.add(node.name)
         elif isinstance(node, ast.Assign):
             for target in node.targets:

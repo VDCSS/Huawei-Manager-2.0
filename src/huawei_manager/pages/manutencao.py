@@ -62,7 +62,7 @@ class PageBuilderManutencaoMixin:
         grp_dev.setStyleSheet(f"""
             QGroupBox {{
                 background: {C.BG_CARD}; color: {C.NEON_CYAN};
-                font: bold 10px 'Inter'; border: 1px solid {C.BORDER_NRM};
+                font: bold 10px {C.FONT_UI_FAMILY}; border: 1px solid {C.BORDER_NRM};
                 border-radius: 4px; margin-top: 8px; padding: 12px 4px 4px 4px;
             }}
             QGroupBox::title {{
@@ -95,7 +95,7 @@ class PageBuilderManutencaoMixin:
         grp_agents.setStyleSheet(f"""
             QGroupBox {{
                 background: {C.BG_CARD}; color: {C.NEON_PURP};
-                font: bold 10px 'Inter'; border: 1px solid {C.BORDER_NRM};
+                font: bold 10px {C.FONT_UI_FAMILY}; border: 1px solid {C.BORDER_NRM};
                 border-radius: 4px; margin-top: 8px; padding: 12px 4px 4px 4px;
             }}
             QGroupBox::title {{
@@ -122,7 +122,7 @@ class PageBuilderManutencaoMixin:
         grp_mode.setStyleSheet(f"""
             QGroupBox {{
                 background: {C.BG_CARD}; color: {C.NEON_AMBER};
-                font: bold 10px 'Inter'; border: 1px solid {C.BORDER_NRM};
+                font: bold 10px {C.FONT_UI_FAMILY}; border: 1px solid {C.BORDER_NRM};
                 border-radius: 4px; margin-top: 8px; padding: 12px 4px 4px 4px;
             }}
             QGroupBox::title {{
@@ -145,7 +145,7 @@ class PageBuilderManutencaoMixin:
         grp_setup.setStyleSheet(f"""
             QGroupBox {{
                 background: {C.BG_CARD}; color: {C.NEON_AMBER};
-                font: bold 10px 'Inter'; border: 1px solid {C.BORDER_NRM};
+                font: bold 10px {C.FONT_UI_FAMILY}; border: 1px solid {C.BORDER_NRM};
                 border-radius: 4px; margin-top: 8px; padding: 12px 4px 4px 4px;
             }}
             QGroupBox::title {{
@@ -183,7 +183,7 @@ class PageBuilderManutencaoMixin:
         self._manut_summary.setStyleSheet(f"""
             QTextEdit {{
                 background: {C.BG_INPUT}; color: {C.FG_CODE};
-                border: none; font: 11px 'Inter'; padding: 8px 10px;
+                border: none; font: 11px {C.FONT_UI_FAMILY}; padding: 8px 10px;
             }}
         """)
         summary_layout.addWidget(self._manut_summary)
@@ -214,7 +214,7 @@ class PageBuilderManutencaoMixin:
             rb.setStyleSheet(f"""
                 QRadioButton {{
                     color: {fcol}; background: {C.BG_CARD};
-                    font: {C.FONT_CAPTION}px 'Inter'; spacing: 2px;
+                    font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY}; spacing: 2px;
                 }}
                 QRadioButton::indicator {{ width: 12px; height: 12px; }}
             """)
@@ -368,7 +368,7 @@ class PageBuilderManutencaoMixin:
         color = C.NEON_AMBER if self._mock_mode else C.NEON_CYAN
         self._mode_btn.setText(f"\u25cf  {mode}")
         self._mode_btn.setStyleSheet(
-            f"color: {color}; background: {C.BG_CARD}; font: bold 11px 'Inter';"
+            f"color: {color}; background: {C.BG_CARD}; font: bold 11px {C.FONT_UI_FAMILY};"
             f" border: 1px solid {color}; border-radius: 4px; padding: 4px 12px;")
         log_msg = f"Modo de probe alterado: {mode}"
         self._write(self._manut_output, log_msg)
@@ -437,8 +437,8 @@ class PageBuilderManutencaoMixin:
 
         self._cancel_and_clear()
 
-        setup_script = str(PROJECT_ROOT / "setup" / "setup.sh")
-        self._loading(self._manut_output, f"setup.sh {mode}...")
+        setup_script = str(PROJECT_ROOT / "setup" / "install.sh")
+        self._loading(self._manut_output, f"install.sh install {mode}...")
 
         cancel = threading.Event()
         self._cancel_event = cancel
@@ -459,7 +459,7 @@ class PageBuilderManutencaoMixin:
             proc: subprocess.Popen | None = None
             try:
                 proc = subprocess.Popen(
-                    [setup_script, mode], stdout=subprocess.PIPE,
+                    [setup_script, "install", mode], stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
                     cwd=str(PROJECT_ROOT),
                 )
@@ -481,7 +481,7 @@ class PageBuilderManutencaoMixin:
                 rc = proc.returncode
                 prefix = "\u2705" if rc == 0 else f"\u274c (exit {rc})"
                 self._dispatch(lambda p=prefix: self._manut_output.append(
-                    f"\n{p}  setup.sh {mode} concluido"))
+                    f"\n{p}  install.sh install {mode} concluido"))
             except subprocess.TimeoutExpired:
                 self._dispatch(lambda: self._manut_output.append(
                     "\n\u23f0  Timeout (120s)"))

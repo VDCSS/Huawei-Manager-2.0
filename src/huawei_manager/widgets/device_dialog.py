@@ -41,7 +41,7 @@ FIELD_DEFINITIONS: list[tuple[str, str, bool]] = [
 def _style_label(text: str, fixed_width: int = 100) -> QLabel:
     lbl = QLabel(text)
     lbl.setStyleSheet(
-        f"color: {C.FG_DIM}; font: 11px 'Inter'; min-width: {fixed_width}px;"
+        f"color: {C.FG_DIM}; font: 11px {C.FONT_UI_FAMILY}; min-width: {fixed_width}px;"
     )
     lbl.setFixedWidth(fixed_width)
     return lbl
@@ -53,7 +53,7 @@ def _style_input(placeholder: str = "", is_secret: bool = False) -> QLineEdit:
     entry.setStyleSheet(
         f"background: {C.BG_INPUT}; color: {C.NEON_CYAN}; "
         f"border: 1px solid {C.BORDER_NRM}; border-radius: 3px; "
-        f"padding: 4px 8px; font: 12px 'Inter';"
+        f"padding: 4px 8px; font: 12px {C.FONT_UI_FAMILY};"
     )
     if is_secret:
         entry.setEchoMode(QLineEdit.EchoMode.Password)
@@ -117,7 +117,7 @@ class DeviceDialog(QDialog):
         self._type_cb.setStyleSheet(
             f"QComboBox {{ background: {C.BG_INPUT}; color: {C.NEON_CYAN}; "
             f"border: 1px solid {C.BORDER_NRM}; border-radius: 3px; "
-            f"padding: 4px 8px; font: 12px 'Inter'; }}"
+            f"padding: 4px 8px; font: 12px {C.FONT_UI_FAMILY}; }}"
             f"QComboBox::drop-down {{ border: none; }}"
             f"QComboBox QAbstractItemView {{ background: {C.BG_INPUT}; "
             f"color: {C.NEON_CYAN}; selection-background-color: {C.NEON_PURP}; }}"
@@ -141,7 +141,7 @@ class DeviceDialog(QDialog):
 
             if is_secret:
                 show_cb = QCheckBox("Exibir", row)
-                show_cb.setStyleSheet(f"color: {C.NEON_PURP}; font: 11px 'Inter';")
+                show_cb.setStyleSheet(f"color: {C.NEON_PURP}; font: 11px {C.FONT_UI_FAMILY};")
                 show_cb.toggled.connect(
                     lambda checked, e=entry: e.setEchoMode(
                         QLineEdit.EchoMode.Normal
@@ -162,7 +162,7 @@ class DeviceDialog(QDialog):
         save_btn.setStyleSheet(
             f"background: transparent; color: {C.NEON_CYAN}; "
             f"border: 1px solid {C.NEON_CYAN}; border-radius: 3px; "
-            f"padding: 6px 18px; font: 12px 'Inter';"
+            f"padding: 6px 18px; font: 12px {C.FONT_UI_FAMILY};"
         )
         save_btn.clicked.connect(self._on_save)
         bar_layout.addWidget(save_btn)
@@ -173,7 +173,7 @@ class DeviceDialog(QDialog):
         cancel_btn.setStyleSheet(
             f"background: transparent; color: {C.NEON_PURP}; "
             f"border: 1px solid {C.NEON_PURP}; border-radius: 3px; "
-            f"padding: 6px 18px; font: 12px 'Inter';"
+            f"padding: 6px 18px; font: 12px {C.FONT_UI_FAMILY};"
         )
         cancel_btn.clicked.connect(self.reject)
         bar_layout.addWidget(cancel_btn)
@@ -202,7 +202,7 @@ class DeviceDialog(QDialog):
             self._name_entry.setStyleSheet(
                 f"background: {C.BG_INPUT}; color: {C.NEON_RED}; "
                 f"border: 1px solid {C.NEON_RED}; border-radius: 3px; "
-                f"padding: 4px 8px; font: 12px 'Inter';"
+                f"padding: 4px 8px; font: 12px {C.FONT_UI_FAMILY};"
             )
             return
 
@@ -212,7 +212,7 @@ class DeviceDialog(QDialog):
             self._form_fields["host"].setStyleSheet(
                 f"background: {C.BG_INPUT}; color: {C.NEON_RED}; "
                 f"border: 1px solid {C.NEON_RED}; border-radius: 3px; "
-                f"padding: 4px 8px; font: 12px 'Inter';"
+                f"padding: 4px 8px; font: 12px {C.FONT_UI_FAMILY};"
             )
             return
 

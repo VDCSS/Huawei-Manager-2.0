@@ -35,7 +35,7 @@ REQUIRED_FILES = [
     "src/huawei_manager/_config.py",
     "pyproject.toml",
     "Makefile",
-    "setup/setup.sh",
+    "setup/install.sh",
 ]
 
 

@@ -14,6 +14,9 @@ dependencies = [
     "bcrypt~=4.2.1",
 ]
 
+[project.scripts]
+huawei-manager = "huawei_manager:main"
+
 [tool.setuptools.dynamic]
 version = {attr = "huawei_manager.__version__"}
 
@@ -36,7 +39,9 @@ reportMissingTypeArgument = "warning"
 
 [tool.ruff]
 target-version = "py312"
-line-length = 100
+line-length = 120
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]
 ignore = []
 fixable = ["E", "F", "W", "I"]

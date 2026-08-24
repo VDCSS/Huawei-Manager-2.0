@@ -40,7 +40,8 @@ def _walk(root: Path) -> list[Path]:
             result.append(p)
     # Apenas ficheiros não ignorados explicitamente
     for p in root.iterdir():
-        if p.is_file() and p.name not in IGNORE_FILES and p.suffix in {".env", ".txt", ".yaml", ".yml", ".cfg"}:
+        allowed_suffixes = {".env", ".txt", ".yaml", ".yml", ".cfg"}
+        if p.is_file() and p.name not in IGNORE_FILES and p.suffix in allowed_suffixes:
             result.append(p)
     return result
 

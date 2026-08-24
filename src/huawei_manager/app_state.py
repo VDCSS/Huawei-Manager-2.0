@@ -46,7 +46,7 @@ class AppStateMixin:
 
     def _set_status(self, text: str, color: str) -> None:
         self.status_dot.setStyleSheet(
-            f"color: {color}; background: {C.BG_BASE}; font: 16px 'Inter';")
+            f"color: {color}; background: {C.BG_BASE}; font: 16px {C.FONT_UI_FAMILY};")
         self.status_lbl.setText(text)
 
     def _set_conn_btn(self, text: str = "  CONECTAR  ", disabled: bool = False) -> None:

@@ -65,7 +65,7 @@ src/huawei_manager/
 ├── widgets/            # ActionButton, NeonButton, helpers de widget
 ├── _app.py             # QSS dark/light themes, apply_theme(), get_qt_app()
 ├── _config.py          # Lazy init: logging, secrets backend, audit logger
-├── constants.py        # Cores, fontes (Inter/Consolas), filtros CLI
+├── constants.py        # Cores, famílias de fonte, filtros CLI
 ├── exceptions.py       # Custom exceptions (Sócrates session)
 │
 ├── pages/              # PageBuilder — 10 abas da interface
@@ -140,7 +140,7 @@ Makefile                # install, run, test, lint, typecheck, coverage
 | Camada | Tecnologia |
 |--------|-----------|
 | **Linguagem** | Python 3.12+ |
-| **Interface** | PySide6 6.8+ (Qt for Python) |
+| **Interface** | PySide6 6.10+ (Qt for Python) |
 | **SSH / CLI** | Netmiko 4+ (paramiko) |
 | **Secrets** | python-dotenv / cryptography / hvac / boto3 / sops |
 | **Criptografia** | cryptography — ED25519, AES-256-GCM |
@@ -177,7 +177,7 @@ cp .env.example .env
 ```bash
 make install
 # ou equivalente:
-bash setup/setup.sh --dev
+bash setup/install.sh install --dev
 ```
 
 **O que faz:**
@@ -186,7 +186,7 @@ bash setup/setup.sh --dev
    - **Core (6)**: PySide6, netmiko, cryptography, pyyaml, python-dotenv, bcrypt
    - **Extras (2)**: hvac, boto3 (via `[vault,aws]`)
    - **Dev (5)**: pytest, pytest-cov, pytest-qt, ruff, pyright
-3. Baixa fontes (Inter, Space Grotesk, JetBrains Mono) em `~/.local/share/fonts/` — tolerante a falhas
+3. Baixa fontes (IBM Plex Sans, Space Grotesk, JetBrains Mono) em `~/.local/share/fonts/` — tolerante a falhas
 4. Instala ícone em `~/.local/share/icons/`
 5. Instala `.desktop` em `~/.local/share/applications/`
 6. Instala comando `huawei` com tab-completion em `~/.local/bin/`
@@ -198,7 +198,7 @@ bash setup/setup.sh --dev
 ```bash
 make install-prod
 # ou equivalente:
-bash setup/setup.sh --prod
+bash setup/install.sh install --prod
 ```
 
 **O que faz:** Igual ao modo dev, mas **apenas dependências de runtime** (6 core + 2 extras via `pip install -e ".[vault,aws]"`), **sem ferramentas de dev**.
@@ -219,18 +219,20 @@ pip install -e ".[aws]"      # instala boto3
 # ou: pip install boto3~=1.35.0
 ```
 
-> **Nota:** `hvac` e `boto3` já estão em `requirements/prod.txt` desde a v2.x — se instalou via `make install` ou `make install-prod`, **já estão disponíveis**. Os comandos acima são para instalação avulsa ou ambientes sem Makefile.
+> **Nota:** se instalou via `make install` ou `make install-prod`, `hvac` e `boto3` **já estão disponíveis** — são os extras `[vault]`/`[aws]` declarados no pyproject. Os comandos acima são para instalação avulsa.
 
 ---
 
-### Flags do script `setup/setup.sh`
+### Modos e flags do instalador `setup/install.sh`
 
 ```bash
-bash setup/setup.sh              # dev + fonts (padrão)
-bash setup/setup.sh --dev        # desenvolvimento (com ferramentas de dev)
-bash setup/setup.sh --prod       # produção (apenas runtime)
-bash setup/setup.sh --fonts      # apenas fontes Google Fonts
-bash setup/setup.sh --help       # mostra ajuda
+bash setup/install.sh                       # install completo: dev + fontes (padrão)
+bash setup/install.sh install --prod        # produção (apenas runtime)
+bash setup/install.sh install --no-fonts    # pula o download das fontes
+bash setup/install.sh fonts                 # apenas fontes Google Fonts
+bash setup/install.sh reset --prod          # limpa .venv/caches/logs e reinstala
+bash setup/install.sh check                 # diagnóstico do ambiente
+bash setup/install.sh --help                # mostra ajuda
 ```
 
 ---
@@ -260,12 +262,24 @@ ROUTER_PORT=22
 ROUTER_USERNAME=admin
 ROUTER_PASSWORD=
 ROUTER_SSH_KEY=~/.ssh/huawei_ed25519
-ROUTER_HOSTKEY_VERIFY=false
+# Verificação de host key: strict | tofu | off
+ROUTER_HOSTKEY_VERIFY=strict
 
 # Secrets backend: env | crypto | sops | vault | aws
 SECRETS_BACKEND=env
 # Chave AES-256-GCM (obrigatória se SECRETS_BACKEND=crypto)
 # SECRETS_KEY=sua-chave-32-bytes
+
+# Backend vault (extra [vault]):
+# VAULT_ADDR=http://127.0.0.1:8200
+# VAULT_TOKEN=
+# VAULT_MOUNT=secret
+# VAULT_SECRET_PATH=huawei/manager
+
+# Backend aws (extra [aws]):
+# AWS_REGION=us-east-1
+# AWS_SECRET_NAME=huawei/manager/creds
+
 # VNF_ENCRYPT_KEY: auto-gerada no primeiro boot se ausente (fail-closed sem ela)
 ```
 
@@ -302,10 +316,11 @@ make decrypt-env     # Descriptografa .env.enc → .env
 4. Não commite senha em texto puro: `vnf_inventory.json` não persiste `password` (fail-closed no save).
 
 # Manutenção
-make reinstall       # pip install -e . (após git pull, dev)
-make reinstall-prod  # pip install -r requirements/prod.txt (produção)
-make uninstall       # Remove atalho, ícone e comando do sistema
-make clean           # Remove caches (__pycache__, .pytest_cache, .ruff_cache)
+make reinstall       # pip install -e ".[dev,vault,aws]" (após git pull, dev)
+make reinstall-prod  # pip install -e ".[vault,aws]" (produção)
+make uninstall       # Remove atalhos, ícone, comando e fontes do sistema
+make clean           # Remove apenas caches (nunca remove .venv nem logs)
+make clean-all       # DESTRUTIVO: clean + .venv + logs (opt-in)
 ```
 
 ---

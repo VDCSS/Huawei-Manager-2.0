@@ -33,7 +33,9 @@ class ThreadingMixin:
                     self._event_drop_count,
                 )
             else:
-                _app_log.warning("UI queue overflow (%d), descartando callback", len(self._ui_queue))
+                _app_log.warning(
+                "UI queue overflow (%d), descartando callback", len(self._ui_queue)
+            )
             return
         self._ui_queue.append(fn)
 

@@ -58,18 +58,18 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
     def _page_title(self, parent: QWidget, title: str, color: str, subtitle: str = "") -> None:
         lbl = QLabel(title, parent)
-        lbl.setStyleSheet(f"color: {color}; font: bold {C.FONT_TITLE}px 'Inter'; padding: 0px; margin: 0px;")
+        lbl.setStyleSheet(f"color: {color}; font: bold {C.FONT_TITLE}px {C.FONT_UI_FAMILY}; padding: 0px; margin: 0px;")
         parent.layout().addWidget(lbl)
         if subtitle:
             sub = QLabel(subtitle, parent)
-            sub.setStyleSheet(f"color: {C.FG_DIM}; font: {C.FONT_SUBHEAD}px 'Inter'; padding: 0px;")
+            sub.setStyleSheet(f"color: {C.FG_DIM}; font: {C.FONT_SUBHEAD}px {C.FONT_UI_FAMILY}; padding: 0px;")
             parent.layout().addWidget(sub)
         parent.layout().addSpacing(8)
 
     def _css_label(self, color: str, bg: str = "", font_size: int = 12, bold: bool = False) -> str:
         weight = "bold" if bold else "normal"
         bg_css = f"background: {bg};" if bg else ""
-        return f"color: {color}; {bg_css} font: {weight} {font_size}px 'Inter';"
+        return f"color: {color}; {bg_css} font: {weight} {font_size}px {C.FONT_UI_FAMILY};"
 
     # ── Config ────────────────────────────────────────────────────────
     def _build_config_page(self: AppCoreProtocol) -> None:
@@ -109,7 +109,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         self._route_filter_cb.setStyleSheet(f"""
             QComboBox {{ background: {C.BG_INPUT}; color: {C.NEON_CYAN};
                          border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                         padding: 4px 8px; font: 11px 'Inter'; }}
+                         padding: 4px 8px; font: 11px {C.FONT_UI_FAMILY}; }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{ background: {C.BG_INPUT};
                                            color: {C.NEON_CYAN};
@@ -300,7 +300,9 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         row1_layout.addWidget(card1)
 
         self._dash_conn_status = QLabel("Desconectado", card1)
-        self._dash_conn_status.setStyleSheet(f"color: {C.NEON_RED}; font: bold 14px 'Inter'; background: {C.BG_INPUT};")
+        self._dash_conn_status.setStyleSheet(
+            f"color: {C.NEON_RED}; font: bold 14px {C.FONT_UI_FAMILY};"
+            f" background: {C.BG_INPUT};")
         card1._clayout.addWidget(self._dash_conn_status)
 
         self._dash_conn_host = QLabel("Host: ---", card1)
@@ -337,7 +339,7 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
             QTextEdit {{
                 background: {C.BG_BASE}; color: {C.FG_CODE};
                 border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                padding: 4px; font: {C.FONT_CAPTION}px 'Inter';
+                padding: 4px; font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY};
             }}
         """)
         self._dash_audit_text.setMinimumHeight(60)

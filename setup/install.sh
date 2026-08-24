@@ -1,80 +1,107 @@
 #!/usr/bin/env bash
+# setup/install.sh — instalador canônico do Huawei Manager 2.0.
+#
+# Uso:
+#   setup/install.sh install [--dev|--prod] [--no-fonts]
+#   setup/install.sh fonts
+#   setup/install.sh reset  [--dev|--prod]
+#   setup/install.sh check
+#   setup/install.sh --help
+#
+# `install` é o modo padrão; `--dev` é o modo padrão de dependências.
+
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$SETUP_DIR/.." && pwd)"
+# shellcheck source=lib/common.sh
+source "$SETUP_DIR/lib/common.sh"
+
 VENV="$SCRIPT_DIR/.venv"
 PY="$VENV/bin/python3"
 PIP="$VENV/bin/pip"
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-BOLD='\033[1m'
-
-# Google Fonts URLs
-IBM_PLEX_SANS_URL="https://github.com/google/fonts/raw/main/ofl/ibmplexsans/IBMPlexSans%5Bwght%5D.ttf"
-SPACE_GROTESK_URL="https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf"
-JETBRAINS_MONO_URL="https://github.com/google/fonts/raw/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
-
-info()  { echo -e "${CYAN}INFO${NC}  $1"; }
-ok()    { echo -e "${GREEN}OK${NC}    $1"; }
-warn()  { echo -e "${YELLOW}WARN${NC}  $1"; }
-err()   { echo -e "${RED}ERRO${NC}  $1"; }
-header(){ echo -e "\n${BOLD}$1${NC}"; echo "────────────────────────────────────────"; }
 
 usage() {
     cat <<EOF
-Huawei Manager 2.0 — Setup
+Huawei Manager 2.0 — Instalador
 
-Uso: $0 [opções]
+Uso: $0 <modo> [opções]
 
-Opções:
-  --dev       Instala com ferramentas de desenvolvimento (padrão)
-  --prod      Instala apenas dependências de produção
-  --fonts     Instala fontes Google Fonts (IBM Plex Sans, Space Grotesk, JetBrains Mono)
-  --help      Mostra esta mensagem
+Modos:
+  install      Instalação completa (padrão)
+  fonts        Instala apenas as fontes Google Fonts
+  reset        Limpa .venv/caches/logs e reinstala
+  check        Diagnóstico do ambiente
+  --help       Mostra esta mensagem
+
+Opções (install / reset):
+  --dev        Com ferramentas de desenvolvimento (padrão)
+  --prod       Apenas dependências de produção
+  --no-fonts   Pula o download das fontes
 
 Exemplos:
-  $0              # Instalação completa (dev + fonts)
-  $0 --prod       # Apenas dependências de produção
-  $0 --prod --fonts  # Produção + fontes
-  $0 reset        # Limpa e reinstala
-  $0 check        # Diagnóstico do ambiente
+  $0                       # Instalação completa (dev + fontes)
+  $0 install --prod        # Produção + fontes
+  $0 install --prod --no-fonts
+  $0 fonts                 # Apenas fontes
+  $0 reset --prod          # Limpa e reinstala em produção
+  $0 check                 # Diagnóstico do ambiente
 EOF
 }
 
 install_deps() {
     local mode="$1"
     header "Dependências"
-    $PIP install --upgrade pip -q
+    "$PIP" install --upgrade pip -q
     if [ "$mode" = "prod" ]; then
-        $PIP install -e ".[vault,aws]" -q
+        "$PIP" install -e ".[vault,aws]" -q
         ok "Dependências de produção instaladas (core + vault + aws extras)"
     else
-        $PIP install -e ".[dev,vault,aws]" -q
+        "$PIP" install -e ".[dev,vault,aws]" -q
         ok "Dependências de desenvolvimento instaladas (core + vault + aws + dev extras)"
     fi
 }
 
-install_fonts() {
+install_assets() {
+    header "Ícone"
+    local ICONS_DIR="$HOME/.local/share/icons/hicolor"
+    local size
+    for size in 48x48 256x256; do
+        install -Dm 644 "$SCRIPT_DIR/share/icons/huawei-manager.png" \
+            "$ICONS_DIR/$size/apps/huawei-manager.png" >/dev/null 2>&1 || true
+    done
+    ok "Ícone instalado"
+
+    header "Desktop entry"
+    local APPS_DIR="$HOME/.local/share/applications"
+    mkdir -p "$APPS_DIR"
+    render_template "$SCRIPT_DIR/share/huawei-manager.desktop" \
+        "$APPS_DIR/huawei-manager.desktop" "$VENV/bin/huawei-manager" "$VENV"
+    chmod 644 "$APPS_DIR/huawei-manager.desktop"
+    update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
+    ok "Desktop entry instalado"
+
+    header "Shell dispatcher"
+    local BIN_DIR="$HOME/.local/bin"
+    local COMP_DIR="$HOME/.local/share/bash-completion/completions"
+    mkdir -p "$BIN_DIR" "$COMP_DIR"
+
+    render_template "$SCRIPT_DIR/share/shell/huawei" "$BIN_DIR/huawei" \
+        "$VENV/bin/huawei-manager" "$VENV"
+    chmod 755 "$BIN_DIR/huawei"
+
+    { echo '#!/usr/bin/env bash'; echo "exec $VENV/bin/huawei-manager \"\$@\""; } \
+        > "$BIN_DIR/huawei-manager"
+    chmod 755 "$BIN_DIR/huawei-manager"
+
+    install -Dm 644 "$SCRIPT_DIR/share/shell/completion/huawei" \
+        "$COMP_DIR/huawei" >/dev/null 2>&1 || true
+    ok "Shell: huawei / huawei-manager"
+}
+
+fonts_mode() {
     header "Fontes Google Fonts"
-    command -v wget >/dev/null || { warn "wget não encontrado; pulando fontes"; return 0; }
-    local FONTS_DIR="$HOME/.local/share/fonts"
-    mkdir -p "$FONTS_DIR"
-
-    echo "Baixando fontes Google Fonts..."
-    wget -q -O /tmp/IBMPlexSans.ttf "$IBM_PLEX_SANS_URL" 2>/dev/null && \
-        cp /tmp/IBMPlexSans.ttf "$FONTS_DIR/IBMPlexSans.ttf" && \
-        ok "IBM Plex Sans" || warn "IBM Plex Sans — download falhou (ignorado)"
-    wget -q -O /tmp/SpaceGrotesk.ttf "$SPACE_GROTESK_URL" 2>/dev/null && \
-        cp /tmp/SpaceGrotesk.ttf "$FONTS_DIR/SpaceGrotesk.ttf" && \
-        ok "Space Grotesk" || warn "Space Grotesk — download falhou (ignorado)"
-    wget -q -O /tmp/JetBrainsMono.ttf "$JETBRAINS_MONO_URL" 2>/dev/null && \
-        cp /tmp/JetBrainsMono.ttf "$FONTS_DIR/JetBrainsMono.ttf" && \
-        ok "JetBrains Mono" || warn "JetBrains Mono — download falhou (ignorado)"
-
-    fc-cache -f "$FONTS_DIR" 2>/dev/null || true
+    install_fonts
     ok "Fontes instaladas (falhas individuais foram ignoradas)."
 }
 
@@ -82,23 +109,21 @@ install_mode() {
     local dep_mode="dev"
     local do_fonts=true
 
-    # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
-            --dev)   dep_mode="dev"; shift ;;
-            --prod)  dep_mode="prod"; shift ;;
-            --fonts) do_fonts=true; shift ;;
-            --help)  usage; exit 0 ;;
-            *)       err "Opção desconhecida: $1"; usage; exit 1 ;;
+            --dev)      dep_mode="dev"; shift ;;
+            --prod)     dep_mode="prod"; shift ;;
+            --no-fonts) do_fonts=false; shift ;;
+            --help|-h)  usage; exit 0 ;;
+            *)          err "Opção desconhecida: $1"; echo; usage; exit 1 ;;
         esac
     done
 
     header "Pré-requisitos"
-    command -v python3 >/dev/null || { err "python3 não encontrado"; exit 1; }
+    command -v python3 >/dev/null 2>&1 || die "python3 não encontrado"
     python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)" \
-        || { err "Python 3.12+ necessário"; exit 1; }
-    python3 -m venv -h >/dev/null 2>&1 \
-        || { err "Módulo venv não disponível"; exit 1; }
+        || die "Python 3.12+ necessário"
+    python3 -m venv -h >/dev/null 2>&1 || die "Módulo venv não disponível"
     ok "python3 $(python3 --version | cut -d' ' -f2)"
 
     header "Virtual environment"
@@ -109,104 +134,77 @@ install_mode() {
         ok ".venv criado"
     fi
 
-    # Check PySide6 system dependencies (needed on fresh Ubuntu)
-    header "Dependências de sistema (PySide6)"
-    local MISSING_SYSDEPS=()
-    for pkg in libxcb-cursor-dev libxkbcommon-x11-dev; do
-        if dpkg -s "$pkg" >/dev/null 2>&1; then
-            ok "$pkg"
-        else
-            MISSING_SYSDEPS+=("$pkg")
-            err "$pkg — não encontrado"
-        fi
-    done
-    if [ ${#MISSING_SYSDEPS[@]} -gt 0 ]; then
-        warn "Instale com: sudo apt install ${MISSING_SYSDEPS[*]}"
-        warn "PySide6 pode falhar sem esses pacotes."
-    fi
+    check_sysdeps
 
     install_deps "$dep_mode"
 
     if [ "$do_fonts" = true ]; then
-        install_fonts
+        fonts_mode
+    else
+        info "Download de fontes pulado (--no-fonts)"
     fi
 
-    header "Ícone"
-    ICONS_DIR="$HOME/.local/share/icons/hicolor"
-    for size in 48x48 256x256; do
-        install -Dm 644 "$SCRIPT_DIR/share/icons/huawei-manager.png" \
-            "$ICONS_DIR/$size/apps/huawei-manager.png" 2>/dev/null || true
-    done
-    ok "Ícone instalado"
-
-    header "Desktop entry"
-    APPS_DIR="$HOME/.local/share/applications"
-    sed "s|__EXEC_PATH__|$VENV/bin/huawei-manager|g" \
-        "$SCRIPT_DIR/share/huawei-manager.desktop" > "$APPS_DIR/huawei-manager.desktop"
-    chmod 644 "$APPS_DIR/huawei-manager.desktop"
-    update-desktop-database "$APPS_DIR" 2>/dev/null || true
-    ok "Desktop entry instalado"
-
-    header "Shell dispatcher"
-    BIN_DIR="$HOME/.local/bin"
-    COMP_DIR="$HOME/.local/share/bash-completion/completions"
-    mkdir -p "$BIN_DIR" "$COMP_DIR"
-
-    sed "s|__VENV_DIR__|$VENV|g" "$SCRIPT_DIR/share/shell/huawei" > "$BIN_DIR/huawei"
-    chmod 755 "$BIN_DIR/huawei"
-
-    { echo '#!/usr/bin/env bash'; echo "exec $VENV/bin/huawei-manager \"\$@\""; } \
-        > "$BIN_DIR/huawei-manager"
-    chmod 755 "$BIN_DIR/huawei-manager"
-
-    install -Dm 644 "$SCRIPT_DIR/share/shell/completion/huawei" "$COMP_DIR/huawei" 2>/dev/null || true
-    ok "Shell: huawei / huawei-manager"
+    install_assets
 
     echo ""
-    ok "${BOLD}Setup completo${NC}"
-    echo "  Modo:     $dep_mode"
-    echo "  Execute:  $VENV/bin/huawei-manager"
+    ok "${BOLD}Instalação completa${NC}"
+    echo "  Modo:      $dep_mode"
+    echo "  Execute:   $VENV/bin/huawei-manager"
     echo "  Ou digite: huawei manager"
 }
 
 reset_mode() {
+    local dep_mode="dev"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --dev)      dep_mode="dev"; shift ;;
+            --prod)     dep_mode="prod"; shift ;;
+            --no-fonts) shift ;;
+            --help|-h)  usage; exit 0 ;;
+            *)          err "Opção desconhecida: $1"; echo; usage; exit 1 ;;
+        esac
+    done
+
     header "Limpando"
     rm -rf "$VENV"
     rm -rf "$SCRIPT_DIR/logs"
-    rm -rf "$SCRIPT_DIR/.pytest_cache" "$SCRIPT_DIR/.ruff_cache" "$SCRIPT_DIR/__pycache__"
-    find "$SCRIPT_DIR" -name '*.pyc' -delete
-    ok "Cache e .venv removidos"
+    rm -rf "$SCRIPT_DIR/.pytest_cache" "$SCRIPT_DIR/.ruff_cache"
+    find "$SCRIPT_DIR/src" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    find "$SCRIPT_DIR" -maxdepth 1 -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    find "$SCRIPT_DIR/src" -name '*.pyc' -delete 2>/dev/null || true
+    ok "Cache, logs e .venv removidos"
 
     header "Reinstalando"
-    exec "$0" install
+    install_mode "--$dep_mode"
 }
 
 check_mode() {
     header "Diagnóstico"
-    errors=0
-    warnings=0
+    local errors=0 warnings=0
 
+    # Severidades honestas: error conta como erro; warning conta como aviso;
+    # info é apenas informativo e NUNCA entra nas contagens (nem sugere reset).
     check() {
         local desc="$1" cmd="$2" sev="${3:-error}"
         if eval "$cmd" >/dev/null 2>&1; then
             ok "$desc"
-        elif [ "$sev" = "warning" ]; then
-            warn "$desc"
-            warnings=$((warnings + 1))
-        else
-            err "$desc"
-            errors=$((errors + 1))
+            return
         fi
+        case "$sev" in
+            error)   err "$desc"; errors=$((errors + 1)) ;;
+            warning) warn "$desc"; warnings=$((warnings + 1)) ;;
+            *)       note "$desc — ausente (informativo)" ;;
+        esac
     }
 
     check "python3" "command -v python3"
     check "python3 >= 3.12" 'python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)"'
     check ".venv existe" "test -f $VENV/bin/python3"
-    check "entry point huawei-manager" "test -f $VENV/bin/huawei-manager"
+    check "entry point huawei-manager" "test -x $VENV/bin/huawei-manager"
     check "import huawei_manager" "$PY -c \"from huawei_manager import main\""
     check "pytest instalado" "$PY -c \"import pytest\"" "warning"
     check "ruff instalado" "$PY -c \"import ruff\"" "warning"
-    check "pyright instalado" "command -v $VENV/bin/pyright" "warning"
+    check "pyright instalado" "$PY -m pyright --version" "warning"
     check "desktop entry" "test -f $HOME/.local/share/applications/huawei-manager.desktop" "warning"
     check "shell dispatcher" "test -x $HOME/.local/bin/huawei" "warning"
     check "entry point direct" "test -x $HOME/.local/bin/huawei-manager" "warning"
@@ -214,22 +212,43 @@ check_mode() {
     check "logs directory" "test -d $SCRIPT_DIR/logs" "info"
 
     echo ""
-    if [ $errors -gt 0 ] || [ $warnings -gt 0 ]; then
+    if [ "$errors" -gt 0 ] && [ "$warnings" -gt 0 ]; then
         echo -e "${RED}${errors} erro(s)${NC} · ${YELLOW}${warnings} warning(s)${NC}"
-        [ $errors -gt 0 ] && echo -e "  ${BOLD}Dica:${NC} Rode ${CYAN}$0 reset${NC}"
-        [ $warnings -gt 0 ] && echo -e "  ${BOLD}Dica:${NC} Rode ${CYAN}$0 install${NC}"
+        echo -e "  ${BOLD}Dica:${NC} Rode ${CYAN}$0 reset${NC}"
+        return 1
+    elif [ "$errors" -gt 0 ]; then
+        echo -e "${RED}${errors} erro(s)${NC}"
+        echo -e "  ${BOLD}Dica:${NC} Rode ${CYAN}$0 reset${NC}"
+        return 1
+    elif [ "$warnings" -gt 0 ]; then
+        echo -e "${YELLOW}${warnings} warning(s)${NC}"
+        echo -e "  ${BOLD}Dica:${NC} Rode ${CYAN}$0 install${NC}"
+        return 0
     else
         echo -e "${GREEN}Tudo OK${NC}"
+        return 0
     fi
 }
 
-case "${1:-install}" in
-    install) shift; install_mode "$@" ;;
-    --help)  usage; exit 0 ;;
-    reset)   reset_mode ;;
-    check)   check_mode ;;
-    *)
-        echo "Uso: $0 {install [--dev|--prod] [--fonts]|reset|check|--help}"
-        exit 1
-        ;;
-esac
+main() {
+    if [ $# -eq 0 ]; then
+        install_mode
+        return
+    fi
+    case "$1" in
+        install) shift; install_mode "$@" ;;
+        fonts)   fonts_mode ;;
+        reset)   shift; reset_mode "$@" ;;
+        check)   check_mode ;;
+        --help|-h|help) usage; exit 0 ;;
+        --dev|--prod|--no-fonts) install_mode "$@" ;;
+        *)
+            err "Modo desconhecido: $1"
+            echo
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

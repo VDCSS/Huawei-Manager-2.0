@@ -80,7 +80,7 @@ class PageBuilderServicesMixin:
         self._svc_cat_cb.setStyleSheet(f"""
             QComboBox {{ background: {C.BG_INPUT}; color: {C.NEON_CYAN};
                          border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                         padding: 4px 8px; font: 11px 'Inter'; }}
+                         padding: 4px 8px; font: 11px {C.FONT_UI_FAMILY}; }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{ background: {C.BG_INPUT};
                                            color: {C.NEON_CYAN};
@@ -123,7 +123,7 @@ class PageBuilderServicesMixin:
         self._svc_listbox.setStyleSheet(f"""
             QListWidget {{
                 background: {C.BG_INPUT}; color: {C.NEON_CYAN};
-                border: none; font: 12px 'Inter';
+                border: none; font: 12px {C.FONT_UI_FAMILY};
                 outline: none;
             }}
             QListWidget:focus {{
@@ -203,7 +203,7 @@ class PageBuilderServicesMixin:
                         "unknown": C.NEON_AMBER}.get(device.status, C.NEON_AMBER)
         self._svc_status_lbl.setText(f"Status: {device.status}")
         self._svc_status_lbl.setStyleSheet(
-            f"color: {status_color}; background: {C.BG_CARD}; font: 11px 'Inter';")
+            f"color: {status_color}; background: {C.BG_CARD}; font: 11px {C.FONT_UI_FAMILY};")
 
         all_cats = get_categories_for(device_type)
         config_cats = [c for c in all_cats if c.startswith("config-")]
@@ -342,7 +342,7 @@ class PageBuilderServicesMixin:
                 QLineEdit {{
                     background: {C.BG_BASE}; color: {C.NEON_CYAN};
                     border: 1px solid {C.BORDER_NRM}; border-radius: 3px;
-                    padding: 3px 6px; font: 12px 'Inter';
+                    padding: 3px 6px; font: 12px {C.FONT_UI_FAMILY};
                 }}
                 QLineEdit:focus {{
                     border: 1px solid {C.NEON_CYAN};

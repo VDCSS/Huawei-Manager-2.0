@@ -353,7 +353,7 @@ class TopologyCanvas(QWidget):
             QMenu {{
                 background: {C.BG_INPUT}; color: {C.FG_MAIN};
                 border: 1px solid {C.BORDER_NRM};
-                font: 11px 'Inter';
+                font: 11px {C.FONT_UI_FAMILY};
                 padding: 4px;
             }}
             QMenu::item {{

@@ -23,12 +23,12 @@ class DashboardMixin:
             host = getattr(self.session, "_host", "?")
             self._dash_conn_status.setText("Online")
             self._dash_conn_status.setStyleSheet(
-                f"color: {C.NEON_CYAN}; font: bold 14px 'Inter'; background: {C.BG_INPUT};")
+                f"color: {C.NEON_CYAN}; font: bold 14px {C.FONT_UI_FAMILY}; background: {C.BG_INPUT};")
             self._dash_conn_host.setText(f"Host: {host}")
         else:
             self._dash_conn_status.setText("Desconectado")
             self._dash_conn_status.setStyleSheet(
-                f"color: {C.NEON_RED}; font: bold 14px 'Inter'; background: {C.BG_INPUT};")
+                f"color: {C.NEON_RED}; font: bold 14px {C.FONT_UI_FAMILY}; background: {C.BG_INPUT};")
             self._dash_conn_host.setText("Host: ---")
 
         devices = self._devices

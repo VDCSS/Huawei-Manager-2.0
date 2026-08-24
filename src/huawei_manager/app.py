@@ -96,7 +96,11 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
             from huawei_manager.device_crypto import ensure_encrypt_key
             ensure_encrypt_key()
         except Exception as exc:
-            log.warning("VNF_ENCRYPT_KEY nao disponivel — segredos Device falharao no save (fail-closed): %s", exc)
+            log.warning(
+                "VNF_ENCRYPT_KEY nao disponivel — segredos Device falharao "
+                "no save (fail-closed): %s",
+                exc,
+            )
 
         # Auto-migrate JSON inventory to SQLite on first run
         json_path = str(Path(__file__).resolve().parent / "data" / "vnf_inventory.json")
@@ -300,12 +304,12 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         lbl_huawei = QLabel("HUAWEI", hdr)
         lbl_huawei.setStyleSheet(f"color: {C.NEON_CYAN}; background: {C.BG_BASE}; "
-                                 f"font: bold 18px 'Inter';")
+                                 f"font: bold 18px {C.FONT_UI_FAMILY};")
         hdr_layout.addWidget(lbl_huawei)
 
         lbl_manager = QLabel(" MANAGER", hdr)
         lbl_manager.setStyleSheet(f"color: {C.FG_MAIN}; background: {C.BG_BASE}; "
-                                  f"font: bold 18px 'Inter';")
+                                  f"font: bold 18px {C.FONT_UI_FAMILY};")
         hdr_layout.addWidget(lbl_manager)
 
         hdr_layout.addStretch()
@@ -318,13 +322,13 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         self.status_dot = QLabel("\u25cf", badge)
         self.status_dot.setStyleSheet(f"color: {C.NEON_RED}; background: {C.BG_BASE}; "
-                                      f"font: 16px 'Inter';")
+                                      f"font: 16px {C.FONT_UI_FAMILY};")
         badge_layout.addWidget(self.status_dot)
         badge_layout.addSpacing(4)
 
         self.status_lbl = QLabel("Desconectado", badge)
         self.status_lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_BASE}; "
-                                      f"font: 11px 'Inter';")
+                                      f"font: 11px {C.FONT_UI_FAMILY};")
         badge_layout.addWidget(self.status_lbl)
         badge_layout.addSpacing(12)
 
@@ -400,7 +404,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
             lbl = QLabel(cat_label, cat_w)
             lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
-                              f"font: {C.FONT_CAPTION}px 'Inter';")
+                              f"font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY};")
             cat_layout.addWidget(lbl)
 
             for key, icon_char, label, color in items:
@@ -427,13 +431,13 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         lbl_alvo = QLabel("ALVO DEVICE", device_section)
         lbl_alvo.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
-                               f"font: 11px 'Inter';")
+                               f"font: 11px {C.FONT_UI_FAMILY};")
         device_layout.addWidget(lbl_alvo)
 
         self._device_target_lbl = QLabel("(roteador padrao)", device_section)
         self._device_target_lbl.setStyleSheet(
             f"color: {C.NEON_AMBER}; background: {C.BG_SIDEBAR}; "
-            f"font: bold 12px 'Inter';")
+            f"font: bold 12px {C.FONT_UI_FAMILY};")
         self._device_target_lbl.setWordWrap(True)
         device_layout.addWidget(self._device_target_lbl)
         sb_layout.addWidget(device_section)
@@ -451,14 +455,14 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         lbl = QLabel("Huawei Manager  \u2022  v2.0.0", foot)
         lbl.setStyleSheet(f"color: {C.FG_DIM}; background: {C.BG_SIDEBAR}; "
-                          f"font: {C.FONT_CAPTION}px 'Inter';")
+                          f"font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY};")
         foot_layout.addWidget(lbl)
 
         foot_layout.addStretch()
 
         self.clock_lbl = QLabel(foot)
         self.clock_lbl.setStyleSheet(f"color: {C.NEON_PURP}; background: {C.BG_SIDEBAR}; "
-                                     f"font: {C.FONT_CAPTION}px 'Inter';")
+                                     f"font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY};")
         foot_layout.addWidget(self.clock_lbl, alignment=Qt.AlignmentFlag.AlignRight)
 
         parent_layout.addWidget(foot)
@@ -546,7 +550,10 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         # Restaurar estado de conexão (defensivo para mocks em testes)
         set_status = getattr(self, "_set_status", None)
         set_conn_btn = getattr(self, "_set_conn_btn", None)
-        color = conn_color.replace("color: ", "").split(";")[0] if "color:" in conn_color else C.NEON_CYAN
+        if "color:" in conn_color:
+            color = conn_color.replace("color: ", "").split(";")[0]
+        else:
+            color = C.NEON_CYAN
         if set_status:
             set_status(conn_text, color)
         if set_conn_btn:
