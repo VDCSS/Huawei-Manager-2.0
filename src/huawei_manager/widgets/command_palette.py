@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -155,11 +155,13 @@ class CommandPalette(QFrame):
 
     def _install_shortcuts(self) -> None:
         # Esc fecha
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, activated=self.hide)
+        esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        esc.activated.connect(self.hide)
         # Ctrl+K fecha (toggle)
-        QShortcut(QKeySequence("Ctrl+K"), self, activated=self.hide)
+        ctrl_k = QShortcut(QKeySequence("Ctrl+K"), self)
+        ctrl_k.activated.connect(self.hide)
 
-    def eventFilter(self, watched: QWidget, event: QEvent) -> bool:
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._search:
             if event.type() == QEvent.Type.KeyPress:
                 key = event.key()
