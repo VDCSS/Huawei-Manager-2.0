@@ -2,13 +2,15 @@
 # setup/install.sh — instalador canônico do Huawei Manager 2.0.
 #
 # Uso:
-#   setup/install.sh install [--dev|--prod] [--no-fonts]
+#   setup/install.sh install [--dev|--prod] [--no-fonts] [--bootstrap-python]
 #   setup/install.sh fonts
-#   setup/install.sh reset  [--dev|--prod]
+#   setup/install.sh reset  [--dev|--prod] [--no-fonts] [--bootstrap-python]
 #   setup/install.sh check
 #   setup/install.sh --help
 #
 # `install` é o modo padrão; `--dev` é o modo padrão de dependências.
+# Sem Python >= 3.12 no sistema? Rode com --bootstrap-python (provisiona um
+# CPython 3.12 gerenciado pelo uv em ~/.local, sem root). Ou exporte HM_PYTHON.
 
 set -euo pipefail
 
@@ -16,6 +18,8 @@ SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_DIR="$(cd "$SETUP_DIR/.." && pwd)"
 # shellcheck source=lib/common.sh
 source "$SETUP_DIR/lib/common.sh"
+# shellcheck source=lib/python.sh
+source "$SETUP_DIR/lib/python.sh"
 
 VENV="$SCRIPT_DIR/.venv"
 PY="$VENV/bin/python3"
@@ -35,14 +39,20 @@ Modos:
   --help       Mostra esta mensagem
 
 Opções (install / reset):
-  --dev        Com ferramentas de desenvolvimento (padrão)
-  --prod       Apenas dependências de produção
-  --no-fonts   Pula o download das fontes
+  --dev               Com ferramentas de desenvolvimento (padrão)
+  --prod              Apenas dependências de produção
+  --no-fonts          Pula o download das fontes
+  --bootstrap-python  Provisiona CPython 3.12 gerenciado pelo uv (sem sudo,
+                      instala em ~/.local) se nenhum Python >= 3.12 existir
+
+Variável de ambiente:
+  HM_PYTHON=/caminho/python3.x   Usa esse interpretador explicitamente (>= 3.12)
 
 Exemplos:
   $0                       # Instalação completa (dev + fontes)
   $0 install --prod        # Produção + fontes
   $0 install --prod --no-fonts
+  $0 install --bootstrap-python  # Máquina sem Python 3.12+
   $0 fonts                 # Apenas fontes
   $0 reset --prod          # Limpa e reinstala em produção
   $0 check                 # Diagnóstico do ambiente
@@ -108,29 +118,29 @@ fonts_mode() {
 install_mode() {
     local dep_mode="dev"
     local do_fonts=true
+    local bootstrap_python=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
             --dev)      dep_mode="dev"; shift ;;
             --prod)     dep_mode="prod"; shift ;;
             --no-fonts) do_fonts=false; shift ;;
+            --bootstrap-python) bootstrap_python=true; shift ;;
             --help|-h)  usage; exit 0 ;;
             *)          err "Opção desconhecida: $1"; echo; usage; exit 1 ;;
         esac
     done
 
     header "Pré-requisitos"
-    command -v python3 >/dev/null 2>&1 || die "python3 não encontrado"
-    python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)" \
-        || die "Python 3.12+ necessário"
-    python3 -m venv -h >/dev/null 2>&1 || die "Módulo venv não disponível"
-    ok "python3 $(python3 --version | cut -d' ' -f2)"
+    resolve_python "$bootstrap_python"
+    timeout 10 "$PY_BIN" -m venv -h >/dev/null 2>&1 \
+        || die "Módulo venv não disponível no interpretador resolvido ($PY_BIN)"
 
     header "Virtual environment"
     if [ -f "$VENV/bin/python3" ]; then
         ok ".venv já existe — reutilizando"
     else
-        python3 -m venv "$VENV"
+        "$PY_BIN" -m venv "$VENV"
         ok ".venv criado"
     fi
 
@@ -155,11 +165,13 @@ install_mode() {
 
 reset_mode() {
     local dep_mode="dev"
+    local bootstrap_python=false
     while [ $# -gt 0 ]; do
         case "$1" in
             --dev)      dep_mode="dev"; shift ;;
             --prod)     dep_mode="prod"; shift ;;
             --no-fonts) shift ;;
+            --bootstrap-python) bootstrap_python=true; shift ;;
             --help|-h)  usage; exit 0 ;;
             *)          err "Opção desconhecida: $1"; echo; usage; exit 1 ;;
         esac
@@ -175,7 +187,11 @@ reset_mode() {
     ok "Cache, logs e .venv removidos"
 
     header "Reinstalando"
-    install_mode "--$dep_mode"
+    if [ "$bootstrap_python" = true ]; then
+        install_mode "--$dep_mode" --bootstrap-python
+    else
+        install_mode "--$dep_mode"
+    fi
 }
 
 check_mode() {
@@ -199,6 +215,18 @@ check_mode() {
 
     check "python3" "command -v python3"
     check "python3 >= 3.12" 'python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)"'
+
+    # Resolução de interpretador (informativa — nunca altera contagens):
+    # mostra exatamente o que o instalador usaria agora.
+    _PY_QUIET=1
+    resolve_python false || true
+    unset _PY_QUIET
+    if [ -n "${PY_BIN:-}" ]; then
+        note "Resolveria com: $PY_BIN (${PY_SOURCE})"
+    else
+        note "Nenhum Python >= 3.12 resolvível — rode '$0 install --bootstrap-python' ou defina HM_PYTHON"
+    fi
+
     check ".venv existe" "test -f $VENV/bin/python3"
     check "entry point huawei-manager" "test -x $VENV/bin/huawei-manager"
     check "import huawei_manager" "$PY -c \"from huawei_manager import main\""
@@ -241,7 +269,7 @@ main() {
         reset)   shift; reset_mode "$@" ;;
         check)   check_mode ;;
         --help|-h|help) usage; exit 0 ;;
-        --dev|--prod|--no-fonts) install_mode "$@" ;;
+        --dev|--prod|--no-fonts|--bootstrap-python) install_mode "$@" ;;
         *)
             err "Modo desconhecido: $1"
             echo

@@ -233,6 +233,10 @@ bash setup/install.sh fonts                 # apenas fontes Google Fonts
 bash setup/install.sh reset --prod          # limpa .venv/caches/logs e reinstala
 bash setup/install.sh check                 # diagnóstico do ambiente
 bash setup/install.sh --help                # mostra ajuda
+
+# Sem Python >= 3.12? Duas alternativas sem sudo:
+bash setup/install.sh install --bootstrap-python   # baixa Python via uv para ~/.local/bin
+HM_PYTHON=/caminho/bin/python3.12 bash setup/install.sh install   # usa interpretador específico
 ```
 
 ---
@@ -356,7 +360,7 @@ Atalhos de teclado: `Ctrl+1..9` navega pelas 9 primeiras abas, `Ctrl+0` abre a a
 
 ## Requisitos
 
-- Python **3.12+**
+- Python **3.12+** — o instalador resolve automaticamente nesta ordem: `HM_PYTHON` → `python3` do sistema → `python3.13`/`python3.12` alternativos → uv (`~/.local/bin/uv`). Sem nenhum disponível, use `install --bootstrap-python` (baixa Python via uv, sem sudo) ou aponte `HM_PYTHON`
 - Linux com servidor gráfico X11/Wayland (para a GUI)
 - Pacotes de sistema (CI): `libxcb-cursor-dev`, `libxkbcommon-x11-dev`
 - Acesso SSH à porta 22 do equipamento Huawei (para modo real)
