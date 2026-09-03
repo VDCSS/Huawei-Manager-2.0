@@ -7,7 +7,7 @@ from typing import cast
 
 from PySide6.QtWidgets import QMessageBox, QWidget
 
-from huawei_manager._config import ADMIN_PASSWORD, TECNICO_PASSWORD, log
+from huawei_manager._config import log
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.sdn_controller.authz import Role, role_meets
 from huawei_manager.widgets.auth_overlay import AuthOverlay
@@ -43,11 +43,6 @@ class AuthMixin:
                 return
         except RuntimeError:
             self._auth_overlay = None  # C++ object já deletado
-
-        if not ADMIN_PASSWORD or not TECNICO_PASSWORD:
-            QMessageBox.warning(None, "Configuracao incompleta",
-                "Defina ADMIN_PASSWORD e TECNICO_PASSWORD no .env")
-            return
 
         now = datetime.datetime.now().timestamp()
         if now < self._admin_locked_until:

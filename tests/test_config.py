@@ -22,10 +22,6 @@ def _reset_config():
     _cfg.log = None
     _cfg.HOST = ""
     _cfg.PORT = 22
-    _cfg.ADMIN_USERNAME = ""
-    _cfg.ADMIN_PASSWORD = ""
-    _cfg.TECNICO_USERNAME = ""
-    _cfg.TECNICO_PASSWORD = ""
     _cfg.AUDIT_HMAC_KEY = ""
 
     yield
@@ -101,10 +97,6 @@ def test_init_sets_module_level_constants():
         "ROUTER_PASSWORD": "secret",
         "ROUTER_SSH_KEY": "~/.ssh/test_key",
         "ROUTER_HOSTKEY_VERIFY": "tofu",
-        "ADMIN_USERNAME": "adm",
-        "ADMIN_PASSWORD": "adm_pass",
-        "TECNICO_USERNAME": "tec",
-        "TECNICO_PASSWORD": "tec_pass",
         "AUDIT_HMAC_KEY": "hmac-key-123",
     }
 
@@ -119,10 +111,6 @@ def test_init_sets_module_level_constants():
     assert _cfg.USER == "admin"
     assert _cfg.PASS == "secret"
     assert _cfg.HK_VERIFY == "tofu"
-    assert _cfg.ADMIN_USERNAME == "adm"
-    assert _cfg.ADMIN_PASSWORD == "adm_pass"
-    assert _cfg.TECNICO_USERNAME == "tec"
-    assert _cfg.TECNICO_PASSWORD == "tec_pass"
     assert _cfg.AUDIT_HMAC_KEY == "hmac-key-123"
 
 
@@ -150,47 +138,6 @@ def test_init_secrets_fallback():
     assert _cfg._secrets is not None
 
 
-# ── get_credentials() ──────────────────────────────────────────────────
-
-
-def test_get_credentials_admin():
-    """get_credentials('admin') returns admin username and password."""
-    import huawei_manager._config as _cfg
-
-    _cfg.ADMIN_USERNAME = "root"
-    _cfg.ADMIN_PASSWORD = "s3cret"
-
-    u, p = _cfg.get_credentials("admin")
-    assert u == "root"
-    assert p == "s3cret"
-
-
-def test_get_credentials_tecnico():
-    """get_credentials('tecnico') returns tecnico credentials."""
-    import huawei_manager._config as _cfg
-
-    _cfg.TECNICO_USERNAME = "tech"
-    _cfg.TECNICO_PASSWORD = "tech_pass"
-
-    u, p = _cfg.get_credentials("tecnico")
-    assert u == "tech"
-    assert p == "tech_pass"
-
-
-def test_get_credentials_unknown():
-    """get_credentials with unknown role returns empty strings."""
-    import huawei_manager._config as _cfg
-
-    u, p = _cfg.get_credentials("operator")
-    assert u == ""
-    assert p == ""
-
-
-def test_get_credentials_admin_unset():
-    """get_credentials returns empty when admin credentials are unset."""
-    import huawei_manager._config as _cfg
-
-    # From autouse fixture both are ""
-    u, p = _cfg.get_credentials("admin")
-    assert u == ""
-    assert p == ""
+# ── Auth tests removed ────────────────────────────────────────────────
+# Credentials are now managed via UserRepository in the database.
+# See tests/test_user_repository.py for auth-related tests.

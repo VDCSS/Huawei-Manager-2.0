@@ -31,7 +31,6 @@ FONT_UI_FAMILY         = _FONT_UI_FAMILY
 FONT_UI_MEDIUM        = (_FONT_UI_FAMILY, 12, _FALLBACK_UI)           # sidebar, botões, inputs
 FONT_UI_MEDIUM_B      = (_FONT_UI_FAMILY, 12, "bold", _FALLBACK_UI)
 FONT_UI_TITLE         = (_FONT_UI_TITLE_FAMILY, 16, _FALLBACK_UI)    # títulos de página/seção
-FONT_UI_TITLE_B       = (_FONT_UI_TITLE_FAMILY, 16, "bold", _FALLBACK_UI)
 
 # Escala de fontes da UI (pt) — 4 passos
 FONT_CAPTION = 11

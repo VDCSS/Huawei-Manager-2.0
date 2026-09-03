@@ -183,7 +183,7 @@ bash setup/install.sh install --dev
 **O que faz:**
 1. Cria `.venv/` com Python 3.12+
 2. Instala **todas dependências** via `pip install -e ".[dev,vault,aws]"`:
-   - **Core (6)**: PySide6, netmiko, cryptography, pyyaml, python-dotenv, bcrypt
+   - **Core (6)**: PySide6, netmiko, cryptography, pyyaml, python-dotenv, argon2-cffi
    - **Extras (2)**: hvac, boto3 (via `[vault,aws]`)
    - **Dev (5)**: pytest, pytest-cov, pytest-qt, ruff, pyright
 3. Baixa fontes (IBM Plex Sans, Space Grotesk, JetBrains Mono) em `~/.local/share/fonts/` — tolerante a falhas

@@ -12,7 +12,7 @@ from huawei_manager.agents import AgentItem, AgentResult
 log = logging.getLogger("huawei.agents.deps")
 
 STDLIB_MODULES: set[str] = {
-    "abc", "ast", "asyncio", "atexit", "base64", "collections", "concurrent", "contextlib",
+    "abc", "argparse", "ast", "asyncio", "atexit", "base64", "collections", "concurrent", "contextlib",
     "copy", "csv", "dataclasses", "datetime", "decimal", "difflib", "enum", "functools",
     "__future__",
     "glob", "hashlib", "hmac", "html", "http", "importlib", "inspect", "io",
@@ -21,12 +21,13 @@ STDLIB_MODULES: set[str] = {
     "queue", "random", "re", "secrets", "shutil", "signal", "socket", "sqlite3",
     "statistics", "string", "struct", "subprocess", "sys", "tempfile", "textwrap",
     "threading", "time", "tkinter", "traceback", "types", "typing",
-    "unittest", "urllib", "uuid", "warnings", "weakref", "xml", "zipfile",
+    "unittest", "urllib", "uuid", "warnings", "weakref", "webbrowser", "xml", "zipfile",
 }
 
 # Módulos first/third-party conhecidos que NÃO precisam estar em pyproject.toml
 KNOWN_OK: set[str] = {
     "netmiko", "hvac", "boto3", "dotenv", "yaml", "cryptography",
+    "argon2",  # declared as argon2-cffi in pyproject.toml
     "pytest", "ruff", "pyright",
 }
 
@@ -34,12 +35,14 @@ KNOWN_OK: set[str] = {
 LOCAL_PACKAGES: set[str] = {
     "agents", "huawei_manager", "tests",
     "_factories",  # test helper module (tests/_factories.py)
+    "migrate_credentials",  # setup script (setup/migrate_credentials.py)
 }
 
 # Package name → módulo importável (quando diferem)
 PACKAGE_ALIASES: dict[str, str] = {
     "python-dotenv": "dotenv",
     "pyyaml": "yaml",
+    "argon2-cffi": "argon2",
 }
 
 

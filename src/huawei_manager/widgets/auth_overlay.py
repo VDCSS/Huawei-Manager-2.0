@@ -149,26 +149,26 @@ class AuthOverlay(QWidget):
             self._show_lockout()
             return
 
-        from huawei_manager._config import get_credentials
+        from huawei_manager.db import get_connection
+        from huawei_manager.user_repository import UserRepository
 
         user = self._user_entry.text().strip()
         pw = self._pw_entry.text()
-        level = "user"
 
-        tec_user, tec_pass = get_credentials("tecnico")
-        if user == tec_user and pw == tec_pass:
-            level = "tecnico"
-        else:
-            adm_user, adm_pass = get_credentials("admin")
-            if user == adm_user and pw == adm_pass:
-                level = "admin"
+        try:
+            conn = get_connection()
+            user_repo = UserRepository(conn)
+            user_repo.seed_default_users()
+            authenticated_user = user_repo.verify_password(user, pw)
 
-        if level != "user":
-            self._error_lbl.hide()
-            self.on_result(level, 0, 0)
-            self.hide()
-            self.deleteLater()
-        else:
+            if authenticated_user is not None:
+                level = authenticated_user.role
+                self._error_lbl.hide()
+                self.on_result(level, 0, 0)
+                self.hide()
+                self.deleteLater()
+                return
+
             self._attempts += 1
             remaining = self._max_attempts - self._attempts
             if remaining <= 0:
@@ -179,7 +179,24 @@ class AuthOverlay(QWidget):
             else:
                 self.on_result("user", self._attempts, 0)
                 self._error_lbl.setText(
-                    "Usu\u00e1rio ou senha incorretos. "
+                    "Usuário ou senha incorretos. "
+                    f"{remaining} tentativa(s) restante(s).")
+                self._error_lbl.show()
+                self._pw_entry.clear()
+                self._pw_entry.setFocus()
+        except Exception:
+            # Fail-closed: treat any error as authentication failure
+            self._attempts += 1
+            remaining = self._max_attempts - self._attempts
+            if remaining <= 0:
+                self._locked_until = time.time() + self._lockout_secs
+                self.on_result("user", 0, self._locked_until)
+                self._lockout_handled = True
+                self._show_lockout()
+            else:
+                self.on_result("user", self._attempts, 0)
+                self._error_lbl.setText(
+                    "Erro de autenticação. "
                     f"{remaining} tentativa(s) restante(s).")
                 self._error_lbl.show()
                 self._pw_entry.clear()

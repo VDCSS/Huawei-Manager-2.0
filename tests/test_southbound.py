@@ -104,13 +104,14 @@ class TestSSHSouthboundInit:
         assert sb._session is not None
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
+    @patch("huawei_manager._config.SSH_TIMEOUT", 90)
     def test_default_timeout(self, mock_session_cls):
         from huawei_manager.sdn_controller.southbound import (
             SSHSouthbound,
         )
 
         sb = SSHSouthbound(EnvBackend(), AuditLogger())
-        assert sb._timeout == 30
+        assert sb._timeout == 90
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
     def test_custom_timeout(self, mock_session_cls):

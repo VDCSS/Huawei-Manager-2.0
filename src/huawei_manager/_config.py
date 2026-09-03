@@ -11,6 +11,8 @@ from huawei_manager.audit_log import AuditLogger
 from huawei_manager.vault import SecretsBackend, _set_ts_path, get_backend
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+USER_CONFIG_DIR = Path.home() / ".config" / "huawei-manager"
+USER_ENV_PATH = USER_CONFIG_DIR / ".env"
 LOG_DIR: Path = PROJECT_ROOT / "logs"
 _set_ts_path(PROJECT_ROOT / ".ssh_rotation_ts")
 
@@ -26,11 +28,8 @@ USER: str = ""
 PASS: str = ""
 SSH_KEY: str = ""
 HK_VERIFY: str = "strict"
+SSH_TIMEOUT: int = 90
 
-ADMIN_USERNAME: str = ""
-ADMIN_PASSWORD: str = ""
-TECNICO_USERNAME: str = ""
-TECNICO_PASSWORD: str = ""
 AUDIT_HMAC_KEY: str = ""
 
 
@@ -45,8 +44,7 @@ def init() -> None:
     global _INITIALIZED
     global _secrets, audit, log
     global HOST, PORT, USER, PASS, SSH_KEY, HK_VERIFY
-    global ADMIN_USERNAME, ADMIN_PASSWORD
-    global TECNICO_USERNAME, TECNICO_PASSWORD, AUDIT_HMAC_KEY
+    global SSH_TIMEOUT, AUDIT_HMAC_KEY
 
     if _INITIALIZED:
         return
@@ -82,12 +80,19 @@ def init() -> None:
     log.info("Logging iniciado \u2014 %s", LOG_DIR.resolve())
 
     # ── Secrets / Audit ─────────────────────────────────────────────
+    if USER_ENV_PATH.exists():
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(USER_ENV_PATH, override=False)
+        except ImportError:
+            pass
+
     try:
         _secrets = get_backend(project_root=str(PROJECT_ROOT))
     except Exception as _e:
         log.error("Falha ao inicializar secrets backend: %s \u2014 usando fallback env", _e)
         from huawei_manager.vault import EnvBackend
-        _secrets = EnvBackend(env_path=PROJECT_ROOT / ".env")
+        _secrets = EnvBackend(env_path=USER_ENV_PATH if USER_ENV_PATH.exists() else PROJECT_ROOT / ".env")
 
     HOST      = _s("ROUTER_HOST")
     PORT      = int(_s("ROUTER_PORT", "22"))
@@ -96,12 +101,9 @@ def init() -> None:
     SSH_KEY   = os.path.expanduser(_s("ROUTER_SSH_KEY", "~/.ssh/huawei_ed25519"))
     _hk_raw = _s("ROUTER_HOSTKEY_VERIFY", "strict").lower().strip()
     HK_VERIFY = _hk_raw if _hk_raw in ("strict", "tofu", "off") else "strict"
+    SSH_TIMEOUT = int(_s("SSH_TIMEOUT", "90"))
 
-    ADMIN_USERNAME     = _s("ADMIN_USERNAME")
-    ADMIN_PASSWORD     = _s("ADMIN_PASSWORD")
-    TECNICO_USERNAME   = _s("TECNICO_USERNAME")
-    TECNICO_PASSWORD   = _s("TECNICO_PASSWORD")
-    AUDIT_HMAC_KEY     = _s("AUDIT_HMAC_KEY", "")
+    AUDIT_HMAC_KEY = _s("AUDIT_HMAC_KEY", "")
 
     audit = AuditLogger(
         filename=str(PROJECT_ROOT / "logs" / "huawei_audit_structured.jsonl"),
@@ -114,23 +116,3 @@ def _s(key: str, default: str = "") -> str:
     if _secrets is None:
         return default
     return _secrets.get(key, default)
-
-
-def get_credentials(role: str) -> tuple[str, str]:
-    """Retorna (username, password) para o papel solicitado.
-
-    Args:
-        role: ``"admin"`` ou ``"tecnico"``.
-
-    Returns:
-        Tupla (username, password). Retorna ("", "") se o papel for
-        desconhecido.
-
-    Nota: ponto de controle único para acesso a credenciais.
-          Em produção, substituir por chamada a vault externo.
-    """
-    if role == "admin":
-        return ADMIN_USERNAME, ADMIN_PASSWORD
-    if role == "tecnico":
-        return TECNICO_USERNAME, TECNICO_PASSWORD
-    return "", ""

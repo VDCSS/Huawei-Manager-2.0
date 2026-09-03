@@ -206,8 +206,6 @@ class TestAuthOverlayIntegration:
         app = QApplication.instance() or QApplication([])
         yield app
 
-    @patch("huawei_manager.handlers.auth.ADMIN_PASSWORD", "admin123")
-    @patch("huawei_manager.handlers.auth.TECNICO_PASSWORD", "tec123")
     def test_auth_dialog_creates_modal_overlay(self):
         """_show_auth_dialog deve criar overlay modal."""
         from huawei_manager.handlers.auth import AuthMixin

@@ -156,6 +156,10 @@ install_mode() {
 
     install_assets
 
+    header "Setup banco de dados de usuários"
+    "$PY" -c "from huawei_manager.db import ensure_default_admin; ensure_default_admin()" \
+        || warn "Setup de admin padrão falhou (não crítico)"
+
     echo ""
     ok "${BOLD}Instalação completa${NC}"
     echo "  Modo:      $dep_mode"

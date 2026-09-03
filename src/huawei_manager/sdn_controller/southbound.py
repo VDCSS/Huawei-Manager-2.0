@@ -70,7 +70,7 @@ class SSHSouthbound(SouthboundProtocol):
     Args:
         backend: Backend de secrets para credenciais.
         audit_logger: Logger de auditoria.
-        timeout: Timeout de conexao em segundos (padrao 30).
+        timeout: Timeout de conexao em segundos (padrao: _config.SSH_TIMEOUT).
         max_retries: Numero maximo de tentativas de conexao (padrao 2).
         session: Sessao Netmiko existente (opcional).
         validator: Validador de comandos (opcional).
@@ -81,12 +81,15 @@ class SSHSouthbound(SouthboundProtocol):
         self,
         backend: SecretsBackend,
         audit_logger: AuditLogger,
-        timeout: int = 30,
+        timeout: int | None = None,
         max_retries: int = 2,
         session: NetmikoSession | None = None,
         validator: CommandValidator | None = None,
         access_role: str = "user",
     ) -> None:
+        if timeout is None:
+            from huawei_manager._config import SSH_TIMEOUT
+            timeout = SSH_TIMEOUT
         self._session = session if session is not None else NetmikoSession(backend, audit_logger)
         self._timeout = timeout
         self._max_retries = max_retries

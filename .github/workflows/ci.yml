@@ -23,6 +23,10 @@ jobs:
           pip install -e ".[dev,vault,aws]"
       - name: Lint (ruff)
         run: ruff check src/huawei_manager/
+      - name: Security scan (bandit)
+        run: |
+          pip install bandit[toml]
+          bandit -r src/huawei_manager/ -c pyproject.toml || true
       - name: Test + Coverage (pytest)
         run: pytest tests/ -q --cov=src/huawei_manager --cov-report=term --cov-fail-under=60
       - name: Typecheck (pyright)

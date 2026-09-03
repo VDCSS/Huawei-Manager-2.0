@@ -97,7 +97,7 @@ class AuthService:
 
         Args:
             username: Username to authenticate.
-            password: Plaintext password (verified against bcrypt hash).
+            password: Plaintext password (verified against Argon2 hash).
         """
         # Check lockout
         if self._is_locked_out(username):

@@ -137,7 +137,10 @@ class NetmikoSession(SessionCommandsMixin):
             )
 
     # ── conexao ──────────────────────────────────────────────────────
-    def connect(self, timeout: int = 30) -> None:
+    def connect(self, timeout: int | None = None) -> None:
+        if timeout is None:
+            from huawei_manager._config import SSH_TIMEOUT
+            timeout = SSH_TIMEOUT
         self._validate_credentials()
         mode = self._hk_verify
         ssh_strict = mode == "strict"
@@ -175,6 +178,7 @@ class NetmikoSession(SessionCommandsMixin):
                 "username": cfg.username,
                 "password": cfg.password,
                 "timeout": cfg.timeout,
+                "conn_timeout": cfg.timeout,
                 "ssh_strict": cfg.ssh_strict,
                 "use_keys": True if cfg.ssh_key else None,
                 "ssh_private_key_file": cfg.ssh_key,
