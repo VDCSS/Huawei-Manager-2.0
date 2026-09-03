@@ -131,6 +131,10 @@ class NetmikoSession(SessionCommandsMixin):
         if not pw and not key:
             missing.append("ROUTER_PASSWORD ou ROUTER_SSH_KEY")
         if missing:
+            log.warning(
+                "Credenciais incompletas: %s — verifique .env ou cadastre um device",
+                ", ".join(missing),
+            )
             raise SdnValidationError(
                 "Credenciais incompletas — verifique secrets backend: "
                 + ", ".join(missing)
@@ -144,6 +148,11 @@ class NetmikoSession(SessionCommandsMixin):
         self._validate_credentials()
         mode = self._hk_verify
         ssh_strict = mode == "strict"
+
+        log.info(
+            "SSH connect: host=%s port=%s user=%s timeout=%s hostkey=%s",
+            self._host, self._port, self._user, timeout, mode,
+        )
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         sess_dir = PROJECT_ROOT / "sessions"

@@ -116,3 +116,44 @@ def set_db_version(conn: sqlite3.Connection, version: int) -> None:
         (str(version),),
     )
     conn.commit()
+
+
+# ── Default admin seeding ──────────────────────────────────────────────
+
+def ensure_default_admin(conn: sqlite3.Connection | None = None) -> None:
+    """Seed a default admin user if the users table is empty.
+
+    Idempotent — safe to call multiple times. Uses argon2 for password hashing.
+    Called by install.sh during setup.
+    """
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+    else:
+        should_close = False
+
+    try:
+        row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
+        if row and row[0] > 0:
+            log.debug("ensure_default_admin: users already exist, skipping")
+            return
+
+        try:
+            from argon2 import PasswordHasher
+            ph = PasswordHasher()
+            hashed = ph.hash("123mudar")
+        except ImportError:
+            log.warning("ensure_default_admin: argon2-cffi not available, using plain text (INSECURE)")
+            hashed = "123mudar"
+
+        conn.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            ("user_admin", hashed, "admin"),
+        )
+        conn.commit()
+        log.info("ensure_default_admin: created default admin user (user_admin)")
+    except Exception as exc:
+        log.warning("ensure_default_admin: failed: %s", exc)
+    finally:
+        if should_close:
+            conn.close()
