@@ -16,6 +16,38 @@ USER_ENV_PATH = USER_CONFIG_DIR / ".env"
 LOG_DIR: Path = PROJECT_ROOT / "logs"
 _set_ts_path(PROJECT_ROOT / ".ssh_rotation_ts")
 
+# ─── Ensure user .env exists ───────────────────────────────────────
+_ENV_TEMPLATE = """\
+# Huawei Manager 2.0 — Configuration
+
+# --- SSH defaults -------------------------------------------------
+ROUTER_SSH_KEY=~/.ssh/huawei_ed25519
+ROUTER_HOSTKEY_VERIFY=strict
+
+# --- Crypto -------------------------------------------------------
+VNF_ENCRYPT_KEY=
+AUDIT_HMAC_KEY=
+
+# --- Behavior -----------------------------------------------------
+HW_ADAPTIVE_POLLING=0
+SSH_TIMEOUT=90
+
+# --- Secrets backend: env | crypto | sops | vault | aws -----------
+SECRETS_BACKEND=env
+"""
+
+
+def _ensure_user_env() -> None:
+    """Cria ~/.config/huawei-manager/.env com template se não existir."""
+    if USER_ENV_PATH.exists():
+        return
+    try:
+        USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        USER_ENV_PATH.write_text(_ENV_TEMPLATE, encoding="utf-8")
+    except OSError:
+        pass
+
+
 # ─── Module-level names (initialized lazily via init()) ──────────────
 _INITIALIZED: bool = False
 _secrets: SecretsBackend | None = None
@@ -80,6 +112,7 @@ def init() -> None:
     log.info("Logging iniciado \u2014 %s", LOG_DIR.resolve())
 
     # ── Secrets / Audit ─────────────────────────────────────────────
+    _ensure_user_env()
     if USER_ENV_PATH.exists():
         try:
             from dotenv import load_dotenv
