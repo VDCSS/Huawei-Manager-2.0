@@ -21,7 +21,7 @@ _ENV_TEMPLATE = """\
 # Huawei Manager 2.0 — Configuration
 
 # --- SSH defaults -------------------------------------------------
-ROUTER_SSH_KEY=~/.ssh/huawei_ed25519
+ROUTER_SSH_KEY=
 ROUTER_HOSTKEY_VERIFY=strict
 
 # --- Crypto -------------------------------------------------------
