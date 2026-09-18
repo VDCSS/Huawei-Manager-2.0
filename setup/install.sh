@@ -169,6 +169,12 @@ ensure_default_admin(conn)
     echo "  Modo:      $dep_mode"
     echo "  Execute:   $VENV/bin/huawei-manager"
     echo "  Ou digite: huawei manager"
+    case ":$PATH:" in
+        *":$HOME/.local/bin:"*) ;;
+        *) echo ""; warn "~/.local/bin não está no PATH"
+           echo "  Adicione ao seu ~/.bashrc ou ~/.zshrc:"
+           echo "    export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
+    esac
 }
 
 reset_mode() {

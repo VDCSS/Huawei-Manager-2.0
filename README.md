@@ -66,24 +66,10 @@ src/huawei_manager/
 ├── _app.py             # QSS dark/light themes, apply_theme(), get_qt_app()
 ├── _config.py          # Lazy init: logging, secrets backend, audit logger
 ├── constants.py        # Cores, famílias de fonte, filtros CLI
-├── exceptions.py       # Custom exceptions (Sócrates session)
+├── exceptions.py       # Custom exceptions
 │
 ├── pages/              # PageBuilder — 10 abas da interface
-│   ├── __init__.py     # Re-exporta PageBuilder
-│   ├── builder.py      # _build_*_page methods + PageBuilder class
-│   ├── cmd.py          # PageBuilder mixin — Command Editor page
-│   ├── manutencao.py   # PageBuilderManutencaoMixin
-│   └── services.py     # PageBuilderServicesMixin
-│
 ├── handlers/           # EventHandlers — SSH, auth, VNFs, serviços
-│   ├── __init__.py     # EventHandlers composite class
-│   ├── auth.py         # AuthMixin — dialogs, RBAC, lockout
-│   ├── commands.py     # CommandsMixin — editor, backup
-│   ├── dashboard.py    # DashboardMixin — refresh dashboard
-│   ├── fetch.py        # FetchMixin — config, route, arp, info
-│   ├── services.py     # ServicesMixin — service execution
-│   ├── ssh.py          # SshMixin — connect, disconnect, VNF target
-│   └── vnfs.py         # VnfsMixin — topology, inventory CRUD
 │
 ├── session.py          # NetmikoSession — connect, run_cli_rpc, edit_config
 ├── vault.py            # SecretsBackend + 5 backends + rotate_ssh_key()
@@ -92,43 +78,12 @@ src/huawei_manager/
 ├── vnf_models.py       # VNF dataclass
 ├── vnf_crypto.py       # Funções de criptografia de VNF
 ├── vnf_inventory.py    # load/save vnf_inventory.json
-├── vnf_probe.py        # probe_vnfs, simulate_status
 │
-├── services/           # Catálogo de serviços
-│   ├── __init__.py     # Re-exports do catálogo legado
-│   ├── catalog.py      # ServiceDef, execute_service, get_all_show_commands
-│   └── vnf_service.py  # VnfService class
-├── services_data.py    # 144 ServiceDef — definições do catálogo
-├── utils.py            # ANSI cleanup, sanitize
+├── services/           # Catálogo de serviços (144 comandos)
+├── sdn_controller/     # ControllerCore, Southbound, Normalizer, Authz, drivers
+├── agents/             # Watcher, Runner, scans
 │
-├── sdn_controller/
-│   ├── core.py         # ControllerCore + DeviceState
-│   ├── event_queue.py  # EventQueue (PriorityQueue + pub/sub)
-│   ├── southbound.py   # SouthboundProtocol + SSHSouthbound
-│   ├── normalizer.py   # Parsers CLI → dataclasses
-│   ├── authz.py        # Role enum, @require_role, SessionTracker
-│   ├── validator.py    # Validação de parâmetros de comandos
-│   ├── dryrun.py       # Modo dry-run (simula sem enviar ao dispositivo)
-│   ├── events.py       # BaseEventPayload + 7 payloads tipados
-│   ├── bus.py          # IEventBus + IEventConsumer protocols
-│   ├── security_events.py  # Eventos de segurança (AN triggers)
-│   └── drivers/        # BaseDriver + Router, Switch, Firewall
-│
-├── agents/
-│   ├── __init__.py
-│   ├── runner.py       # Orquestrador de scans com timeout e isolamento
-│   ├── watcher.py      # Watcher Qt (QTimer + ThreadPoolExecutor)
-│   └── scans/          # Módulos de scan individuais
-│       ├── __init__.py
-│       ├── cross_ref.py
-│       ├── dead_code.py
-│       ├── deps.py
-│       ├── security.py
-│       ├── structure.py
-│       └── style.py
-
-agents/                 # Scans externos (raiz do projeto)
-tests/                  # 924 testes pytest (headless, QT_QPA_PLATFORM=offscreen)
+tests/                  # 1150+ testes pytest (headless)
 .github/workflows/      # CI: ruff → pytest → pyright
 Makefile                # install, run, test, lint, typecheck, coverage
 ```
@@ -154,111 +109,81 @@ Makefile                # install, run, test, lint, typecheck, coverage
 
 ---
 
-## Instalação
-
-### Passo a passo rápido
+## Instalação Rápida
 
 ```bash
-# 1. Clone e entre no diretório
+# Clone
 git clone https://github.com/VDCSS/Huawei-Manager-2.0.git
 cd Huawei-Manager-2.0
 
-# 2. Configure variáveis de ambiente
-cp .env.example .env
-# Edite .env com suas credenciais (veja seção Configuração)
-
-# 3. Instale (escolha um modo)
-```
-
----
-
-### Modo Desenvolvimento (recomendado para contribuidores)
-
-```bash
+# Instalação completa (dev + fontes + assets)
 make install
-# ou equivalente:
+# ou
 bash setup/install.sh install --dev
-```
 
-**O que faz:**
-1. Cria `.venv/` com Python 3.12+
-2. Instala **todas dependências** via `pip install -e ".[dev,vault,aws]"`:
-   - **Core (6)**: PySide6, netmiko, cryptography, pyyaml, python-dotenv, argon2-cffi
-   - **Extras (2)**: hvac, boto3 (via `[vault,aws]`)
-   - **Dev (5)**: pytest, pytest-cov, pytest-qt, ruff, pyright
-3. Baixa fontes (IBM Plex Sans, Space Grotesk, JetBrains Mono) em `~/.local/share/fonts/` — tolerante a falhas
-4. Instala ícone em `~/.local/share/icons/`
-5. Instala `.desktop` em `~/.local/share/applications/`
-6. Instala comando `huawei` com tab-completion em `~/.local/bin/`
-
----
-
-### Modo Produção (para usuários finais / servidores)
-
-```bash
+# Produção (sem ferramentas de dev)
 make install-prod
-# ou equivalente:
+# ou
 bash setup/install.sh install --prod
 ```
 
-**O que faz:** Igual ao modo dev, mas **apenas dependências de runtime** (6 core + 2 extras via `pip install -e ".[vault,aws]"`), **sem ferramentas de dev**.
+### Requisitos
 
----
+- **Python 3.12+** — o instalador resolve automaticamente: `HM_PYTHON` → `python3` do sistema → alternativos → uv. Sem disponível: `install --bootstrap-python`
+- **Linux** com servidor gráfico (X11/Wayland) para a GUI
+- **Pacotes de sistema**: `libxcb-cursor-dev`, `libxkbcommon-x11-dev` (Debian/Ubuntu) ou equivalentes
+- **Acesso SSH** à porta 22 do equipamento Huawei (modo real)
 
-### Backends opcionais de segredos (Vault / AWS)
+### O que o instalador faz
 
-Se usar `SECRETS_BACKEND=vault` ou `aws` no `.env`, instale o extra correspondente:
+1. Cria `.venv/` com Python 3.12+
+2. Instala dependências via pip (core + extras `[vault,aws]` + `[dev]` se `--dev`)
+3. Baixa fontes Google Fonts em `~/.local/share/fonts/`
+4. Instala ícone em `~/.local/share/icons/`
+5. Instala `.desktop` em `~/.local/share/applications/`
+6. Instala comando `huawei` com tab-completion em `~/.local/bin/`
+7. Inicializa banco SQLite (`~/.huawei_manager/inventory.db`) com admin padrão
+8. Verifica dependências de sistema (cross-distro: apt/dnf/yum/pacman)
+9. Auto-gera `~/.config/huawei-manager/.env` com `AUDIT_HMAC_KEY` no primeiro boot
 
-```bash
-# HashiCorp Vault
-pip install -e ".[vault]"    # instala hvac
-# ou: pip install hvac~=2.2.0
-
-# AWS Secrets Manager
-pip install -e ".[aws]"      # instala boto3
-# ou: pip install boto3~=1.35.0
-```
-
-> **Nota:** se instalou via `make install` ou `make install-prod`, `hvac` e `boto3` **já estão disponíveis** — são os extras `[vault]`/`[aws]` declarados no pyproject. Os comandos acima são para instalação avulsa.
-
----
-
-### Modos e flags do instalador `setup/install.sh`
+### Modos e flags
 
 ```bash
 bash setup/install.sh                       # install completo: dev + fontes (padrão)
 bash setup/install.sh install --prod        # produção (apenas runtime)
-bash setup/install.sh install --no-fonts    # pula o download das fontes
+bash setup/install.sh install --no-fonts    # pula download das fontes
 bash setup/install.sh fonts                 # apenas fontes Google Fonts
 bash setup/install.sh reset --prod          # limpa .venv/caches/logs e reinstala
 bash setup/install.sh check                 # diagnóstico do ambiente
 bash setup/install.sh --help                # mostra ajuda
 
-# Sem Python >= 3.12? Duas alternativas sem sudo:
-bash setup/install.sh install --bootstrap-python   # baixa Python via uv para ~/.local/bin
-HM_PYTHON=/caminho/bin/python3.12 bash setup/install.sh install   # usa interpretador específico
+# Sem Python >= 3.12:
+bash setup/install.sh install --bootstrap-python   # baixa Python via uv para ~/.local
+HM_PYTHON=/caminho/python3.12 bash setup/install.sh install
 ```
 
----
+### Comando `huawei`
 
-### Reinstalação / Atualização
+Após a instalação, o comando `huawei` fica disponível em `~/.local/bin/`:
 
 ```bash
-# Após git pull — modo desenvolvimento
-make reinstall
-
-# Após git pull — modo produção
-make reinstall-prod
-
-# Limpar caches
-make clean
+huawei manager              # Abre a interface gráfica
+huawei check                # Diagnóstico do ambiente
+huawei version              # Mostra a versão
+huawei help                 # Ajuda completa
 ```
+
+> **Nota**: Adicione `~/.local/bin` ao PATH se ainda não estiver:
+> ```bash
+> export PATH="$HOME/.local/bin:$PATH"    # adicione ao ~/.bashrc ou ~/.zshrc
+> ```
 
 ---
 
 ## Configuração
 
-Edite `.env`:
+O arquivo `.env` é auto-gerado em `~/.config/huawei-manager/.env` no primeiro boot.
+Edite-o para configurar credenciais e backends:
 
 ```ini
 ROUTER_HOST=192.168.1.1
@@ -271,21 +196,20 @@ ROUTER_HOSTKEY_VERIFY=strict
 
 # Secrets backend: env | crypto | sops | vault | aws
 SECRETS_BACKEND=env
-# Chave AES-256-GCM (obrigatória se SECRETS_BACKEND=crypto)
-# SECRETS_KEY=sua-chave-32-bytes
 
-# Backend vault (extra [vault]):
-# VAULT_ADDR=http://127.0.0.1:8200
-# VAULT_TOKEN=
-# VAULT_MOUNT=secret
-# VAULT_SECRET_PATH=huawei/manager
-
-# Backend aws (extra [aws]):
-# AWS_REGION=us-east-1
-# AWS_SECRET_NAME=huawei/manager/creds
-
-# VNF_ENCRYPT_KEY: auto-gerada no primeiro boot se ausente (fail-closed sem ela)
+# VNF_ENCRYPT_KEY: auto-gerada no primeiro boot se ausente
+# AUDIT_HMAC_KEY: auto-gerada no primeiro boot
 ```
+
+### Backends de segredos
+
+| Backend | Configuração | Extra |
+|---------|-------------|-------|
+| `env` (padrão) | Variáveis no `.env` | — |
+| `crypto` | `SECRETS_KEY` (32 bytes) | `cryptography` |
+| `sops` | SOPS/age configurado | — |
+| `vault` | `VAULT_ADDR`, `VAULT_TOKEN` | `hvac` |
+| `aws` | `AWS_REGION`, `AWS_SECRET_NAME` | `boto3` |
 
 ---
 
@@ -295,7 +219,7 @@ SECRETS_BACKEND=env
 
 ```bash
 make run             # via Makefile
-huawei manager       # via comando instalado (tab complete)
+huawei manager       # via comando instalado
 ```
 
 ---
@@ -313,18 +237,12 @@ make ci              # lint + test + typecheck (pipeline completa)
 make encrypt-env     # Criptografa .env → .env.enc
 make decrypt-env     # Descriptografa .env.enc → .env
 
-### Rotação de senha (D7) — passo manual
-1. Troque a senha no dispositivo físico (console/SSH administrativo), fora do Huawei Manager.
-2. Atualize `ROUTER_PASSWORD`/`TECNICO_PASSWORD` no `.env` (vazios = aguardando rotação).
-3. Regenerar o arquivo criptografado: `make encrypt-env` (exige `SECRETS_KEY`).
-4. Não commite senha em texto puro: `vnf_inventory.json` não persiste `password` (fail-closed no save).
-
 # Manutenção
-make reinstall       # pip install -e ".[dev,vault,aws]" (após git pull, dev)
+make reinstall       # pip install -e ".[dev,vault,aws]" (após git pull)
 make reinstall-prod  # pip install -e ".[vault,aws]" (produção)
-make uninstall       # Remove atalhos, ícone, comando e fontes do sistema
-make clean           # Remove apenas caches (nunca remove .venv nem logs)
-make clean-all       # DESTRUTIVO: clean + .venv + logs (opt-in)
+make uninstall       # Remove atalhos, ícone, comando e fontes
+make clean           # Remove caches (nunca remove .venv nem logs)
+make clean-all       # DESTRUTIVO: clean + .venv + logs
 ```
 
 ---
@@ -333,7 +251,7 @@ make clean-all       # DESTRUTIVO: clean + .venv + logs (opt-in)
 
 | Aba | Descrição |
 |-----|-----------|
-| 🏠 **Dashboard** | Status da conexão, VNFs, últimas operações de auditoria, atalhos |
+| 🏠 **Dashboard** | Status da conexão, VNFs, últimas operações de auditoria |
 | 🗺 **Topologia / VNFs** | Canvas SDN interativo, seleção de alvo SSH |
 | 📋 **Configuração Atual** | `display current-configuration` com filtros |
 | 🌐 **Roteamento** | Tabela de roteamento, BGP, OSPF |
@@ -344,26 +262,15 @@ make clean-all       # DESTRUTIVO: clean + .venv + logs (opt-in)
 | ⚡ **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
 | 🔧 **Manutenção** | Dev tools, scans de agentes, setup |
 
-Atalhos de teclado: `Ctrl+1..9` navega pelas 9 primeiras abas, `Ctrl+0` abre a aba Serviços, `Ctrl+Tab` avança, `Ctrl+Shift+Tab` volta.
-
 ---
 
 ## Modos de Operação
 
 | Modo | Descrição |
 |------|-----------|
-| **Mock (lab)** | Inventário local + status simulados + output realista sem dispositivo real |
+| **Mock (lab)** | Inventário local + status simulados sem dispositivo real |
 | **CLI real** | Sessão Netmiko SSH ativa, comandos executados no equipamento |
-| **Híbrido** | Mock para demonstração + CLI para VNFs disponíveis simultaneamente |
-
----
-
-## Requisitos
-
-- Python **3.12+** — o instalador resolve automaticamente nesta ordem: `HM_PYTHON` → `python3` do sistema → `python3.13`/`python3.12` alternativos → uv (`~/.local/bin/uv`). Sem nenhum disponível, use `install --bootstrap-python` (baixa Python via uv, sem sudo) ou aponte `HM_PYTHON`
-- Linux com servidor gráfico X11/Wayland (para a GUI)
-- Pacotes de sistema (CI): `libxcb-cursor-dev`, `libxkbcommon-x11-dev`
-- Acesso SSH à porta 22 do equipamento Huawei (para modo real)
+| **Híbrido** | Mock para demonstração + CLI para VNFs disponíveis |
 
 ---
 

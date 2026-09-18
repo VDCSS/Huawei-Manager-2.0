@@ -61,26 +61,52 @@ install_fonts() {
     fc-cache -f "$FONTS_DIR" >/dev/null 2>&1 || true
 }
 
-# check_sysdeps — sonda dependências de sistema do PySide6 (dpkg).
-# Apenas AVISO: nunca aborta a instalação (distros sem dpkg pulam a sonda).
+# check_sysdeps — sonda dependências de sistema do PySide6 (cross-distro).
+# Suporta: apt (Debian/Ubuntu), dnf (Fedora/RHEL), pacman (Arch).
+# Apenas AVISO: nunca aborta a instalação.
 check_sysdeps() {
     header "Dependências de sistema (PySide6)"
-    if ! command -v dpkg >/dev/null 2>&1; then
-        warn "dpkg não disponível — verificação de pacotes de sistema pulada"
+
+    local PM="" PM_INSTALL=""
+    local DEB_PKGS="libxcb-cursor-dev libxkbcommon-x11-dev"
+    local RPM_PKGS="libxcb libxkbcommon-x11"
+
+    if command -v dpkg >/dev/null 2>&1; then
+        PM="dpkg"; PM_INSTALL="sudo apt install"
+    elif command -v dnf >/dev/null 2>&1; then
+        PM="dnf"; PM_INSTALL="sudo dnf install"
+    elif command -v yum >/dev/null 2>&1; then
+        PM="yum"; PM_INSTALL="sudo yum install"
+    elif command -v pacman >/dev/null 2>&1; then
+        PM="pacman"; PM_INSTALL="sudo pacman -S"
+    else
+        warn "Nenhum gerenciador de pacotes detectado — verificação pulada"
         return 0
     fi
-    local MISSING_SYSDEPS=()
-    local pkg
-    for pkg in libxcb-cursor-dev libxkbcommon-x11-dev; do
-        if dpkg -s "$pkg" >/dev/null 2>&1; then
-            ok "$pkg"
-        else
-            MISSING_SYSDEPS+=("$pkg")
-            warn "$pkg — não encontrado"
-        fi
+
+    if "$PY_BIN" -c "import sqlite3" 2>/dev/null; then
+        ok "sqlite3 (módulo padrão Python)"
+    else
+        warn "sqlite3 não disponível no Python — pode causar falhas"
+    fi
+
+    local MISSING=() PKGS
+    case "$PM" in
+        dpkg)    PKGS=$DEB_PKGS ;;
+        dnf|yum) PKGS=$RPM_PKGS ;;
+        pacman)  PKGS="libxcb libxkbcommon" ;;
+    esac
+
+    for pkg in $PKGS; do
+        case "$PM" in
+            dpkg)    dpkg -s "$pkg" >/dev/null 2>&1 && ok "$pkg" || { MISSING+=("$pkg"); warn "$pkg — não encontrado"; } ;;
+            dnf|yum) $PM list installed "$pkg" >/dev/null 2>&1 && ok "$pkg" || { MISSING+=("$pkg"); warn "$pkg — não encontrado"; } ;;
+            pacman)  pacman -Qi "$pkg" >/dev/null 2>&1 && ok "$pkg" || { MISSING+=("$pkg"); warn "$pkg — não encontrado"; } ;;
+        esac
     done
-    if [ ${#MISSING_SYSDEPS[@]} -gt 0 ]; then
-        warn "Instale com: sudo apt install ${MISSING_SYSDEPS[*]}"
+
+    if [ ${#MISSING[@]} -gt 0 ]; then
+        warn "Instale com: $PM_INSTALL ${MISSING[*]}"
         warn "PySide6 pode falhar sem esses pacotes."
     fi
 }
