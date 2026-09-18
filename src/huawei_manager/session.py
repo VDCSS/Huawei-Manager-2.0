@@ -193,6 +193,9 @@ class NetmikoSession(SessionCommandsMixin):
                 "ssh_private_key_file": cfg.ssh_key,
                 "session_log": cfg.session_log or None,
             }.items() if v is not None}
+            # P0.2: Filtrar senha do session_log (fail-closed)
+            if cfg.password:
+                kwargs["no_log"] = {"password": cfg.password, "secret": cfg.password}
             self._conn = ConnectHandler(**kwargs)
             ctx.set_status("ok")
 

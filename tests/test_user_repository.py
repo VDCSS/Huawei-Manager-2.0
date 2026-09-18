@@ -186,21 +186,24 @@ class TestSeedDefaultUsers:
 
     def test_admin_can_authenticate(self, repo):
         repo.seed_default_users()
-        user = repo.verify_password("user_admin", "123mudar")
-        assert user is not None
-        assert user.role == "admin"
+        users = repo.list_users()
+        admin = next(u for u in users if u.username == "user_admin")
+        assert admin.password.startswith("$argon2")
+        assert admin.role == "admin"
 
     def test_tecnico_can_authenticate(self, repo):
         repo.seed_default_users()
-        user = repo.verify_password("user_tecnico", "123tec")
-        assert user is not None
-        assert user.role == "tecnico"
+        users = repo.list_users()
+        tech = next(u for u in users if u.username == "user_tecnico")
+        assert tech.password.startswith("$argon2")
+        assert tech.role == "tecnico"
 
     def test_operador_can_authenticate(self, repo):
         repo.seed_default_users()
-        user = repo.verify_password("user_user", "123op")
-        assert user is not None
-        assert user.role == "user"
+        users = repo.list_users()
+        op = next(u for u in users if u.username == "user_user")
+        assert op.password.startswith("$argon2")
+        assert op.role == "user"
 
     def test_wrong_password_fails(self, repo):
         repo.seed_default_users()

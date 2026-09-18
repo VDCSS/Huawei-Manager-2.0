@@ -223,11 +223,22 @@ class UserRepository:
         if self.list_users():
             return  # Users already exist
 
-        default_users = [
-            ("user_admin", "123mudar", "admin", "Administrador do Sistema"),
-            ("user_tecnico", "123tec", "tecnico", "Técnico de Rede"),
-            ("user_user", "123op", "user", "Operador Padrão"),
-        ]
+        import secrets
+        import string
+        def _gen_password(length: int = 16) -> str:
+            """Gera senha aleatória segura (letras + dígitos + símbolos)."""
+            alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+            return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+        default_users = []
+        for uname, role, desc in [
+            ("user_admin", "admin", "Administrador do Sistema"),
+            ("user_tecnico", "tecnico", "Técnico de Rede"),
+            ("user_user", "user", "Operador Padrão"),
+        ]:
+            pw = _gen_password()
+            default_users.append((uname, pw, role, desc))
+            log.warning("seed_default_users: %s senha gerada: %s — ALTERE NO PRIMEIRO LOGIN", uname, pw)
 
         for username, password, role, full_name in default_users:
             try:

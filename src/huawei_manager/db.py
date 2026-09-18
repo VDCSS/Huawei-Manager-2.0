@@ -138,13 +138,9 @@ def ensure_default_admin(conn: sqlite3.Connection | None = None) -> None:
             log.debug("ensure_default_admin: users already exist, skipping")
             return
 
-        try:
-            from argon2 import PasswordHasher
-            ph = PasswordHasher()
-            hashed = ph.hash("123mudar")
-        except ImportError:
-            log.warning("ensure_default_admin: argon2-cffi not available, using plain text (INSECURE)")
-            hashed = "123mudar"
+        from argon2 import PasswordHasher
+        ph = PasswordHasher()
+        hashed = ph.hash("123mudar")
 
         conn.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",

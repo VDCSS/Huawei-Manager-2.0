@@ -42,8 +42,11 @@ def _ensure_user_env() -> None:
     if USER_ENV_PATH.exists():
         return
     try:
+        import secrets
         USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        USER_ENV_PATH.write_text(_ENV_TEMPLATE, encoding="utf-8")
+        hmac_key = secrets.token_hex(32)
+        template = _ENV_TEMPLATE.replace("AUDIT_HMAC_KEY=", f"AUDIT_HMAC_KEY={hmac_key}")
+        USER_ENV_PATH.write_text(template, encoding="utf-8")
     except OSError:
         pass
 
