@@ -142,13 +142,15 @@ class TestToggleConnect:
         mixin._toggle_connect()
         mixin._sb.disconnect.assert_called_once()
 
-    def test_connects_default_when_no_device(self):
+    def test_shows_hint_when_no_device(self):
         mixin = _make_mixin()
         mixin._sb.is_alive.return_value = False
         mixin._get_selected_device = MagicMock(return_value=None)
-        with patch.object(mixin, "_connect_default") as mock_def:
-            mixin._toggle_connect()
-        mock_def.assert_called_once()
+        mixin._toggle_connect()
+        mixin._set_status.assert_called_once()
+        # Must NOT attempt to connect
+        mixin._sb.connect.assert_not_called()
+        mixin._spawn_io.assert_not_called()
 
     def test_connects_with_device_when_selected(self):
         device = _make_device()
