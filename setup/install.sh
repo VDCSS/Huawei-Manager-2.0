@@ -164,6 +164,10 @@ init_database(conn)
 ensure_default_admin(conn)
 " || warn "Setup de admin padrão falhou (não crítico)"
 
+    header "Setup chaves de criptografia (.env)"
+    "$PY" "$SETUP_DIR/ensure_env.py" \
+        || warn "Geração de chaves falhou (não crítico — app gera no 1º boot)"
+
     echo ""
     ok "${BOLD}Instalação completa${NC}"
     echo "  Modo:      $dep_mode"

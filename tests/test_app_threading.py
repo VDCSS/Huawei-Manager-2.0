@@ -33,6 +33,7 @@ class _FakeApp(ThreadingMixin):
         self._sb.is_alive.return_value = True
         self._on_sdn_event = MagicMock()
         self._event_drop_count = 0
+        self._ensure_device_ready = MagicMock(return_value=MagicMock())
 
     @property
     def _ui_queue_maxlen(self) -> int | None:
@@ -293,6 +294,18 @@ class TestRun:
 
         app._run(fn)  # should not raise
         app._io_executor.shutdown(wait=True)
+
+    def test_run_returns_when_not_device_ready(self, app: _FakeApp, monkeypatch) -> None:
+        app._ensure_device_ready.return_value = None
+        results: list[int] = []
+
+        def fn() -> None:
+            results.append(7)
+
+        app._run(fn)
+        app._io_executor.shutdown(wait=True)
+        assert results == []
+        app._ensure_device_ready.assert_called_once_with("executar esta acao")
 
 
 # ═══════════════════════════════════════════════════════════════════

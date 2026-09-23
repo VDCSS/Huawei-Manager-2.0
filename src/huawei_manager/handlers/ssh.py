@@ -38,12 +38,8 @@ class SshMixin:
                                         payload=DeviceDisconnectedPayload(reason="manual")))
             return
 
-        device = self._get_selected_device()
+        device = self._ensure_device_ready("conectar")
         if device is None:
-            self._set_status(
-                "Selecione um device primeiro — cadastre via menu Devices",
-                C.NEON_AMBER,
-            )
             return
         self._connect_with_device(device)
 

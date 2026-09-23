@@ -23,7 +23,12 @@ def _make_mixin(**attrs) -> SshMixin:
         _dispatch=MagicMock(side_effect=lambda fn: fn() if callable(fn) else None),
         _spawn_io=MagicMock(),
         session=MagicMock(),
+        _devices=[],
+        _device_service=MagicMock(),
+        _access_level="user",
+        _ensure_device_ready=MagicMock(return_value=None),
     )
+    defaults["_device_service"].load_inventory.return_value = []
     for k, v in defaults.items():
         setattr(mixin, k, v)
     for k, v in attrs.items():
@@ -142,13 +147,11 @@ class TestToggleConnect:
         mixin._toggle_connect()
         mixin._sb.disconnect.assert_called_once()
 
-    def test_shows_hint_when_no_device(self):
+    def test_returns_early_when_no_device(self):
         mixin = _make_mixin()
         mixin._sb.is_alive.return_value = False
-        mixin._get_selected_device = MagicMock(return_value=None)
         mixin._toggle_connect()
-        mixin._set_status.assert_called_once()
-        # Must NOT attempt to connect
+        mixin._ensure_device_ready.assert_called_once_with("conectar")
         mixin._sb.connect.assert_not_called()
         mixin._spawn_io.assert_not_called()
 
@@ -156,7 +159,7 @@ class TestToggleConnect:
         device = _make_device()
         mixin = _make_mixin()
         mixin._sb.is_alive.return_value = False
-        mixin._get_selected_device = MagicMock(return_value=device)
+        mixin._ensure_device_ready = MagicMock(return_value=device)
         with patch.object(mixin, "_connect_with_device") as mock_dev:
             mixin._toggle_connect()
         mock_dev.assert_called_once_with(device)

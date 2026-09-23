@@ -78,6 +78,8 @@ class ThreadingMixin:
 
     def _run(self: AppCoreProtocol, func) -> None:
         try:
+            if self._ensure_device_ready("executar esta acao") is None:
+                return
             if self._sb is None or not self._sb.is_alive():
                 from PySide6.QtWidgets import QMessageBox
 

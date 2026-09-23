@@ -40,7 +40,14 @@ def _make_mixin(**attrs) -> ServicesMixin:
         _loading=MagicMock(),
         _event_queue=MagicMock(),
         _spawn_io=MagicMock(),
+        _devices=[],
+        _device_service=MagicMock(),
+        _access_level="user",
+        _get_selected_device=MagicMock(return_value=None),
+        _set_status=MagicMock(),
+        _ensure_device_ready=MagicMock(return_value=None),
     )
+    defaults["_device_service"].load_inventory.return_value = []
     for k, v in defaults.items():
         setattr(mixin, k, v)
     for k, v in attrs.items():
@@ -102,7 +109,9 @@ class TestRunService:
         mixin._write.assert_called()
 
     def test_cli_no_ssh_writes_error(self):
-        mixin = _make_mixin(_svc_mode_var="cli")
+        device = MagicMock()
+        mixin = _make_mixin(_svc_mode_var="cli", _devices=[device])
+        mixin._ensure_device_ready = MagicMock(return_value=device)
         mixin._sb.is_alive.return_value = False
         svc = _make_svc()
 

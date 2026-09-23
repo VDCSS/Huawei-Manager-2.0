@@ -105,6 +105,49 @@ class DevicesMixin:
             self._device_target_lbl.setText(info)
         self._refresh_service_list()
 
+    def _ensure_device_ready(self: AppCoreProtocol, action: str) -> Device | None:
+        """Garante device cadastrado e selecionado antes de acoes que exigem device.
+
+        Retorna o device selecionado, ou None se nao houver device cadastrado
+        (admin e convidado a cadastrar via dialog modal; nao-admin recebe aviso)
+        ou se nenhum device estiver selecionado.
+        """
+        devices = getattr(self, "_devices", None)
+        if not devices:
+            svc = getattr(self, "_device_service", None)
+            devices = svc.load_inventory() if svc is not None else []
+        if not devices:
+            self._prompt_no_devices(action)
+            return None
+        device = self._get_selected_device()
+        if device is None:
+            self._set_status(
+                "Selecione um device primeiro — Topologia / Devices",
+                C.NEON_AMBER,
+            )
+            return None
+        return device
+
+    def _prompt_no_devices(self: AppCoreProtocol, action: str) -> None:
+        """Dialog modal (admin) ou aviso (nao-admin) quando nao ha devices."""
+        if role_meets(self._access_level, "admin"):
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                None,
+                "Nenhum device cadastrado",
+                f"Para {action} e necessario cadastrar um device.\n\n"
+                "Deseja cadastrar agora?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._show_device_dialog()
+        else:
+            self._set_status(
+                "Nenhum device cadastrado — solicite ao admin para cadastrar",
+                C.NEON_AMBER,
+            )
+
     def _clear_device_target(self: AppCoreProtocol) -> None:
         self._target_device = None
         self.session.override_host = None

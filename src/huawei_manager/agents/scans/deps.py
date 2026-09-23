@@ -35,7 +35,6 @@ KNOWN_OK: set[str] = {
 LOCAL_PACKAGES: set[str] = {
     "agents", "huawei_manager", "tests",
     "_factories",  # test helper module (tests/_factories.py)
-    "migrate_credentials",  # setup script (setup/migrate_credentials.py)
 }
 
 # Package name → módulo importável (quando diferem)
