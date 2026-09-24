@@ -438,9 +438,13 @@ class TestHostKeyVerify:
     def test_tofu_key_mismatch_raises(self, mock_connect, session):
         """TOFU mode raises ValueError when cached key differs."""
         mock_conn = MagicMock()
-        mock_conn.remote_server_key.get_name.return_value = "ssh-rsa"
+        transport = MagicMock()
+        mock_conn.remote_conn_pre.get_transport.return_value = transport
+        remote_key = MagicMock()
+        remote_key.get_name.return_value = "ssh-rsa"
         # Return a different base64 key from remote
-        mock_conn.remote_server_key.get_base64.return_value = "DIFFERENTKEYBASE64"
+        remote_key.get_base64.return_value = "DIFFERENTKEYBASE64"
+        transport.get_remote_server_key.return_value = remote_key
         mock_connect.return_value = mock_conn
 
         with (
