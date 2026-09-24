@@ -161,7 +161,12 @@ install_mode() {
 from huawei_manager.db import init_database, get_connection, ensure_default_admin
 conn = get_connection()
 init_database(conn)
-ensure_default_admin(conn)
+pw = ensure_default_admin(conn)
+if pw:
+    print()
+    print('  Usuario admin padrao criado: user_admin')
+    print(f'  Senha gerada (guarde com seguranca): {pw}')
+    print('  Altere a senha no primeiro login.')
 " || warn "Setup de admin padrão falhou (não crítico)"
 
     header "Setup chaves de criptografia (.env)"

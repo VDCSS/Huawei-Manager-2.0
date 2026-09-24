@@ -44,16 +44,6 @@ class ArpEntry:
     status: str
 
 
-@dataclass
-class VlanEntry:
-    """Entrada de VLAN."""
-
-    vlan_id: int
-    name: str
-    status: str
-    ports: list[str]
-
-
 # ── Routing table ───────────────────────────────────────────────────────────
 
 _ROUTE_RE = re.compile(
@@ -165,45 +155,6 @@ def parse_arp_table(output: str) -> list[ArpEntry]:
                 mac_address=m.group(2),
                 status=m.group(3),
                 interface=m.group(4),
-            )
-        )
-    return entries
-
-
-# ── VLANs ───────────────────────────────────────────────────────────────────
-
-_VLAN_RE = re.compile(
-    r"^(\d+)\s+(\S+)\s+(\S+)\s+(.+)$"  # id, name, status, port-list
-)
-
-
-def parse_vlans(output: str) -> list[VlanEntry]:
-    """Parse output de ``display vlan``.
-
-    Extrai linhas do formato::
-
-        VLAN ID   Name            Status     Ports
-        1         default         up         GE0/0/0 GE0/0/1
-    """
-    entries: list[VlanEntry] = []
-    in_table = False
-    for line in output.splitlines():
-        if line.startswith("VLAN ID"):
-            in_table = True
-            continue
-        if not in_table or not line.strip():
-            continue
-        m = _VLAN_RE.match(line)
-        if not m:
-            continue
-        ports_str = m.group(4).strip()
-        ports = ports_str.split() if ports_str else []
-        entries.append(
-            VlanEntry(
-                vlan_id=int(m.group(1)),
-                name=m.group(2),
-                status=m.group(3),
-                ports=ports,
             )
         )
     return entries

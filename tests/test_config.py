@@ -20,8 +20,6 @@ def _reset_config():
     _cfg._secrets = None
     _cfg.audit = None
     _cfg.log = None
-    _cfg.HOST = ""
-    _cfg.PORT = 22
     _cfg.AUDIT_HMAC_KEY = ""
 
     yield
@@ -87,17 +85,12 @@ def test_init_idempotent():
 
 
 def test_init_sets_module_level_constants():
-    """init() populates HOST, PORT, USER, PASS, SSH_KEY, etc."""
+    """init() populates AUDIT_HMAC_KEY and SSH_TIMEOUT."""
     import huawei_manager._config as _cfg
 
     env_vals = {
-        "ROUTER_HOST": "192.168.1.1",
-        "ROUTER_PORT": "22",
-        "ROUTER_USERNAME": "admin",
-        "ROUTER_PASSWORD": "secret",
-        "ROUTER_SSH_KEY": "~/.ssh/test_key",
-        "ROUTER_HOSTKEY_VERIFY": "tofu",
         "AUDIT_HMAC_KEY": "hmac-key-123",
+        "SSH_TIMEOUT": "45",
     }
 
     def fake_s(key: str, default: str = "") -> str:
@@ -106,26 +99,8 @@ def test_init_sets_module_level_constants():
     with patch.object(_cfg, "_s", side_effect=fake_s):
         _cfg.init()
 
-    assert _cfg.HOST == "192.168.1.1"
-    assert _cfg.PORT == 22
-    assert _cfg.USER == "admin"
-    assert _cfg.PASS == "secret"
-    assert _cfg.HK_VERIFY == "tofu"
     assert _cfg.AUDIT_HMAC_KEY == "hmac-key-123"
-
-
-def test_init_hk_verify_defaults_to_strict():
-    """Invalid or missing HOSTKEY_VERIFY falls back to 'strict'."""
-    import huawei_manager._config as _cfg
-
-    def fake_s(key: str, default: str = "") -> str:
-        vals = {"ROUTER_HOSTKEY_VERIFY": "bogus"}
-        return vals.get(key, default)
-
-    with patch.object(_cfg, "_s", side_effect=fake_s):
-        _cfg.init()
-
-    assert _cfg.HK_VERIFY == "strict"
+    assert _cfg.SSH_TIMEOUT == 45
 
 
 def test_init_secrets_fallback():

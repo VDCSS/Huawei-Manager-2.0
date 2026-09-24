@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from huawei_manager.device_crypto import _decrypt_val
 
-log = logging.getLogger("huawei.topology")
+log = logging.getLogger("huawei.device_models")
 
 
 @dataclass

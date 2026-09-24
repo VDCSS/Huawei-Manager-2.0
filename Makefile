@@ -71,7 +71,7 @@ typecheck:
 	$(PY) -m pyright
 
 coverage:
-	$(PY) -m pytest --cov=src/huawei_manager --cov-report=term-missing
+	$(PY) -m pytest --cov=src/huawei_manager --cov-report=term-missing --cov-fail-under=60
 
 ci: lint test typecheck
 

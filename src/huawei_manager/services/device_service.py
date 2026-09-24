@@ -23,7 +23,15 @@ class SessionOverrides:
 
 def _next_id(devices: list[Device], name: str) -> str:
     slug = name.lower().replace(" ", "-")
-    return f"dev-{len(devices) + 1:03d}-{slug}"
+    # Baseado no MAIOR numero existente, nao em len(devices): apos uma
+    # delecao, len() subestima e colidiria com um ID ainda em uso
+    # (ex.: [dev-001, dev-003] com len=2 geraria dev-003 de novo).
+    max_num = 0
+    for d in devices:
+        parts = d.id.split("-")
+        if len(parts) >= 2 and parts[0] == "dev" and parts[1].isdigit():
+            max_num = max(max_num, int(parts[1]))
+    return f"dev-{max_num + 1:03d}-{slug}"
 
 
 log = logging.getLogger("huawei.device_service")
@@ -126,9 +134,13 @@ class DeviceService:
     def update_device(self, device: Device, data: dict[str, Any]) -> Device:
         name = str(data.get("name", device.name)).strip()
         host = str(data.get("host", device.host)).strip()
+        if not name:
+            raise ValueError("Nome e obrigatorio.")
+        if not host:
+            raise ValueError("IP/Host e obrigatorio.")
         port = int(data.get("port", device.port))
         if not (1 <= port <= 65535):
-            port = device.port
+            raise ValueError("Porta deve estar entre 1 e 65535.")
 
         updated = Device(
             id=device.id,

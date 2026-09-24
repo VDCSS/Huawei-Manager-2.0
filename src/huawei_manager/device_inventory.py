@@ -11,7 +11,7 @@ from threading import Lock
 from huawei_manager.device_crypto import _encrypt_val
 from huawei_manager.device_models import Device
 
-log = logging.getLogger("huawei.topology")
+log = logging.getLogger("huawei.device_inventory")
 
 DEVICE_INVENTORY_FILE = "vnf_inventory.json"
 _INV_LOCK = Lock()

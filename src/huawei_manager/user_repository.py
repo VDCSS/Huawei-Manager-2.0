@@ -214,14 +214,19 @@ class UserRepository:
         log.warning("verify_password: failed for user=%s", username)
         return None
 
-    def seed_default_users(self) -> None:
+    def seed_default_users(self) -> list[tuple[str, str]]:
         """Seed default users if none exist.
 
-        Creates admin, tecnico, and operador users with default passwords.
+        Creates admin, tecnico, and operador users with random passwords.
         Idempotent - safe to call multiple times.
+
+        Returns:
+            List of ``(username, password)`` generated on first seed, so the
+            caller can surface them securely (terminal/dialog). Empty list if
+            users already existed. Passwords are NEVER logged.
         """
         if self.list_users():
-            return  # Users already exist
+            return []  # Users already exist
 
         import secrets
         import string
@@ -230,19 +235,17 @@ class UserRepository:
             alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
             return ''.join(secrets.choice(alphabet) for _ in range(length))
 
-        default_users = []
-        for uname, role, desc in [
+        created: list[tuple[str, str]] = []
+        for uname, role, _desc in [
             ("user_admin", "admin", "Administrador do Sistema"),
             ("user_tecnico", "tecnico", "Técnico de Rede"),
             ("user_user", "user", "Operador Padrão"),
         ]:
             pw = _gen_password()
-            default_users.append((uname, pw, role, desc))
-            log.warning("seed_default_users: %s senha gerada: %s — ALTERE NO PRIMEIRO LOGIN", uname, pw)
-
-        for username, password, role, full_name in default_users:
             try:
-                self.create_user(username, password, role=role)
-                log.info("seed_default_users: created %s", username)
+                self.create_user(uname, pw, role=role)
+                created.append((uname, pw))
+                log.info("seed_default_users: created %s", uname)
             except (ValueError, sqlite3.IntegrityError):
-                log.debug("seed_default_users: %s already exists", username)
+                log.debug("seed_default_users: %s already exists", uname)
+        return created

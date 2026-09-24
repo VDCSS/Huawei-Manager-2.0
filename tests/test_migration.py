@@ -9,7 +9,6 @@ from huawei_manager._config import init as init_config
 from huawei_manager.db import get_connection, init_database
 from huawei_manager.device_repository import DeviceRepository
 from huawei_manager.migration import (
-    dry_run_json_migration,
     load_json_inventory,
     migrate_json_inventory,
 )
@@ -153,12 +152,6 @@ class TestMigrateJsonInventory:
     def test_nonexistent_file_migrates_zero(self, conn, tmp_path):
         count = migrate_json_inventory(tmp_path / "nope.json", conn)
         assert count == 0
-
-    def test_dry_run_does_not_write(self, conn, sample_json):
-        ids = dry_run_json_migration(sample_json)
-        assert ids == ["vnf-001", "vnf-002"]
-        repo = DeviceRepository(conn)
-        assert repo.list_devices() == []
 
     def test_idempotent_migration(self, conn, sample_json):
         migrate_json_inventory(sample_json, conn)

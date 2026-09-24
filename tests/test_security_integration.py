@@ -91,13 +91,6 @@ class TestDryRunEngineDiff:
         report = e.diff("a\nb\n", "a\nb\nc\n")
         assert "added" in report.summary
 
-    def test_b3_apply_with_rollback(self):
-        e = DryRunEngine()
-        fake_fn = MagicMock(return_value="config applied")
-        result = e.apply(fake_fn, "new config", original="old config")
-        assert result.success
-        assert result.rollback_command is not None
-
 
 # ═══════════════════════════════════════════════════════════════════
 #  B6 — ControllerCore: gerenciamento de estado

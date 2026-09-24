@@ -91,12 +91,9 @@ LIGHT_THEME = {
 # Cópia congelada do tema escuro — NUNCA mutada, usada como fonte para re-aplicar dark
 DARK_THEME = THEME.copy()
 
-_active_theme: str = "dark"
-
 
 def set_theme(name: str) -> None:
     """Swap all module-level colour constants to the named palette."""
-    global _active_theme
     global BG_BASE, BG_CARD, BG_SIDEBAR, BG_INPUT
     global NEON_CYAN, NEON_MAG, NEON_PURP, NEON_AMBER, NEON_RED
     global FG_MAIN, FG_DIM, FG_CODE, BORDER_NRM
@@ -119,7 +116,6 @@ def set_theme(name: str) -> None:
 
     THEME.clear()
     THEME.update(pal)
-    _active_theme = name
 
 # ─── COMANDOS CLI — filtros da aba Roteamento ───────────────────────
 CLI_FILTERS: dict[str, str] = {

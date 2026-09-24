@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -57,12 +56,6 @@ _secrets: SecretsBackend | None = None
 audit: AuditLogger | None = None
 log: logging.Logger | None = None
 
-HOST: str = ""
-PORT: int = 22
-USER: str = ""
-PASS: str = ""
-SSH_KEY: str = ""
-HK_VERIFY: str = "strict"
 SSH_TIMEOUT: int = 90
 
 AUDIT_HMAC_KEY: str = ""
@@ -78,7 +71,6 @@ def init() -> None:
     """
     global _INITIALIZED
     global _secrets, audit, log
-    global HOST, PORT, USER, PASS, SSH_KEY, HK_VERIFY
     global SSH_TIMEOUT, AUDIT_HMAC_KEY
 
     if _INITIALIZED:
@@ -130,13 +122,6 @@ def init() -> None:
         from huawei_manager.vault import EnvBackend
         _secrets = EnvBackend(env_path=USER_ENV_PATH if USER_ENV_PATH.exists() else PROJECT_ROOT / ".env")
 
-    HOST      = _s("ROUTER_HOST")
-    PORT      = int(_s("ROUTER_PORT", "22"))
-    USER      = _s("ROUTER_USERNAME")
-    PASS      = _s("ROUTER_PASSWORD")
-    SSH_KEY   = os.path.expanduser(_s("ROUTER_SSH_KEY", "~/.ssh/huawei_ed25519"))
-    _hk_raw = _s("ROUTER_HOSTKEY_VERIFY", "strict").lower().strip()
-    HK_VERIFY = _hk_raw if _hk_raw in ("strict", "tofu", "off") else "strict"
     SSH_TIMEOUT = int(_s("SSH_TIMEOUT", "90"))
 
     AUDIT_HMAC_KEY = _s("AUDIT_HMAC_KEY", "")

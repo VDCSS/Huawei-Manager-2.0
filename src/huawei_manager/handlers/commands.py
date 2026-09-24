@@ -25,6 +25,48 @@ class CommandsMixin:
         """Retorna o texto atual do editor de comandos."""
         return self._cmd_editor.toPlainText().strip()
 
+    def _confirm_destructive(self: AppCoreProtocol, cmd: str) -> bool:
+        """Valida o comando e pede confirmacao explicita para bypass de politica.
+
+        Roda na UI thread (antes do _run). Retorna False se o comando for
+        bloqueado ou se o operador cancelar um comando destrutivo liberado
+        por privilegio elevado (admin/tecnico).
+        """
+        validator: CommandValidator | None = self._cmd_validator
+        if validator is None:
+            return True
+        vr = validator.validate(cmd, self._access_level)
+        if not vr.allowed:
+            self._write(self.out_cmd, f"\u2718  Comando bloqueado: {vr.reason}")
+            return False
+        if vr.bypass_2fa:
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                None, "Confirmar comando destrutivo",
+                f"O comando abaixo e destrutivo e foi liberado por privilegio elevado:\n\n"
+                f"{cmd}\n\nExecutar mesmo assim?",
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                self._write(self.out_cmd, "\u2718  Comando cancelado pelo usuario.")
+                return False
+        return True
+
+    def _run_cmd_safe(self: AppCoreProtocol, cmd: str = "") -> None:
+        """Despacha _exec_cmd apos validacao + confirmacao (UI thread)."""
+        if not cmd:
+            return
+        if not self._confirm_destructive(cmd):
+            return
+        self._run(lambda: self._exec_cmd(cmd))
+
+    def _run_config_safe(self: AppCoreProtocol, cmd: str = "") -> None:
+        """Despacha _exec_config apos validacao + confirmacao (UI thread)."""
+        if not cmd:
+            return
+        if not self._confirm_destructive(cmd):
+            return
+        self._run(lambda: self._exec_config(cmd))
+
     def _exec_cmd(self: AppCoreProtocol, cmd: str = "") -> None:
         """Executa o comando do editor, opcionalmente dentro de system-view.
 
@@ -94,7 +136,14 @@ class CommandsMixin:
                     self._write(self.out_cmd, "\u2139  Nenhuma alteracao detectada em relacao a config atual.")
                     return
             except Exception:
-                log.exception("Dry-run falhou \u2014 aplicando config sem preview")
+                # Protecao falhou -> NAO aplicar: seguir sem preview violaria
+                # o contrato de dry-run (mudanca de estado sem visibilidade).
+                log.exception("Dry-run falhou \u2014 abortando aplicacao de config")
+                self._write(
+                    self.out_cmd,
+                    "\u2718  Dry-run falhou \u2014 configuracao NAO aplicada. Verifique o log.",
+                )
+                return
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
         try:
             ok, msg = self._sb.send_config(cmd.strip().splitlines())

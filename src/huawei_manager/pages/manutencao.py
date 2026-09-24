@@ -223,7 +223,6 @@ class PageBuilderManutencaoMixin:
             rb.toggled.connect(lambda checked, v=fval: self._on_manut_filter_toggled(checked, v))
             filter_layout.addWidget(rb)
             filter_layout.addSpacing(4)
-            self._manut_rb_group.append(rb)
         filter_layout.addStretch()
 
         # Output

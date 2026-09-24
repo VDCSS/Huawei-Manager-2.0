@@ -29,10 +29,8 @@ EXCEPTIONS: set[str] = {
     "setup", "teardown", "main", "run",
     # Public API da package — usado externamente, não em src/
     "__version__",
-    # Estado interno de módulo — só atribuído, não lido diretamente
-    "_active_theme",
     # Utilitários usados apenas por testes
-    "_normalize_status", "_validate_credentials",
+    "_validate_credentials",
     # Usado em tests/test_session.py (fora do escopo src/)
     "_resolve_filter",
 }

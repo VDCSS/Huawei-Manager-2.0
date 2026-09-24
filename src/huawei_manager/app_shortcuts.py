@@ -52,7 +52,7 @@ class ShortcutsMixin:
         elif page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
-                self._run(lambda: self._exec_cmd(cmd))
+                self._run_cmd_safe(cmd)
         elif page == "backup":
             self._run(lambda: self._do_backup(C.BACKUP_FMT_TEXT))
 
@@ -63,7 +63,7 @@ class ShortcutsMixin:
         if self._current_page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
-                self._run(lambda: self._exec_config(cmd))
+                self._run_config_safe(cmd)
 
     def _on_ctrl_d(self) -> None:
         overlay = getattr(self, "_auth_overlay", None)

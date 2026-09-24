@@ -49,7 +49,7 @@ class _CmdReturnFilter(QObject):
                         cursor.insertText("\n")
                     return True
                 else:
-                    self.app._run(lambda cmd=self.app._get_editor_cmd(): self.app._exec_cmd(cmd))
+                    self.app._run_cmd_safe(self.app._get_editor_cmd())
                     return True
         return super().eventFilter(obj, event)
 
@@ -150,13 +150,11 @@ class PageBuilderCmdMixin:
         right_layout.addSpacing(6)
 
         btn_exec = action_button(abar, "\u25b6 Executar",
-                                 lambda: self._run(
-                                     lambda cmd=self._get_editor_cmd(): self._exec_cmd(cmd)), C.NEON_CYAN)
+                                 lambda: self._run_cmd_safe(self._get_editor_cmd()), C.NEON_CYAN)
         abar_layout.addWidget(btn_exec)
         abar_layout.addSpacing(6)
         btn_cfg = action_button(abar, "\u2699 Enviar Config",
-                                lambda: self._run(
-                                    lambda cmd=self._get_editor_cmd(): self._exec_config(cmd)), C.NEON_AMBER)
+                                lambda: self._run_config_safe(self._get_editor_cmd()), C.NEON_AMBER)
         abar_layout.addWidget(btn_cfg)
 
         self._sysview_var = False

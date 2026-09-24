@@ -45,8 +45,8 @@ Execução em dois modos: **mock** (lab/simulação) ou **cli** (Netmiko real).
 - `ControllerCore` — estado centralizado de dispositivos em RAM + dump periódico JSON
 - `EventQueue` — fila de prioridade thread-safe com pub/sub (`PriorityQueue`)
 - `Southbound` — abstração SSH com retry e sanitização de credenciais em logs
-- `Normalizer` — parsers de output CLI → dataclasses (`RouteEntry`, `ArpEntry`, `VlanEntry`, `InterfaceEntry`)
-- `Authz` — decorador `@require_role` e `SessionTracker`
+- `Normalizer` — parsers de output CLI → dataclasses (`RouteEntry`, `ArpEntry`, `InterfaceEntry`)
+- `Authz` — `SessionTracker` com papéis e timeout de inatividade
 
 ### Watcher / Agentes de Scan
 - Scans periódicos em `ThreadPoolExecutor` separado (sem bloquear a UI)

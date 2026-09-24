@@ -83,12 +83,10 @@ class _DeviceNodeRect(QGraphicsRectItem):
         self.setBrush(self._hover_brush)
         if self._hover_pen is not None:
             self.setPen(self._hover_pen)
-        self._canvas._on_hover_enter(self._device)
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event) -> None:
         self.setBrush(self._normal_brush)
         if self._normal_pen is not None:
             self.setPen(self._normal_pen)
-        self._canvas._on_hover_leave()
         super().hoverLeaveEvent(event)

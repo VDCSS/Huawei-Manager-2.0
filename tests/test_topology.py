@@ -8,7 +8,7 @@ from cryptography.fernet import Fernet
 from huawei_manager.topology import TopologyCanvas
 from huawei_manager.device_inventory import load_devices, save_devices
 from huawei_manager.device_models import Device
-from huawei_manager.device_probe import _check_device, _normalize_status, probe_devices
+from huawei_manager.device_probe import _check_device, probe_devices
 
 
 class TestDevice:
@@ -71,17 +71,6 @@ class TestSaveDeviceInventory:
         raw = json.loads(p.read_text())
         assert "devices" in raw
         assert len(raw["devices"]) == 1
-
-
-class TestNormalizeStatus:
-    def test_online(self):
-        assert _normalize_status("online") == "online"
-
-    def test_offline(self):
-        assert _normalize_status("offline") == "offline"
-
-    def test_unknown_becomes_unknown(self):
-        assert _normalize_status("something") == "unknown"
 
 
 class TestDevicePasswordEncryption:

@@ -180,7 +180,7 @@ class TestEditConfig:
             ok, msg = session.edit_config("config text")
             assert ok
 
-    def test_save_config_called(self, session):
+    def test_save_config_not_called_by_default(self, session):
         mock_conn = MagicMock()
         session._conn = mock_conn
         with (
@@ -188,6 +188,16 @@ class TestEditConfig:
             patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
         ):
             session.edit_config("config text")
+            mock_conn.save_config.assert_not_called()
+
+    def test_save_config_called_when_save_true(self, session):
+        mock_conn = MagicMock()
+        session._conn = mock_conn
+        with (
+            patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
+        ):
+            session.edit_config("config text", save=True)
             mock_conn.save_config.assert_called_once()
 
 

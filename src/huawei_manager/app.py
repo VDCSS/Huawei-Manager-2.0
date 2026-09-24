@@ -598,6 +598,9 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._clock_timer.stop()
         if getattr(self, "_adaptive_timer", None) is not None:
             self._adaptive_timer.stop()
+        # Salvar estado do watcher ANTES de parar: stop() zera is_active,
+        # entao a checagem na reinicializacao (passo 5) usaria o estado errado.
+        watcher_was_active = self._watcher.is_active
         self._watcher.stop()
 
         # 2. Salvar estado
@@ -628,7 +631,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._clock_timer.start()
         if getattr(self, "_adaptive_timer", None) is not None:
             self._adaptive_timer.start()
-        if self._watcher.is_active:
+        if watcher_was_active:
             self._watcher.start()
 
 class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, AppCore, PageBuilder, EventHandlers):

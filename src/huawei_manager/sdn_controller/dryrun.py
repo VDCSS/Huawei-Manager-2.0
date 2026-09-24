@@ -1,12 +1,11 @@
-"""Dry-Run Engine — diff generation, dry-run, apply, and rollback.
+"""Dry-Run Engine — diff generation.
 
 Compara config atual vs proposta usando difflib. Todo deploy passa
-por dry-run antes de ser aplicado. Rollback automatico.
+por dry-run antes de ser aplicado.
 """
 from __future__ import annotations
 
 import difflib
-from collections.abc import Callable
 from dataclasses import dataclass, field
 
 
@@ -49,28 +48,10 @@ class DiffReport:
         return ", ".join(parts)
 
 
-@dataclass
-class ApplyResult:
-    """Resultado da aplicacao de config.
-
-    Attributes:
-        success: True se a operacao foi bem-sucedida.
-        output: Output do comando.
-        error: Mensagem de erro (None se success=True).
-        rollback_command: Comando para rollback (None se nao houver).
-    """
-
-    success: bool
-    output: str
-    error: str | None = None
-    rollback_command: str | None = None
-
-
 class DryRunEngine:
     """Engine de dry-run para comandos de configuracao.
 
-    Gera diff entre config atual e proposta, executa dry-run
-    (simulacao sem envio), apply, e rollback.
+    Gera diff entre config atual e proposta (simulacao sem envio).
     """
 
     # ── Diff generation ──────────────────────────────────────────────────
@@ -119,95 +100,3 @@ class DryRunEngine:
             removed=removed,
             context_lines=context,
         )
-
-    # ── Dry-run ──────────────────────────────────────────────────────────
-
-    def dry_run(
-        self,
-        execute_fn: Callable[[str], str],
-        current: str,
-        proposed: str,
-    ) -> DiffReport:
-        """Simula a execucao sem enviar comandos ao dispositivo.
-
-        Gera o diff e retorna o relatorio. A funcao *nao* e chamada
-        — apenas simulamos o resultado.
-
-        Args:
-            execute_fn: Funcao de execucao (nao chamada em dry-run).
-            current: Configuracao atual.
-            proposed: Configuracao proposta.
-
-        Returns:
-            ``DiffReport`` com o resultado da simulacao.
-        """
-        return self.diff(current, proposed)
-
-    # ── Apply ────────────────────────────────────────────────────────────
-
-    def apply(
-        self,
-        execute_fn: Callable[[str], str],
-        proposed: str,
-        original: str | None = None,
-    ) -> ApplyResult:
-        """Aplica a configuracao proposta.
-
-        Se ``original`` for fornecido, gera um comando de rollback
-        para restaurar a config original em caso de falha.
-
-        Args:
-            execute_fn: Funcao que executa o comando no dispositivo.
-            proposed: Configuracao proposta a ser aplicada.
-            original: Configuracao original (para rollback).
-
-        Returns:
-            ``ApplyResult`` com o resultado da aplicacao.
-        """
-        try:
-            output = execute_fn(proposed)
-        except RuntimeError as e:
-            return ApplyResult(
-                success=False,
-                output="",
-                error=str(e),
-            )
-
-        rollback_cmd: str | None = None
-        if original is not None:
-            diff_report = self.diff(original, proposed)
-            if diff_report.has_changes:
-                rollback_cmd = original
-
-        return ApplyResult(
-            success=True,
-            output=output,
-            rollback_command=rollback_cmd,
-        )
-
-    # ── Rollback ─────────────────────────────────────────────────────────
-
-    def rollback(
-        self,
-        execute_fn: Callable[[str], str],
-        command: str,
-    ) -> ApplyResult:
-        """Executa rollback para restaurar config anterior.
-
-        Args:
-            execute_fn: Funcao que executa o comando no dispositivo.
-            command: Comando/configuracao de rollback.
-
-        Returns:
-            ``ApplyResult`` com o resultado do rollback.
-        """
-        try:
-            output = execute_fn(command)
-        except RuntimeError as e:
-            return ApplyResult(
-                success=False,
-                output="",
-                error=str(e),
-            )
-
-        return ApplyResult(success=True, output=output)

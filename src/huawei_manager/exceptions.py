@@ -24,9 +24,5 @@ class SdnCommandError(SdnError):
     """Falha na execução de um comando CLI."""
 
 
-class SdnConfigError(SdnError):
-    """Falha na aplicação de configuração no dispositivo."""
-
-
 class SdnValidationError(SdnError):
     """Falha de validação de dados, credenciais ou parâmetros."""

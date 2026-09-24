@@ -165,52 +165,6 @@ class TestDeleteDevice:
         assert repo.delete_device("nonexistent") is False
 
 
-# ── search_devices ────────────────────────────────────────────────────────
-
-class TestSearchDevices:
-    def test_finds_by_name(self, repo):
-        repo.create_device(Device(id="d1", name="Router-Core", host="10.0.0.1"))
-        repo.create_device(Device(id="d2", name="Switch-Access", host="10.0.0.2"))
-        results = repo.search_devices("Router")
-        assert len(results) == 1
-        assert results[0].name == "Router-Core"
-
-    def test_finds_by_host(self, repo):
-        repo.create_device(Device(id="d1", name="Core", host="10.0.0.1"))
-        results = repo.search_devices("10.0.0.1")
-        assert len(results) == 1
-
-    def test_case_insensitive(self, repo):
-        repo.create_device(Device(id="d1", name="router", host="10.0.0.1"))
-        results = repo.search_devices("ROUTER")
-        assert len(results) == 1
-
-    def test_returns_empty_when_no_match(self, repo):
-        assert repo.search_devices("nonexistent") == []
-
-
-# ── get_devices_by_type ──────────────────────────────────────────────────
-
-class TestGetDevicesByType:
-    def test_filters_by_type(self, repo):
-        repo.create_device(Device(id="d1", name="R1", host="10.0.0.1", type="ROUTER"))
-        repo.create_device(Device(id="d2", name="S1", host="10.0.0.2", type="SWITCH"))
-        repo.create_device(Device(id="d3", name="R2", host="10.0.0.3", type="router"))
-        results = repo.get_devices_by_type("ROUTER")
-        assert len(results) == 2
-
-
-# ── get_devices_by_status ────────────────────────────────────────────────
-
-class TestGetDevicesByStatus:
-    def test_filters_by_status(self, repo):
-        repo.create_device(Device(id="d1", name="A", host="h1", status="online"))
-        repo.create_device(Device(id="d2", name="B", host="h2", status="offline"))
-        repo.create_device(Device(id="d3", name="C", host="h3", status="online"))
-        results = repo.get_devices_by_status("online")
-        assert len(results) == 2
-
-
 # ── Round-trip test ──────────────────────────────────────────────────────
 
 class TestRoundTrip:

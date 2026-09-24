@@ -102,12 +102,11 @@ def execute_service(
     service: ServiceDef,
     session_type: str = "mock",
     session=None,
-    **kwargs,
 ) -> str:
     """Executa um serviço no dispositivo alvo via Netmiko."""
     if session_type == "mock":
         return _execute_mock(service)
-    return _execute_cli(service, session, **kwargs)
+    return _execute_cli(service, session)
 
 
 def _execute_mock(service: ServiceDef) -> str:
@@ -373,7 +372,7 @@ Total stations: 3""",
     return result + f"\n\n  Timestamp: {ts}"
 
 
-def _execute_cli(service: ServiceDef, connection, **kwargs) -> str:
+def _execute_cli(service: ServiceDef, connection) -> str:
     """Executa via CLI (Netmiko)."""
     if connection is None:
         return "Sem conexão CLI ativa"

@@ -195,7 +195,8 @@ class SSHSouthbound(SouthboundProtocol):
         """Envia um comando show e retorna o output.
 
         Se um ``validator`` foi configurado, valida o comando antes
-        de executar. Comandos negados disparam ``RuntimeError``.
+        de executar. Comandos negados disparam ``SdnAuthError``;
+        falhas de execucao disparam ``SdnCommandError``.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
@@ -213,13 +214,19 @@ class SSHSouthbound(SouthboundProtocol):
             raise SdnCommandError(sanitized) from exc
 
     def send_config(
-        self, commands: list[str]
+        self, commands: list[str], save: bool = False
     ) -> tuple[bool, str]:
         """Envia comandos de configuracao.
 
         Se um ``validator`` foi configurado, valida cada comando
-        antes de executar. Comandos negados disparam ``RuntimeError``.
+        antes de executar. Comandos negados disparam ``SdnAuthError``.
         A validacao e feita no comando completo (join por newline).
+
+        Falhas de execucao nao levantam: retornam ``(False, mensagem)``
+        com a mensagem sanitizada (sem credenciais).
+
+        ``save=True`` persiste na startup-config (mudanca duradoura);
+        por padrao a config e aplicada apenas na running-config.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
@@ -232,7 +239,7 @@ class SSHSouthbound(SouthboundProtocol):
                 raise SdnAuthError(msg)
         config_text = "\n".join(commands)
         try:
-            ok, msg = self._session.edit_config(config_text, target="running")
+            ok, msg = self._session.edit_config(config_text, target="running", save=save)
             return ok, _sanitize(msg) if not ok else msg
         except Exception as exc:
             sanitized = _sanitize(str(exc))

@@ -208,3 +208,15 @@ class TestSeedDefaultUsers:
     def test_wrong_password_fails(self, repo):
         repo.seed_default_users()
         assert repo.verify_password("user_admin", "wrongpass") is None
+
+    def test_returns_credentials_on_first_seed(self, repo):
+        creds = repo.seed_default_users()
+        assert len(creds) == 3
+        usernames = {u for u, _ in creds}
+        assert usernames == {"user_admin", "user_tecnico", "user_user"}
+        assert all(pw for _, pw in creds)  # no empty passwords
+        assert all(len(pw) >= 16 for _, pw in creds)
+
+    def test_returns_empty_on_second_call(self, repo):
+        repo.seed_default_users()
+        assert repo.seed_default_users() == []

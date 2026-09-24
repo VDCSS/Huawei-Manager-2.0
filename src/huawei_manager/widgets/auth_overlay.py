@@ -158,7 +158,18 @@ class AuthOverlay(QWidget):
         try:
             conn = get_connection()
             user_repo = UserRepository(conn)
-            user_repo.seed_default_users()
+            creds = user_repo.seed_default_users()
+            if creds:
+                # Primeiro boot: credenciais geradas aleatoriamente — exibir
+                # em dialog (nunca em log) para o operador anotar.
+                from PySide6.QtWidgets import QMessageBox
+                lines = "\n".join(f"  {u}: {p}" for u, p in creds)
+                QMessageBox.information(
+                    None, "Credenciais de primeiro acesso",
+                    "Usuários padrão criados com senhas aleatórias:\n\n"
+                    f"{lines}\n\n"
+                    "Altere as senhas no primeiro login.",
+                )
             authenticated_user = user_repo.verify_password(user, pw)
 
             if authenticated_user is not None:

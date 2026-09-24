@@ -76,6 +76,8 @@ class TestShortcutGuards:
         mixin._current_page = "cmd"
         mixin._PAGE_KEYS = ["home", "topology", "config", "route", "arp", "info", "cmd", "backup", "manutencao", "services"]
         mixin._run = MagicMock()
+        mixin._run_cmd_safe = MagicMock()
+        mixin._run_config_safe = MagicMock()
         mixin._get_editor_cmd = MagicMock(return_value="display version")
         mixin._fetch_config = MagicMock()
         mixin._fetch_route = MagicMock()
@@ -194,8 +196,8 @@ class TestShortcutGuards:
         mixin._auth_overlay = hidden_overlay
 
         mixin._on_enter()
-        # Deve chamar _run com lambda que executa _exec_cmd
-        mixin._run.assert_called_once()
+        # Deve chamar _run_cmd_safe (fluxo com confirmação de comando destrutivo)
+        mixin._run_cmd_safe.assert_called_once()
 
 
 class TestAuthOverlayIntegration:

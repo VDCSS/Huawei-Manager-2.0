@@ -202,7 +202,7 @@ def test_overlapping_ticks_are_skipped(make_manager):
 def test_force_poll_clears_next_due(make_manager):
     mgr, _ = make_manager([_device_fake("r1")])
     mgr._next_due["r1"] = 9999999999.0
-    mgr.force_poll("r1", service_id="router-routing-table")
+    mgr.force_poll("r1")
     assert "r1" not in mgr._next_due
 
 

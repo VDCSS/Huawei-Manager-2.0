@@ -32,16 +32,6 @@ class TestInitDatabase:
         finally:
             conn.close()
 
-    def test_creates_active_sessions_table(self, tmp_path: Path) -> None:
-        from huawei_manager.db import get_connection, init_database
-
-        conn = get_connection(tmp_path / "test.db")
-        try:
-            init_database(conn)
-            assert "active_sessions" in _table_names(conn)
-        finally:
-            conn.close()
-
     def test_creates_db_meta_table(self, tmp_path: Path) -> None:
         from huawei_manager.db import get_connection, init_database
 
@@ -61,8 +51,8 @@ class TestInitDatabase:
             init_database(conn)
             init_database(conn)
             tables = _table_names(conn)
-            # 4 user tables + sqlite_sequence (auto-created by AUTOINCREMENT)
-            assert {"devices", "users", "active_sessions", "db_meta"}.issubset(tables)
+            # 3 user tables + sqlite_sequence (auto-created by AUTOINCREMENT)
+            assert {"devices", "users", "db_meta"}.issubset(tables)
         finally:
             conn.close()
 
@@ -124,49 +114,65 @@ class TestDatabasePath:
         assert path.parent.exists()
 
 
-class TestVersioning:
-    """get_db_version / set_db_version roundtrip."""
+class TestEnsureDefaultAdmin:
+    """ensure_default_admin() should seed a random admin password (never '123mudar')."""
 
-    def test_initial_version_is_none(self, tmp_path: Path) -> None:
-        from huawei_manager.db import get_connection, get_db_version, init_database
+    def test_returns_generated_password(self, tmp_path: Path) -> None:
+        from huawei_manager.db import ensure_default_admin, get_connection, init_database
 
         conn = get_connection(tmp_path / "test.db")
         try:
             init_database(conn)
-            assert get_db_version(conn) is None
+            password = ensure_default_admin(conn)
+            assert password is not None
+            assert len(password) >= 16
+            assert password != "123mudar"
         finally:
             conn.close()
 
-    def test_set_and_get_version(self, tmp_path: Path) -> None:
-        from huawei_manager.db import (
-            get_connection,
-            get_db_version,
-            init_database,
-            set_db_version,
-        )
+    def test_creates_admin_user_with_argon2(self, tmp_path: Path) -> None:
+        from huawei_manager.db import ensure_default_admin, get_connection, init_database
 
         conn = get_connection(tmp_path / "test.db")
         try:
             init_database(conn)
-            set_db_version(conn, 1)
-            assert get_db_version(conn) == 1
+            ensure_default_admin(conn)
+            row = conn.execute(
+                "SELECT username, password, role FROM users WHERE username = ?",
+                ("user_admin",),
+            ).fetchone()
+            assert row is not None
+            assert row[1].startswith("$argon2")
+            assert row[2] == "admin"
         finally:
             conn.close()
 
-    def test_overwrite_version(self, tmp_path: Path) -> None:
-        from huawei_manager.db import (
-            get_connection,
-            get_db_version,
-            init_database,
-            set_db_version,
-        )
+    def test_idempotent_returns_none_on_second_call(self, tmp_path: Path) -> None:
+        from huawei_manager.db import ensure_default_admin, get_connection, init_database
 
         conn = get_connection(tmp_path / "test.db")
         try:
             init_database(conn)
-            set_db_version(conn, 1)
-            set_db_version(conn, 2)
-            assert get_db_version(conn) == 2
+            first = ensure_default_admin(conn)
+            second = ensure_default_admin(conn)
+            assert first is not None
+            assert second is None
+        finally:
+            conn.close()
+
+    def test_generated_password_authenticates(self, tmp_path: Path) -> None:
+        from huawei_manager.db import ensure_default_admin, get_connection, init_database
+        from huawei_manager.user_repository import UserRepository
+
+        conn = get_connection(tmp_path / "test.db")
+        try:
+            init_database(conn)
+            password = ensure_default_admin(conn)
+            assert password is not None
+            repo = UserRepository(conn)
+            user = repo.verify_password("user_admin", password)
+            assert user is not None
+            assert user.role == "admin"
         finally:
             conn.close()
 

@@ -44,15 +44,6 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """
 
-_ACTIVE_SESSIONS_DDL = """\
-CREATE TABLE IF NOT EXISTS active_sessions (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER REFERENCES users(id),
-    started_at  TEXT DEFAULT (datetime('now')),
-    last_touch  TEXT DEFAULT (datetime('now'))
-);
-"""
-
 _DB_META_DDL = """\
 CREATE TABLE IF NOT EXISTS db_meta (
     key   TEXT PRIMARY KEY,
@@ -60,7 +51,7 @@ CREATE TABLE IF NOT EXISTS db_meta (
 );
 """
 
-_ALL_DDL = [_DEVICES_DDL, _USERS_DDL, _ACTIVE_SESSIONS_DDL, _DB_META_DDL]
+_ALL_DDL = [_DEVICES_DDL, _USERS_DDL, _DB_META_DDL]
 
 
 # ── Connection ─────────────────────────────────────────────────────────
@@ -92,39 +83,27 @@ def get_connection(db_path: str | Path | None = None) -> sqlite3.Connection:
 # ── Schema init ────────────────────────────────────────────────────────
 
 def init_database(conn: sqlite3.Connection) -> None:
-    """Create all 4 tables if they don't exist. Idempotent."""
+    """Create all 3 tables if they don't exist. Idempotent."""
     for ddl in _ALL_DDL:
         conn.execute(ddl)
     conn.commit()
     log.debug("init_database: schema OK")
 
 
-# ── Versioning ─────────────────────────────────────────────────────────
-
-def get_db_version(conn: sqlite3.Connection) -> int | None:
-    """Return the current schema version, or None if never set."""
-    row = conn.execute(
-        "SELECT value FROM db_meta WHERE key = 'schema_version'"
-    ).fetchone()
-    return int(row[0]) if row else None
-
-
-def set_db_version(conn: sqlite3.Connection, version: int) -> None:
-    """Set the schema version (upsert)."""
-    conn.execute(
-        "INSERT OR REPLACE INTO db_meta (key, value) VALUES ('schema_version', ?)",
-        (str(version),),
-    )
-    conn.commit()
-
-
 # ── Default admin seeding ──────────────────────────────────────────────
 
-def ensure_default_admin(conn: sqlite3.Connection | None = None) -> None:
+def ensure_default_admin(conn: sqlite3.Connection | None = None) -> str | None:
     """Seed a default admin user if the users table is empty.
 
     Idempotent — safe to call multiple times. Uses argon2 for password hashing.
-    Called by install.sh during setup.
+    The password is randomly generated (secrets) and returned to the caller
+    (e.g. install.sh) so it can be shown on the terminal — never logged.
+
+    Args:
+        conn: SQLite connection. If None, opens and closes one.
+
+    Returns:
+        The generated password, or None if users already existed or seeding failed.
     """
     if conn is None:
         conn = get_connection()
@@ -136,11 +115,16 @@ def ensure_default_admin(conn: sqlite3.Connection | None = None) -> None:
         row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
         if row and row[0] > 0:
             log.debug("ensure_default_admin: users already exist, skipping")
-            return
+            return None
+
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = ''.join(secrets.choice(alphabet) for _ in range(16))
 
         from argon2 import PasswordHasher
         ph = PasswordHasher()
-        hashed = ph.hash("123mudar")
+        hashed = ph.hash(password)
 
         conn.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
@@ -148,8 +132,10 @@ def ensure_default_admin(conn: sqlite3.Connection | None = None) -> None:
         )
         conn.commit()
         log.info("ensure_default_admin: created default admin user (user_admin)")
+        return password
     except Exception as exc:
         log.warning("ensure_default_admin: failed: %s", exc)
+        return None
     finally:
         if should_close:
             conn.close()
