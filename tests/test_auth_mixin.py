@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 from huawei_manager.handlers.auth import AuthMixin
 
@@ -25,6 +25,8 @@ def _make_mixin(**attrs) -> AuthMixin:
         _sb=MagicMock(),
         _rebuild_page=MagicMock(),
         content=MagicMock(),
+        ADMIN_MAX_ATTEMPTS=3,
+        ADMIN_LOCKOUT_SECS=300,
     )
     for k, v in defaults.items():
         setattr(mixin, k, v)
@@ -101,13 +103,12 @@ class TestShowAuthDialog:
         mixin._show_auth_dialog()
         overlay.show.assert_not_called()
 
-    @patch("huawei_manager.handlers.auth.ADMIN_PASSWORD", "")
-    @patch("huawei_manager.handlers.auth.TECNICO_PASSWORD", "secret")
-    @patch("huawei_manager.handlers.auth.QMessageBox")
-    def test_warns_when_passwords_not_set(self, mock_msgbox, monkeypatch):
+    @patch("huawei_manager.handlers.auth.AuthOverlay")
+    def test_creates_overlay_when_user(self, mock_overlay_cls):
+        """Quando access_level=user e nao bloqueado, cria AuthOverlay."""
         mixin = _make_mixin()
         mixin._show_auth_dialog()
-        mock_msgbox.warning.assert_called_once()
+        mock_overlay_cls.assert_called_once()
 
     def test_blocks_when_locked(self):
         import time

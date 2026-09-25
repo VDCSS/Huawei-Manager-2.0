@@ -25,10 +25,12 @@ _FONT_MONO_FAMILY     = "JetBrains Mono"
 _FALLBACK_UI          = "Inter"
 _FALLBACK_MONO        = "Consolas"
 
+# Família da UI exposta para stylesheets QSS montados em f-strings
+FONT_UI_FAMILY         = _FONT_UI_FAMILY
+
 FONT_UI_MEDIUM        = (_FONT_UI_FAMILY, 12, _FALLBACK_UI)           # sidebar, botões, inputs
 FONT_UI_MEDIUM_B      = (_FONT_UI_FAMILY, 12, "bold", _FALLBACK_UI)
 FONT_UI_TITLE         = (_FONT_UI_TITLE_FAMILY, 16, _FALLBACK_UI)    # títulos de página/seção
-FONT_UI_TITLE_B       = (_FONT_UI_TITLE_FAMILY, 16, "bold", _FALLBACK_UI)
 
 # Escala de fontes da UI (pt) — 4 passos
 FONT_CAPTION = 11
@@ -89,12 +91,9 @@ LIGHT_THEME = {
 # Cópia congelada do tema escuro — NUNCA mutada, usada como fonte para re-aplicar dark
 DARK_THEME = THEME.copy()
 
-_active_theme: str = "dark"
-
 
 def set_theme(name: str) -> None:
     """Swap all module-level colour constants to the named palette."""
-    global _active_theme
     global BG_BASE, BG_CARD, BG_SIDEBAR, BG_INPUT
     global NEON_CYAN, NEON_MAG, NEON_PURP, NEON_AMBER, NEON_RED
     global FG_MAIN, FG_DIM, FG_CODE, BORDER_NRM
@@ -117,7 +116,6 @@ def set_theme(name: str) -> None:
 
     THEME.clear()
     THEME.update(pal)
-    _active_theme = name
 
 # ─── COMANDOS CLI — filtros da aba Roteamento ───────────────────────
 CLI_FILTERS: dict[str, str] = {

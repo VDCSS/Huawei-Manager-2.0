@@ -38,11 +38,10 @@ class SshMixin:
                                         payload=DeviceDisconnectedPayload(reason="manual")))
             return
 
-        device = self._get_selected_device()
-        if device:
-            self._connect_with_device(device)
-        else:
-            self._connect_default()
+        device = self._ensure_device_ready("conectar")
+        if device is None:
+            return
+        self._connect_with_device(device)
 
     def _do_connect(self: AppCoreProtocol, on_success_fmt: str, on_error_msg: str) -> None:
         self._session_tracker.touch()
@@ -85,11 +84,6 @@ class SshMixin:
                 self._set_conn_btn()
 
         self._spawn_io(_do)
-
-    def _connect_default(self: AppCoreProtocol) -> None:
-        self._set_status("Conectando SSH\u2026", C.NEON_AMBER)
-        self._set_conn_btn(disabled=True)
-        self._do_connect("SSH \u2714  {sid}", "Erro ao conectar")
 
     def _connect_with_device(self: AppCoreProtocol, device: Device) -> None:
         if self._sb.is_alive():

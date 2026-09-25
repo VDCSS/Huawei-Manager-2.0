@@ -1,13 +1,15 @@
 """Command Validator — Allow-list and deny-list para comandos CLI.
 
 Valida comandos contra listas de permitidos/negados antes da execucao.
-Admin/Tecnico podem bypassar 2FA para comandos negados.
+Roles privilegiados (admin/tecnico) podem liberar comandos negados via
+bypass de politica (``bypass_2fa``). NAO existe mecanismo 2FA: a camada
+de execucao DEVE exigir confirmacao explicita antes de executar um
+comando liberado por bypass.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
 
 # Comandos sempre permitidos (show/display)
 _DEFAULT_ALLOW_PATTERNS: list[str] = [
@@ -24,7 +26,7 @@ _DEFAULT_DENY_PATTERNS: list[str] = [
     r"\breset\b",
 ]
 
-# Roles que podem bypassar 2FA para comandos negados
+# Roles que podem liberar comandos negados (bypass de politica)
 _BYPASS_ROLES: set[str] = {"admin", "tecnico"}
 
 
@@ -35,7 +37,9 @@ class ValidationResult:
     Attributes:
         allowed: True se o comando pode ser executado.
         reason: Mensagem explicativa (None se allowed=True sem bypass).
-        bypass_2fa: True se o comando foi liberado por bypass 2FA.
+        bypass_2fa: True se o comando foi liberado por bypass de politica
+            (roles privilegiados). NAO e um mecanismo 2FA — a camada de
+            execucao deve exigir confirmacao explicita do operador.
     """
 
     allowed: bool
@@ -76,7 +80,8 @@ class CommandValidator:
         Regras:
         1. Comando vazio → negado.
         2. Comando em allow-list → permitido.
-        3. Comando em deny-list + role com bypass → permitido (bypass).
+        3. Comando em deny-list + role com bypass → permitido (bypass de
+           politica; exige confirmacao explicita na camada de execucao).
         4. Comando em deny-list + role sem bypass → negado.
         5. Comando desconhecido (nem allow nem deny) → negado.
 
@@ -114,44 +119,3 @@ class CommandValidator:
             allowed=False,
             reason=f"Unknown command: {command}",
         )
-
-    # ── Validate + Audit ────────────────────────────────────────────────
-
-    def validate_and_audit(
-        self,
-        command: str,
-        role: str = "user",
-        audit_logger: Any = None,
-        user: str = "unknown",
-        host: str = "unknown",
-    ) -> ValidationResult:
-        """Valida e audita o resultado.
-
-        Comandos negados e bypass 2FA sao registrados no audit log.
-
-        Args:
-            command: Comando CLI.
-            role: Papel do usuario.
-            audit_logger: Opcional — ``AuditLogger`` para registrar.
-            user: Nome do usuario (para audit log).
-            host: Host alvo (para audit log).
-
-        Returns:
-            ``ValidationResult``.
-        """
-        result = self.validate(command, role)
-
-        if audit_logger is not None and not result.allowed:
-            audit_logger.log_operation(
-                "command_denied", user, host,
-                status="blocked",
-                details=result.reason or command,
-            )
-        elif audit_logger is not None and result.bypass_2fa:
-            audit_logger.log_operation(
-                "command_bypass", user, host,
-                status="allowed",
-                details=result.reason or command,
-            )
-
-        return result

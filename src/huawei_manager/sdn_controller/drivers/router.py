@@ -7,11 +7,9 @@ from huawei_manager.sdn_controller.normalizer import (
     ArpEntry,
     InterfaceEntry,
     RouteEntry,
-    VlanEntry,
     parse_arp_table,
     parse_interfaces,
     parse_routing_table,
-    parse_vlans,
 )
 from huawei_manager.sdn_controller.southbound import SouthboundProtocol
 
@@ -52,7 +50,3 @@ class RouterDriver(BaseDriver):
     def get_arp_table(self) -> list[ArpEntry]:
         output = self._sb.send_command("display arp")
         return parse_arp_table(output)
-
-    def get_vlans(self) -> list[VlanEntry]:
-        output = self._sb.send_command("display vlan")
-        return parse_vlans(output)

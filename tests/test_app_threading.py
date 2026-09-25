@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 import pytest
+from PySide6.QtGui import QCloseEvent
 
 from huawei_manager.app_notify import NotifyMixin  # noqa: E402
 from huawei_manager.app_shortcuts import ShortcutsMixin  # noqa: E402
@@ -32,6 +33,7 @@ class _FakeApp(ThreadingMixin):
         self._sb.is_alive.return_value = True
         self._on_sdn_event = MagicMock()
         self._event_drop_count = 0
+        self._ensure_device_ready = MagicMock(return_value=MagicMock())
 
     @property
     def _ui_queue_maxlen(self) -> int | None:
@@ -293,6 +295,18 @@ class TestRun:
         app._run(fn)  # should not raise
         app._io_executor.shutdown(wait=True)
 
+    def test_run_returns_when_not_device_ready(self, app: _FakeApp, monkeypatch) -> None:
+        app._ensure_device_ready.return_value = None
+        results: list[int] = []
+
+        def fn() -> None:
+            results.append(7)
+
+        app._run(fn)
+        app._io_executor.shutdown(wait=True)
+        assert results == []
+        app._ensure_device_ready.assert_called_once_with("executar esta acao")
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  W4 — Ciclo de vida (Ctrl+Q, closeEvent robusto, _shutdown gate)
@@ -302,7 +316,7 @@ class _FakeBase:
     def __init__(self) -> None:
         self._super_close_called = False
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QCloseEvent, /) -> None:
         self._super_close_called = True
 
 
@@ -334,14 +348,14 @@ class TestCloseEvent:
     def test_close_event_calls_super_when_on_close_raises(self) -> None:
         app = _NotifyFakeApp()
         app._on_close = MagicMock(side_effect=RuntimeError("boom"))
-        app.closeEvent(None)
+        app.closeEvent(QCloseEvent())
         assert app._super_close_called is True
 
     def test_close_event_calls_on_close_and_super(self) -> None:
         app = _NotifyFakeApp()
         on_close = MagicMock()
         app._on_close = on_close
-        app.closeEvent(None)
+        app.closeEvent(QCloseEvent())
         on_close.assert_called_once()
         assert app._super_close_called is True
 

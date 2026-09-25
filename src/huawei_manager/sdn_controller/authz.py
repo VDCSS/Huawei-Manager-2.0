@@ -1,22 +1,14 @@
-"""RBAC Framework — roles, decorator e session timeout.
+"""RBAC Framework — roles e session timeout.
 
-Fornece o decorador ``@require_role`` para proteger operacoes do
-controlador SDN, o enum ``Role`` com hierarquia, e o ``SessionTracker``
-para timeout de inatividade.
+Fornece o enum ``Role`` com hierarquia, a funcao ``role_meets`` e o
+``SessionTracker`` para timeout de inatividade.
 """
 from __future__ import annotations
 
 import enum
-import functools
 import time
-from collections.abc import Callable
-from typing import ParamSpec, TypeVar
 
-from huawei_manager.exceptions import SdnAuthError, SdnValidationError
-
-P = ParamSpec("P")
-R = TypeVar("R")
-
+from huawei_manager.exceptions import SdnValidationError
 
 _ROLE_HIERARCHY: dict[str, int] = {
     "user": 0,
@@ -80,41 +72,6 @@ def role_meets(actual: str, required: str = "tecnico") -> bool:
     except SdnValidationError:
         req = Role.USER
     return cur.hierarchy >= req.hierarchy
-
-
-def require_role(
-    min_role: Role | str,
-) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """Decorador que exige um nivel minimo de acesso.
-
-    A funcao decorada deve aceitar um parametro ``role: str`` (passado
-    como keyword argument). Se o nivel for insuficiente, levanta
-    ``PermissionError``.
-
-    Args:
-        min_role: Nivel minimo exigido (``Role`` enum ou string).
-    """
-    min_enum = min_role if isinstance(min_role, Role) else Role.from_string(min_role)
-    min_level = _ROLE_EQUIV[min_enum]
-
-    def decorator(func: Callable[P, R]) -> Callable[P, R]:
-        @functools.wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            raw = kwargs.get("role", "user")
-            assert isinstance(raw, str), f"role must be str, got {type(raw)}"
-            role_str: str = raw
-            caller_enum = Role.from_string(role_str)
-            caller_level = _ROLE_EQUIV[caller_enum]
-            if caller_level < min_level:
-                raise SdnAuthError(
-                    f"Role '{role_str}' insufficient for '{func.__name__}'; "
-                    f"requires {min_enum.value}"
-                )
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
 
 
 class SessionTracker:

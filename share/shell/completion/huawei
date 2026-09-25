@@ -2,7 +2,7 @@
 _huawei() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     if [[ ${#COMP_WORDS[@]} -eq 2 ]]; then
-        COMPREPLY=($(compgen -W "manager" -- "$cur"))
+        COMPREPLY=($(compgen -W "manager check version help" -- "$cur"))
     fi
 }
 complete -F _huawei huawei

@@ -160,45 +160,6 @@ class TestValidationResult:
         assert r.bypass_2fa is True
 
 
-# ── Integration with validate_and_audit ──────────────────────────────────────
-
-
-class TestValidateAndAudit:
-    """validate_and_audit logs denied commands."""
-
-    def test_allowed_command_no_audit(self, validator):
-        result = validator.validate_and_audit(
-            "display version", role="user",
-        )
-        assert result.allowed is True
-
-    def test_denied_command_audited(self, validator):
-        mock_audit = MagicMock()
-        result = validator.validate_and_audit(
-            "format flash", role="user", audit_logger=mock_audit,
-            user="operator", host="192.168.1.1",
-        )
-        assert result.allowed is False
-        mock_audit.log_operation.assert_called_once_with(
-            "command_denied", "operator", "192.168.1.1",
-            status="blocked",
-            details="Command denied by policy: format flash",
-        )
-
-    def test_admin_bypass_not_audited(self, validator):
-        mock_audit = MagicMock()
-        result = validator.validate_and_audit(
-            "format flash", role="admin", audit_logger=mock_audit,
-            user="admin01", host="192.168.1.1",
-        )
-        assert result.allowed is True
-        mock_audit.log_operation.assert_called_once_with(
-            "command_bypass", "admin01", "192.168.1.1",
-            status="allowed",
-            details="Admin bypass for: format flash",
-        )
-
-
 # ── Edge cases ───────────────────────────────────────────────────────────────
 
 

@@ -12,7 +12,6 @@ from huawei_manager.sdn_controller.normalizer import (
     ArpEntry,
     InterfaceEntry,
     RouteEntry,
-    VlanEntry,
 )
 
 
@@ -29,7 +28,6 @@ class TestBaseDriverABC:
         assert "get_routing_table" in methods
         assert "get_interfaces" in methods
         assert "get_arp_table" in methods
-        assert "get_vlans" in methods
 
     def test_cannot_instantiate(self):
         with pytest.raises(TypeError):
@@ -42,10 +40,8 @@ class TestRouterDriver:
     @patch("huawei_manager.sdn_controller.drivers.router.parse_routing_table")
     @patch("huawei_manager.sdn_controller.drivers.router.parse_interfaces")
     @patch("huawei_manager.sdn_controller.drivers.router.parse_arp_table")
-    @patch("huawei_manager.sdn_controller.drivers.router.parse_vlans")
     def test_get_routing_table_delegates(
         self,
-        mock_parse_vlans,
         mock_parse_arp,
         mock_parse_intf,
         mock_parse_route,
@@ -69,9 +65,8 @@ class TestRouterDriver:
     @patch("huawei_manager.sdn_controller.drivers.router.parse_routing_table")
     @patch("huawei_manager.sdn_controller.drivers.router.parse_interfaces")
     @patch("huawei_manager.sdn_controller.drivers.router.parse_arp_table")
-    @patch("huawei_manager.sdn_controller.drivers.router.parse_vlans")
     def test_get_interfaces_delegates(
-        self, mock_parse_vlans, mock_parse_arp, mock_parse_intf, _m_route
+        self, mock_parse_arp, mock_parse_intf, _m_route
     ):
         from huawei_manager.sdn_controller.drivers.router import RouterDriver
 
@@ -92,9 +87,8 @@ class TestRouterDriver:
     @patch("huawei_manager.sdn_controller.drivers.router.parse_routing_table")
     @patch("huawei_manager.sdn_controller.drivers.router.parse_interfaces")
     @patch("huawei_manager.sdn_controller.drivers.router.parse_arp_table")
-    @patch("huawei_manager.sdn_controller.drivers.router.parse_vlans")
     def test_get_arp_table_delegates(
-        self, mock_parse_vlans, mock_parse_arp, _m_intf, _m_route
+        self, mock_parse_arp, _m_intf, _m_route
     ):
         from huawei_manager.sdn_controller.drivers.router import RouterDriver
 
@@ -108,26 +102,6 @@ class TestRouterDriver:
         entries = driver.get_arp_table()
         mock_sb.send_command.assert_called_once_with("display arp")
         assert len(entries) == 1
-
-    @patch("huawei_manager.sdn_controller.drivers.router.parse_routing_table")
-    @patch("huawei_manager.sdn_controller.drivers.router.parse_interfaces")
-    @patch("huawei_manager.sdn_controller.drivers.router.parse_arp_table")
-    @patch("huawei_manager.sdn_controller.drivers.router.parse_vlans")
-    def test_get_vlans_delegates(
-        self, mock_parse_vlans, _m_arp, _m_intf, _m_route
-    ):
-        from huawei_manager.sdn_controller.drivers.router import RouterDriver
-
-        mock_sb = MagicMock()
-        mock_sb.send_command.return_value = "vlan output"
-        mock_parse_vlans.return_value = [
-            VlanEntry(1, "default", "up", ["GE0/0/0"])
-        ]
-        eq = EventQueue()
-        driver = RouterDriver(mock_sb, eq)
-        vlans = driver.get_vlans()
-        mock_sb.send_command.assert_called_once_with("display vlan")
-        assert len(vlans) == 1
 
     def test_send_command_delegates(self):
         from huawei_manager.sdn_controller.drivers.router import RouterDriver
@@ -150,38 +124,6 @@ class TestRouterDriver:
         ok, msg = driver.send_config(["vlan 10", "name test"])
         assert ok is True
         mock_sb.send_config.assert_called_once_with(["vlan 10", "name test"])
-
-    def test_send_command_emits_event(self):
-        from huawei_manager.sdn_controller.drivers.router import RouterDriver
-
-        mock_sb = MagicMock()
-        eq = EventQueue()
-        received: list[Event] = []
-
-        def cb(ev: Event) -> None:
-            received.append(ev)
-
-        eq.subscribe(
-            type(mock_sb).__class__  # won't match — use EventType
-            if False
-            else ...,  # skip
-            cb,
-        )
-
-        driver = RouterDriver(mock_sb, eq)
-        events_received: list[Event] = []
-
-        def capture(ev: Event) -> None:
-            events_received.append(ev)
-
-        eq.subscribe(
-            type(events_received).__class__ if False else ...,  # skip
-            capture,
-        )  # we'll test events via the driver's internal emit
-
-        driver.send_command("display version")
-        # Verify at least one event was emitted
-        eq.poll(timeout=0.1)
 
     def test_device_type_property(self):
         from huawei_manager.sdn_controller.drivers.router import RouterDriver

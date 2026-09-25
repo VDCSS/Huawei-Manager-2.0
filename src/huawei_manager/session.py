@@ -131,16 +131,28 @@ class NetmikoSession(SessionCommandsMixin):
         if not pw and not key:
             missing.append("ROUTER_PASSWORD ou ROUTER_SSH_KEY")
         if missing:
+            log.warning(
+                "Credenciais incompletas: %s — verifique .env ou cadastre um device",
+                ", ".join(missing),
+            )
             raise SdnValidationError(
                 "Credenciais incompletas — verifique secrets backend: "
                 + ", ".join(missing)
             )
 
     # ── conexao ──────────────────────────────────────────────────────
-    def connect(self, timeout: int = 30) -> None:
+    def connect(self, timeout: int | None = None) -> None:
+        if timeout is None:
+            from huawei_manager._config import SSH_TIMEOUT
+            timeout = SSH_TIMEOUT
         self._validate_credentials()
         mode = self._hk_verify
         ssh_strict = mode == "strict"
+
+        log.info(
+            "SSH connect: host=%s port=%s user=%s timeout=%s hostkey=%s",
+            self._host, self._port, self._user, timeout, mode,
+        )
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         sess_dir = PROJECT_ROOT / "sessions"
@@ -175,16 +187,27 @@ class NetmikoSession(SessionCommandsMixin):
                 "username": cfg.username,
                 "password": cfg.password,
                 "timeout": cfg.timeout,
+                "conn_timeout": cfg.timeout,
                 "ssh_strict": cfg.ssh_strict,
                 "use_keys": True if cfg.ssh_key else None,
-                "ssh_private_key_file": cfg.ssh_key,
+                "key_file": cfg.ssh_key,
                 "session_log": cfg.session_log or None,
             }.items() if v is not None}
+            # Netmiko (>=4) ja filtra password/secret do session_log
+            # automaticamente (SessionLog.no_log + SecretsFilter) — nao
+            # existe o kwarg `no_log` em ConnectHandler, e passa-lo quebra
+            # a conexao com TypeError.
             self._conn = ConnectHandler(**kwargs)
             ctx.set_status("ok")
 
         if mode == "tofu" and self._conn:
-            remote = self._conn.remote_server_key
+            transport = self._conn.remote_conn_pre.get_transport()
+            if transport is None:
+                self.disconnect()
+                raise SdnConnectionError(
+                    f"Transporte SSH indisponivel para {self._host}"
+                )
+            remote = transport.get_remote_server_key()
             remote_key = f"{remote.get_name()} {remote.get_base64()}"
             cached = self._load_host_key(self._host)
             if cached and cached != remote_key:

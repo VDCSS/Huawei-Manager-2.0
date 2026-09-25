@@ -180,7 +180,7 @@ class TestEditConfig:
             ok, msg = session.edit_config("config text")
             assert ok
 
-    def test_save_config_called(self, session):
+    def test_save_config_not_called_by_default(self, session):
         mock_conn = MagicMock()
         session._conn = mock_conn
         with (
@@ -188,6 +188,16 @@ class TestEditConfig:
             patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
         ):
             session.edit_config("config text")
+            mock_conn.save_config.assert_not_called()
+
+    def test_save_config_called_when_save_true(self, session):
+        mock_conn = MagicMock()
+        session._conn = mock_conn
+        with (
+            patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
+            patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
+        ):
+            session.edit_config("config text", save=True)
             mock_conn.save_config.assert_called_once()
 
 
@@ -438,9 +448,13 @@ class TestHostKeyVerify:
     def test_tofu_key_mismatch_raises(self, mock_connect, session):
         """TOFU mode raises ValueError when cached key differs."""
         mock_conn = MagicMock()
-        mock_conn.remote_server_key.get_name.return_value = "ssh-rsa"
+        transport = MagicMock()
+        mock_conn.remote_conn_pre.get_transport.return_value = transport
+        remote_key = MagicMock()
+        remote_key.get_name.return_value = "ssh-rsa"
         # Return a different base64 key from remote
-        mock_conn.remote_server_key.get_base64.return_value = "DIFFERENTKEYBASE64"
+        remote_key.get_base64.return_value = "DIFFERENTKEYBASE64"
+        transport.get_remote_server_key.return_value = remote_key
         mock_connect.return_value = mock_conn
 
         with (

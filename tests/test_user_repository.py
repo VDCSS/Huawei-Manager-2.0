@@ -1,4 +1,4 @@
-"""Tests for UserRepository (SQLite-backed user CRUD with bcrypt)."""
+"""Tests for UserRepository (SQLite-backed user CRUD with Argon2)."""
 from __future__ import annotations
 
 import sqlite3
@@ -38,12 +38,12 @@ class TestCreateUser:
         assert admin_user.username == "admin1"
         assert admin_user.role == "admin"
         assert admin_user.password != "adminpass"
-        assert len(admin_user.password) > 20  # bcrypt hash is long
+        assert len(admin_user.password) > 20  # argon2 hash is long
 
     def test_password_is_hashed_not_plaintext(self, repo):
         user = repo.create_user("testuser", "mypassword", role="user")
         assert user.password != "mypassword"
-        assert user.password.startswith("$2")  # bcrypt prefix
+        assert user.password.startswith("$argon2")  # argon2 prefix
 
     def test_duplicate_username_raises(self, repo, admin_user):
         with pytest.raises(sqlite3.IntegrityError):
@@ -167,3 +167,56 @@ class TestVerifyPassword:
 
     def test_nonexistent_user_returns_none(self, repo):
         assert repo.verify_password("ghost", "anypass") is None
+
+
+# ── seed_default_users ─────────────────────────────────────────────────────
+
+class TestSeedDefaultUsers:
+    def test_creates_three_default_users(self, repo):
+        repo.seed_default_users()
+        users = repo.list_users()
+        assert len(users) == 3
+        usernames = {u.username for u in users}
+        assert usernames == {"user_admin", "user_tecnico", "user_user"}
+
+    def test_idempotent_on_multiple_calls(self, repo):
+        repo.seed_default_users()
+        repo.seed_default_users()
+        assert len(repo.list_users()) == 3
+
+    def test_admin_can_authenticate(self, repo):
+        repo.seed_default_users()
+        users = repo.list_users()
+        admin = next(u for u in users if u.username == "user_admin")
+        assert admin.password.startswith("$argon2")
+        assert admin.role == "admin"
+
+    def test_tecnico_can_authenticate(self, repo):
+        repo.seed_default_users()
+        users = repo.list_users()
+        tech = next(u for u in users if u.username == "user_tecnico")
+        assert tech.password.startswith("$argon2")
+        assert tech.role == "tecnico"
+
+    def test_operador_can_authenticate(self, repo):
+        repo.seed_default_users()
+        users = repo.list_users()
+        op = next(u for u in users if u.username == "user_user")
+        assert op.password.startswith("$argon2")
+        assert op.role == "user"
+
+    def test_wrong_password_fails(self, repo):
+        repo.seed_default_users()
+        assert repo.verify_password("user_admin", "wrongpass") is None
+
+    def test_returns_credentials_on_first_seed(self, repo):
+        creds = repo.seed_default_users()
+        assert len(creds) == 3
+        usernames = {u for u, _ in creds}
+        assert usernames == {"user_admin", "user_tecnico", "user_user"}
+        assert all(pw for _, pw in creds)  # no empty passwords
+        assert all(len(pw) >= 16 for _, pw in creds)
+
+    def test_returns_empty_on_second_call(self, repo):
+        repo.seed_default_users()
+        assert repo.seed_default_users() == []

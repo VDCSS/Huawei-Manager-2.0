@@ -4,6 +4,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from PySide6.QtCore import QObject
 from PySide6.QtGui import QShortcut
 from PySide6.QtWidgets import QApplication
 
@@ -22,15 +23,19 @@ def _app():
     yield app
 
 
-def _mixin() -> ShortcutsMixin:
-    mixin = ShortcutsMixin()
+class _QObjectHost(ShortcutsMixin, QObject):
+    """Host QObject local — ShortcutsMixin puro não é mais um QObject."""
+
+
+def _mixin() -> _QObjectHost:
+    mixin = _QObjectHost()
     mixin._PAGE_KEYS = PAGE_KEYS
     mixin._show_page = MagicMock()
     mixin._setup_bindings()
     return mixin
 
 
-def _shortcut_for(mixin: ShortcutsMixin, seq: str) -> QShortcut:
+def _shortcut_for(mixin: _QObjectHost, seq: str) -> QShortcut:
     for sc in mixin.findChildren(QShortcut):
         if sc.key().toString() == seq:
             return sc

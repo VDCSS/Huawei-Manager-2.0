@@ -116,12 +116,3 @@ def migrate_json_inventory(json_path: str | Path, conn=None) -> int:
     else:
         log.info("No devices to migrate (JSON inventory empty or not found)")
     return count
-
-
-def dry_run_json_migration(json_path: str | Path) -> list[str]:
-    """Parse a JSON inventory and return list of device IDs (no DB write).
-
-    Useful for verifying the inventory before migrating.
-    """
-    devices = load_json_inventory(json_path)
-    return [str(d.get("id", "")) for d in devices]

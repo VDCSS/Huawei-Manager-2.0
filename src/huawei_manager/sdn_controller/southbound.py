@@ -15,7 +15,12 @@ from abc import ABC, abstractmethod
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
 from huawei_manager.audit_log import AuditLogger
-from huawei_manager.exceptions import SdnAuthError, SdnCommandError, SdnConnectionError, SdnValidationError
+from huawei_manager.exceptions import (
+    SdnAuthError,
+    SdnCommandError,
+    SdnConnectionError,
+    SdnValidationError,
+)
 from huawei_manager.sdn_controller.validator import CommandValidator, ValidationResult
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import SecretsBackend
@@ -65,7 +70,7 @@ class SSHSouthbound(SouthboundProtocol):
     Args:
         backend: Backend de secrets para credenciais.
         audit_logger: Logger de auditoria.
-        timeout: Timeout de conexao em segundos (padrao 30).
+        timeout: Timeout de conexao em segundos (padrao: _config.SSH_TIMEOUT).
         max_retries: Numero maximo de tentativas de conexao (padrao 2).
         session: Sessao Netmiko existente (opcional).
         validator: Validador de comandos (opcional).
@@ -76,12 +81,15 @@ class SSHSouthbound(SouthboundProtocol):
         self,
         backend: SecretsBackend,
         audit_logger: AuditLogger,
-        timeout: int = 30,
+        timeout: int | None = None,
         max_retries: int = 2,
         session: NetmikoSession | None = None,
         validator: CommandValidator | None = None,
         access_role: str = "user",
     ) -> None:
+        if timeout is None:
+            from huawei_manager._config import SSH_TIMEOUT
+            timeout = SSH_TIMEOUT
         self._session = session if session is not None else NetmikoSession(backend, audit_logger)
         self._timeout = timeout
         self._max_retries = max_retries
@@ -187,7 +195,8 @@ class SSHSouthbound(SouthboundProtocol):
         """Envia um comando show e retorna o output.
 
         Se um ``validator`` foi configurado, valida o comando antes
-        de executar. Comandos negados disparam ``RuntimeError``.
+        de executar. Comandos negados disparam ``SdnAuthError``;
+        falhas de execucao disparam ``SdnCommandError``.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
@@ -205,13 +214,19 @@ class SSHSouthbound(SouthboundProtocol):
             raise SdnCommandError(sanitized) from exc
 
     def send_config(
-        self, commands: list[str]
+        self, commands: list[str], save: bool = False
     ) -> tuple[bool, str]:
         """Envia comandos de configuracao.
 
         Se um ``validator`` foi configurado, valida cada comando
-        antes de executar. Comandos negados disparam ``RuntimeError``.
+        antes de executar. Comandos negados disparam ``SdnAuthError``.
         A validacao e feita no comando completo (join por newline).
+
+        Falhas de execucao nao levantam: retornam ``(False, mensagem)``
+        com a mensagem sanitizada (sem credenciais).
+
+        ``save=True`` persiste na startup-config (mudanca duradoura);
+        por padrao a config e aplicada apenas na running-config.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
@@ -224,7 +239,7 @@ class SSHSouthbound(SouthboundProtocol):
                 raise SdnAuthError(msg)
         config_text = "\n".join(commands)
         try:
-            ok, msg = self._session.edit_config(config_text, target="running")
+            ok, msg = self._session.edit_config(config_text, target="running", save=save)
             return ok, _sanitize(msg) if not ok else msg
         except Exception as exc:
             sanitized = _sanitize(str(exc))

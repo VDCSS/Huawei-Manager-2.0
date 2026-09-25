@@ -296,8 +296,7 @@ class PollingManager:
             "intervals": intervals,
         }
 
-    def force_poll(self, device_id: str, service_id: str | None = None) -> None:
+    def force_poll(self, device_id: str) -> None:
         """Torna um device elegível imediatamente no próximo tick."""
-        del service_id
         with self._next_due_lock:
             self._next_due.pop(device_id, None)

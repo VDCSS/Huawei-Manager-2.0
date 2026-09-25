@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from huawei_manager.device_crypto import _decrypt_val
 
-log = logging.getLogger("huawei.topology")
+log = logging.getLogger("huawei.device_models")
 
 
 @dataclass
@@ -36,7 +36,26 @@ class Device:
     def from_dict(cls, data: dict) -> Device:
         v = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
         if v.password:
-            v.password = _decrypt_val(v.password)
+            try:
+                v.password = _decrypt_val(v.password)
+            except ValueError:
+                raise
+            except Exception:
+                log.warning(
+                    "Falha ao descriptografar senha do device %s "
+                    "(VNF_ENCRYPT_KEY pode ter mudado) — senha ignorada",
+                    v.id,
+                )
+                v.password = ""
         if v.ssh_key:
-            v.ssh_key = _decrypt_val(v.ssh_key)
+            try:
+                v.ssh_key = _decrypt_val(v.ssh_key)
+            except ValueError:
+                raise
+            except Exception:
+                log.warning(
+                    "Falha ao descriptografar ssh_key do device %s — chave ignorada",
+                    v.id,
+                )
+                v.ssh_key = ""
         return v

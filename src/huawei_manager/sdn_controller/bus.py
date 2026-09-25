@@ -42,10 +42,3 @@ class IEventBus(Protocol):
     def unsubscribe(
         self, event_type: EventType, callback: Callable[[Event], None]
     ) -> None: ...
-
-
-@runtime_checkable
-class IEventConsumer(Protocol):
-    """Algo que consome eventos do barramento."""
-
-    def on_event(self, event: Event) -> None: ...

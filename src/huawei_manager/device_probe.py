@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from huawei_manager import _config
 from huawei_manager.device_models import Device
 
-log = logging.getLogger("huawei.topology")
+log = logging.getLogger("huawei.device_probe")
 
 
 class _ProbeState:
@@ -89,12 +89,3 @@ def probe_devices(devices: list[Device], timeout: int | None = None) -> list[Dev
 
 def clear_probe_cache() -> None:
     _probe.cache.clear()
-
-
-def _normalize_status(raw: str) -> str:
-    raw = raw.lower()
-    if raw in ("online", "reachable", "active", "managed"):
-        return "online"
-    if raw in ("offline", "unreachable", "inactive", "unmanaged"):
-        return "offline"
-    return "unknown"

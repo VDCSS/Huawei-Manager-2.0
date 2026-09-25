@@ -117,6 +117,10 @@ class ServicesMixin:
                 )
             return
 
+        if mode == "cli":
+            if self._ensure_device_ready(f"executar o servico '{svc.name}'") is None:
+                return
+
         def _do():
             """Executa o servico selecionado (mock ou SSH real)."""
             self._loading(self._svc_output, f"Executando: {svc.name} ({mode})\u2026")

@@ -29,10 +29,8 @@ EXCEPTIONS: set[str] = {
     "setup", "teardown", "main", "run",
     # Public API da package — usado externamente, não em src/
     "__version__",
-    # Estado interno de módulo — só atribuído, não lido diretamente
-    "_active_theme",
     # Utilitários usados apenas por testes
-    "_normalize_status", "_validate_credentials",
+    "_validate_credentials",
     # Usado em tests/test_session.py (fora do escopo src/)
     "_resolve_filter",
 }
@@ -47,7 +45,7 @@ def _collect_definitions(tree: ast.AST) -> set[str]:
     """Coleta todos os nomes definidos (funções, classes, imports, assignments)."""
     defined: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             defined.add(node.name)
         elif isinstance(node, ast.Assign):
             for target in node.targets:

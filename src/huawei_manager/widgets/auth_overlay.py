@@ -2,7 +2,15 @@ import time
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 import huawei_manager.constants as _C
 
@@ -12,7 +20,7 @@ _ENTRY_STYLE = f"""QLineEdit {{
     border: 1px solid {_C.BORDER_NRM};
     border-radius: 4px;
     padding: 6px 10px;
-    font: 13px 'Inter';
+    font: 13px {_C.FONT_UI_FAMILY};
 }}"""
 
 
@@ -60,7 +68,8 @@ class AuthOverlay(QWidget):
         self._close_btn = QPushButton("\u2715", self._card)
         self._close_btn.setFixedSize(28, 28)
         self._close_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {_C.FG_DIM}; border: none; font: 14px 'Inter'; }}"
+            f"QPushButton {{ background: transparent; color: {_C.FG_DIM};"
+            f" border: none; font: 14px {_C.FONT_UI_FAMILY}; }}"
             f"QPushButton:hover {{ color: {_C.NEON_CYAN}; }}")
         self._close_btn.clicked.connect(self.close_)
         header.addWidget(self._close_btn)
@@ -68,7 +77,7 @@ class AuthOverlay(QWidget):
 
         title = QLabel("Acesso Restrito", self._card)
         title.setStyleSheet(
-            f"color: {_C.NEON_CYAN}; font: bold 18px 'Inter'; background: transparent; border: none;")
+            f"color: {_C.NEON_CYAN}; font: bold 18px {_C.FONT_UI_FAMILY}; background: transparent; border: none;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(title)
 
@@ -86,7 +95,7 @@ class AuthOverlay(QWidget):
         self._error_lbl = QLabel("", self._card)
         self._error_lbl.setWordWrap(True)
         self._error_lbl.setStyleSheet(
-            "color: #ff4444; background: transparent; border: none; font: 12px 'Inter';")
+            "color: #ff4444; background: transparent; border: none; font: 12px {_C.FONT_UI_FAMILY};")
         self._error_lbl.hide()
         card_layout.addWidget(self._error_lbl)
 
@@ -96,7 +105,7 @@ class AuthOverlay(QWidget):
         self._auth_btn.setStyleSheet(
             f"QPushButton {{ background: {_C.BG_CARD}; color: {_C.NEON_CYAN}; "
             f"border: 1px solid {_C.NEON_CYAN}; border-radius: 6px; "
-            f"padding: 8px 24px; font: bold 13px 'Inter'; }}"
+            f"padding: 8px 24px; font: bold 13px {_C.FONT_UI_FAMILY}; }}"
             f"QPushButton:hover {{ background: {_C.NEON_CYAN}; color: {_C.BG_CARD}; }}")
         self._auth_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._auth_btn.clicked.connect(self._verify)
@@ -140,26 +149,37 @@ class AuthOverlay(QWidget):
             self._show_lockout()
             return
 
-        from huawei_manager._config import get_credentials
+        from huawei_manager.db import get_connection
+        from huawei_manager.user_repository import UserRepository
 
         user = self._user_entry.text().strip()
         pw = self._pw_entry.text()
-        level = "user"
 
-        tec_user, tec_pass = get_credentials("tecnico")
-        if user == tec_user and pw == tec_pass:
-            level = "tecnico"
-        else:
-            adm_user, adm_pass = get_credentials("admin")
-            if user == adm_user and pw == adm_pass:
-                level = "admin"
+        try:
+            conn = get_connection()
+            user_repo = UserRepository(conn)
+            creds = user_repo.seed_default_users()
+            if creds:
+                # Primeiro boot: credenciais geradas aleatoriamente — exibir
+                # em dialog (nunca em log) para o operador anotar.
+                from PySide6.QtWidgets import QMessageBox
+                lines = "\n".join(f"  {u}: {p}" for u, p in creds)
+                QMessageBox.information(
+                    None, "Credenciais de primeiro acesso",
+                    "Usuários padrão criados com senhas aleatórias:\n\n"
+                    f"{lines}\n\n"
+                    "Altere as senhas no primeiro login.",
+                )
+            authenticated_user = user_repo.verify_password(user, pw)
 
-        if level != "user":
-            self._error_lbl.hide()
-            self.on_result(level, 0, 0)
-            self.hide()
-            self.deleteLater()
-        else:
+            if authenticated_user is not None:
+                level = authenticated_user.role
+                self._error_lbl.hide()
+                self.on_result(level, 0, 0)
+                self.hide()
+                self.deleteLater()
+                return
+
             self._attempts += 1
             remaining = self._max_attempts - self._attempts
             if remaining <= 0:
@@ -170,7 +190,24 @@ class AuthOverlay(QWidget):
             else:
                 self.on_result("user", self._attempts, 0)
                 self._error_lbl.setText(
-                    "Usu\u00e1rio ou senha incorretos. "
+                    "Usuário ou senha incorretos. "
+                    f"{remaining} tentativa(s) restante(s).")
+                self._error_lbl.show()
+                self._pw_entry.clear()
+                self._pw_entry.setFocus()
+        except Exception:
+            # Fail-closed: treat any error as authentication failure
+            self._attempts += 1
+            remaining = self._max_attempts - self._attempts
+            if remaining <= 0:
+                self._locked_until = time.time() + self._lockout_secs
+                self.on_result("user", 0, self._locked_until)
+                self._lockout_handled = True
+                self._show_lockout()
+            else:
+                self.on_result("user", self._attempts, 0)
+                self._error_lbl.setText(
+                    "Erro de autenticação. "
                     f"{remaining} tentativa(s) restante(s).")
                 self._error_lbl.show()
                 self._pw_entry.clear()

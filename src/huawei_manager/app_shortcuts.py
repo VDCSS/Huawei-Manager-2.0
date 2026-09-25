@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from PySide6.QtCore import QObject
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QTextEdit, QWidget
@@ -7,9 +9,9 @@ from PySide6.QtWidgets import QTextEdit, QWidget
 import huawei_manager.constants as C
 
 
-class ShortcutsMixin(QObject):
+class ShortcutsMixin:
     def _setup_bindings(self) -> None:
-        parent: QObject = self
+        parent = cast(QObject, self)
         QShortcut(QKeySequence("Return"), parent).activated.connect(self._on_enter)
         QShortcut(QKeySequence("Ctrl+Shift+Return"), parent).activated.connect(
             self._on_ctrl_shift_enter)
@@ -50,7 +52,7 @@ class ShortcutsMixin(QObject):
         elif page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
-                self._run(lambda: self._exec_cmd(cmd))
+                self._run_cmd_safe(cmd)
         elif page == "backup":
             self._run(lambda: self._do_backup(C.BACKUP_FMT_TEXT))
 
@@ -61,7 +63,7 @@ class ShortcutsMixin(QObject):
         if self._current_page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
-                self._run(lambda: self._exec_config(cmd))
+                self._run_config_safe(cmd)
 
     def _on_ctrl_d(self) -> None:
         overlay = getattr(self, "_auth_overlay", None)

@@ -33,43 +33,44 @@ def _collect_const_assignments(tree: ast.AST) -> set[str]:
 
 
 def _collect_const_aliases(root: Path) -> set[str]:
-    """Devolve nomes de alias locais para constants.py (ex: 'C')."""
     aliases: set[str] = set()
-    src = root / "src"
-    for fpath in src.rglob("*.py"):
-        try:
-            tree = ast.parse(fpath.read_text(encoding="utf-8"))
-        except SyntaxError:
+    dirs = [root / "src", root / "tests"]
+    for d in dirs:
+        if not d.is_dir():
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name == CONST_MODULE:
-                        aliases.add(alias.asname or CONST_MODULE)
-            elif isinstance(node, ast.ImportFrom):
-                if node.module == CONST_MODULE:
-                    # from module import X, Y — esses são Name, não Attribute
-                    pass
+        for fpath in d.rglob("*.py"):
+            try:
+                tree = ast.parse(fpath.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name == CONST_MODULE:
+                            aliases.add(alias.asname or CONST_MODULE)
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module == CONST_MODULE:
+                        pass
     return aliases
 
 
 def _collect_all_caps_uses(root: Path, const_aliases: set[str]) -> set[str]:
-    """Devolve todos os ALL_CAPS referenciados em src/ (Name + Attribute)."""
     used: set[str] = set()
-    src = root / "src"
-    for fpath in src.rglob("*.py"):
-        try:
-            tree = ast.parse(fpath.read_text(encoding="utf-8"))
-        except SyntaxError:
+    dirs = [root / "src", root / "tests"]
+    for d in dirs:
+        if not d.is_dir():
             continue
-        for node in ast.walk(tree):
-            # Variável direta: FONT_H1
-            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id.isupper():
-                used.add(node.id)
-            # Atributo via alias: C.FONT_H1
-            if isinstance(node, ast.Attribute) and node.attr.isupper():
-                if isinstance(node.value, ast.Name) and node.value.id in const_aliases:
-                    used.add(node.attr)
+        for fpath in d.rglob("*.py"):
+            try:
+                tree = ast.parse(fpath.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id.isupper():
+                    used.add(node.id)
+                if isinstance(node, ast.Attribute) and node.attr.isupper():
+                    if isinstance(node.value, ast.Name) and node.value.id in const_aliases:
+                        used.add(node.attr)
     return used
 
 

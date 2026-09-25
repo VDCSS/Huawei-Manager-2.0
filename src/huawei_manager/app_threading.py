@@ -33,7 +33,9 @@ class ThreadingMixin:
                     self._event_drop_count,
                 )
             else:
-                _app_log.warning("UI queue overflow (%d), descartando callback", len(self._ui_queue))
+                _app_log.warning(
+                "UI queue overflow (%d), descartando callback", len(self._ui_queue)
+            )
             return
         self._ui_queue.append(fn)
 
@@ -76,6 +78,8 @@ class ThreadingMixin:
 
     def _run(self: AppCoreProtocol, func) -> None:
         try:
+            if self._ensure_device_ready("executar esta acao") is None:
+                return
             if self._sb is None or not self._sb.is_alive():
                 from PySide6.QtWidgets import QMessageBox
 

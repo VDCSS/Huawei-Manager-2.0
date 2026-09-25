@@ -211,16 +211,19 @@ class AuditLogger:
         _log.debug("AUDIT host=%s", entry.host)
 
     @classmethod
-    def verify_chain(cls, path: str) -> bool:
+    def verify_chain(cls, path: str, hmac_key: str = "") -> bool:
         """Verifica a integridade da cadeia de hashes no arquivo JSONL.
 
         Percorre todas as entradas e confirma que o ``previous_hash``
         de cada registro corresponde ao SHA-256 do anterior.
-        Entradas com ``previous_hash`` vazio sao consideradas a raiz
-        da cadeia (primeiro registro ou inicio de nova cadeia).
+        Se ``hmac_key`` for fornecida, tambem valida o HMAC de cada
+        entrada — detecta adulteracao mesmo que os hashes sejam
+        recalculados por um atacante sem a chave.
 
         Args:
             path: Caminho para o arquivo JSONL.
+            hmac_key: Chave HMAC (opcional). Se vazia, valida apenas a
+                cadeia de hashes (comportamento legado).
 
         Returns:
             True se a cadeia estiver intacta, False se houver adulteracao.
@@ -240,6 +243,9 @@ class AuditLogger:
             except json.JSONDecodeError:
                 log.warning("verify_chain: linha invalida ignorada")
                 continue
+            if hmac_key and not cls._verify_hmac(entry_dict, hmac_key):
+                log.warning("verify_chain: hmac mismatch")
+                return False
             prev_hash = entry_dict.get("previous_hash", "")
             if previous_entry_dict is not None:
                 expected_hash = cls._entry_hash(previous_entry_dict)
@@ -257,6 +263,10 @@ class AuditLogger:
                 return False
             previous_entry_dict = entry_dict
         return True
+
+    def verify(self) -> bool:
+        """Verifica a cadeia e o HMAC deste arquivo usando a chave do logger."""
+        return self.verify_chain(str(self._path), self._hmac_key)
 
     # ── API direta ────────────────────────────────────────────────────
     def log_operation(

@@ -14,7 +14,7 @@ from cryptography.fernet import Fernet
 
 from huawei_manager import _config
 
-log = logging.getLogger("huawei.topology")
+log = logging.getLogger("huawei.device_crypto")
 
 
 def _get_fernet_encrypt() -> Fernet:

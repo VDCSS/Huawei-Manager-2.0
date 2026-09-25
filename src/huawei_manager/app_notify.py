@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from PySide6.QtGui import QCloseEvent
+
 _app_log = logging.getLogger("huawei.app")
 
 
@@ -24,7 +26,7 @@ class NotifyMixin:
         self._sb.disconnect()
         self._cleanup_executors()
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QCloseEvent, /) -> None:
         try:
             self._on_close()
         except Exception:

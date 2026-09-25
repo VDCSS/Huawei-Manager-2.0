@@ -9,7 +9,6 @@ from huawei_manager.exceptions import SdnAuthError, SdnValidationError
 from huawei_manager.sdn_controller.authz import (
     Role,
     SessionTracker,
-    require_role,
 )
 from tests.helpers import wait_until
 
@@ -36,108 +35,6 @@ class TestRoleEnum:
     def test_from_string_unknown(self) -> None:
         with pytest.raises(SdnValidationError, match="Unknown role: 'root'"):
             Role.from_string("root")
-
-
-# ── Test require_role decorator ─────────────────────────────────────────────
-
-class TestRequireRole:
-    """@require_role deve bloquear operacoes baseado no nivel minimo."""
-
-    def test_user_can_read(self) -> None:
-        """USER pode executar operacoes de leitura."""
-        @require_role(Role.USER)
-        def read_device(role: str = "user") -> str:
-            return "data"
-
-        assert read_device(role="user") == "data"
-
-    def test_user_cannot_configure(self) -> None:
-        """USER nao pode executar config. Levanta PermissionError."""
-        @require_role(Role.ADMIN)
-        def configure_device(role: str = "user") -> str:
-            return "configured"
-
-        with pytest.raises(SdnAuthError, match="requires admin"):
-            configure_device(role="user")
-
-    def test_admin_can_configure(self) -> None:
-        """ADMIN pode executar config normalmente."""
-        @require_role(Role.ADMIN)
-        def configure_device(role: str = "user") -> str:
-            return "configured"
-
-        assert configure_device(role="admin") == "configured"
-
-    def test_admin_can_destroy(self) -> None:
-        """ADMIN pode executar operacoes destrutivas."""
-        @require_role(Role.TECNICO)
-        def destroy_device(role: str = "user") -> str:
-            return "destroyed"
-
-        assert destroy_device(role="admin") == "destroyed"
-
-    def test_tecnico_can_destroy(self) -> None:
-        """TECNICO pode executar operacoes destrutivas."""
-        @require_role(Role.TECNICO)
-        def destroy_device(role: str = "user") -> str:
-            return "destroyed"
-
-        assert destroy_device(role="tecnico") == "destroyed"
-
-    def test_user_cannot_destroy(self) -> None:
-        """USER nao pode executar operacoes destrutivas."""
-        @require_role(Role.TECNICO)
-        def destroy_device(role: str = "user") -> str:
-            return "destroyed"
-
-        with pytest.raises(SdnAuthError, match="requires tecnico"):
-            destroy_device(role="user")
-
-    def test_tecnico_cannot_configure_some_operations(self) -> None:
-        """TECNICO nao pode executar operacoes exclusivas de ADMIN."""
-        @require_role(Role.ADMIN)
-        def delete_device(role: str = "user") -> str:
-            return "deleted"
-
-        with pytest.raises(SdnAuthError, match="requires admin"):
-            delete_device(role="tecnico")
-
-    def test_default_role_user(self) -> None:
-        """Sem argumento role, padrao e USER."""
-        @require_role(Role.USER)
-        def read_device(role: str = "user") -> str:
-            return "data"
-
-        assert read_device() == "data"
-
-    def test_unknown_role_raises(self) -> None:
-        """Role invalida no parametro levanta ValueError."""
-        @require_role(Role.USER)
-        def read_device(role: str = "user") -> str:
-            return "data"
-
-        with pytest.raises(SdnValidationError, match="Unknown role: 'hacker'"):
-            read_device(role="hacker")
-
-    def test_preserves_function_metadata(self) -> None:
-        """Decorator preserva __name__ e __doc__."""
-        @require_role(Role.USER)
-        def my_func(role: str = "user") -> str:
-            """My docstring."""
-            return "ok"
-
-        assert my_func.__name__ == "my_func"
-        assert my_func.__doc__ == "My docstring."
-
-    def test_role_as_string(self) -> None:
-        """@require_role aceita string em vez de Role enum."""
-        @require_role("admin")
-        def configure(role: str = "user") -> str:
-            return "configured"
-
-        assert configure(role="admin") == "configured"
-        with pytest.raises(SdnAuthError):
-            configure(role="user")
 
 
 # ── Test SessionTracker ─────────────────────────────────────────────────────

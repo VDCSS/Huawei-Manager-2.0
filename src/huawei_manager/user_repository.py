@@ -1,6 +1,6 @@
 """user_repository.py — SQLite CRUD repository for User objects.
 
-Stores users with hashed passwords (bcrypt) and RBAC roles.
+Stores users with hashed passwords (Argon2) and RBAC roles.
 Schema mirrors the ``users`` table defined in ``db.py``.
 """
 from __future__ import annotations
@@ -10,9 +10,12 @@ import sqlite3
 from dataclasses import asdict, dataclass
 
 try:
-    import bcrypt
+    from argon2 import PasswordHasher
+    from argon2.exceptions import InvalidHashError, VerifyMismatchError
 except ImportError:  # pragma: no cover
-    bcrypt = None  # type: ignore[assignment]
+    PasswordHasher = None  # type: ignore[assignment,misc]
+    VerifyMismatchError = type("VerifyMismatchError", (Exception,), {})
+    InvalidHashError = type("InvalidHashError", (Exception,), {})
 
 from huawei_manager.exceptions import SdnValidationError
 from huawei_manager.sdn_controller.authz import Role
@@ -20,22 +23,34 @@ from huawei_manager.sdn_controller.authz import Role
 log = logging.getLogger("huawei.user_repo")
 
 
+_ph = None
+
+
+def _get_password_hasher():  # type: ignore[no-untyped-def]
+    """Get or create PasswordHasher instance."""
+    global _ph
+    if _ph is None:
+        if PasswordHasher is None:
+            raise RuntimeError("argon2-cffi is required for password hashing")
+        _ph = PasswordHasher()
+    return _ph
+
+
 def _hash_password(password: str) -> str:
-    """Hash a password using bcrypt (fail-closed if bcrypt unavailable)."""
-    if bcrypt is None:
-        raise RuntimeError("bcrypt is required for password hashing")
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    """Hash a password using Argon2 (fail-closed if argon2-cffi unavailable)."""
+    ph = _get_password_hasher()
+    return ph.hash(password)
 
 
 def _verify_password(password: str, hashed: str) -> bool:
-    """Verify a password against a bcrypt hash."""
-    if bcrypt is None:
-        raise RuntimeError("bcrypt is required for password verification")
+    """Verify a password against an Argon2 hash."""
+    ph = _get_password_hasher()
     if not hashed:
         return False
     try:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
-    except (ValueError, TypeError):
+        ph.verify(hashed, password)
+        return True
+    except (VerifyMismatchError, InvalidHashError, Exception):
         return False
 
 
@@ -45,7 +60,7 @@ class User:
 
     id: int = 0
     username: str = ""
-    password: str = ""  # bcrypt hash
+    password: str = ""  # argon2 hash
     role: str = "user"  # "user" | "tecnico" | "admin"
 
     def to_dict(self) -> dict[str, object]:
@@ -198,3 +213,39 @@ class UserRepository:
             return user
         log.warning("verify_password: failed for user=%s", username)
         return None
+
+    def seed_default_users(self) -> list[tuple[str, str]]:
+        """Seed default users if none exist.
+
+        Creates admin, tecnico, and operador users with random passwords.
+        Idempotent - safe to call multiple times.
+
+        Returns:
+            List of ``(username, password)`` generated on first seed, so the
+            caller can surface them securely (terminal/dialog). Empty list if
+            users already existed. Passwords are NEVER logged.
+        """
+        if self.list_users():
+            return []  # Users already exist
+
+        import secrets
+        import string
+        def _gen_password(length: int = 16) -> str:
+            """Gera senha aleatória segura (letras + dígitos + símbolos)."""
+            alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+            return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+        created: list[tuple[str, str]] = []
+        for uname, role, _desc in [
+            ("user_admin", "admin", "Administrador do Sistema"),
+            ("user_tecnico", "tecnico", "Técnico de Rede"),
+            ("user_user", "user", "Operador Padrão"),
+        ]:
+            pw = _gen_password()
+            try:
+                self.create_user(uname, pw, role=role)
+                created.append((uname, pw))
+                log.info("seed_default_users: created %s", uname)
+            except (ValueError, sqlite3.IntegrityError):
+                log.debug("seed_default_users: %s already exists", uname)
+        return created

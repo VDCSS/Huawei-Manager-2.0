@@ -81,6 +81,7 @@ class SessionCommandsMixin:
         self,
         config: str,
         target: str = "running",
+        save: bool = False,
     ) -> tuple[bool, str]:
         if not self._conn:
             return False, "Sem conexao"
@@ -92,22 +93,17 @@ class SessionCommandsMixin:
                 try:
                     lines = [line.strip() for line in config.splitlines() if line.strip()]
                     output = self._conn.send_config_set(lines, read_timeout=120)
-                    self._conn.save_config()
+                    # Persistir na startup-config e mudanca de estado duradoura:
+                    # so acontece com save=True explicito (fail-closed por padrao).
+                    if save:
+                        self._conn.save_config()
                     ctx.set_status("ok")
-                    return True, f"OK Configuracao aplicada\n{output}"
+                    saved = " e salva" if save else " (running-config; use save=True para persistir)"
+                    return True, f"OK Configuracao aplicada{saved}\n{output}"
                 except Exception as e:
                     ctx.set_status("error")
                     log.exception("edit-config falhou")
                     return False, f"ERRO: {e}"
-
-    # ── schemas (nao aplicavel via CLI) ───────────────────────────────
-    def get_schemas(self) -> str:
-        return "Schemas nao disponiveis via Netmiko/CLI."
-
-    # ── capabilities ─────────────────────────────────────────────────
-    def get_capabilities(self) -> str:
-        with self._lock:
-            return self._cmd("display version")
 
     # ── comando CLI livre ─────────────────────────────────────────────
     def run_cli_rpc(self, cmd: str) -> str:

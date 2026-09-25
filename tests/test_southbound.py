@@ -104,13 +104,14 @@ class TestSSHSouthboundInit:
         assert sb._session is not None
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
+    @patch("huawei_manager._config.SSH_TIMEOUT", 90)
     def test_default_timeout(self, mock_session_cls):
         from huawei_manager.sdn_controller.southbound import (
             SSHSouthbound,
         )
 
         sb = SSHSouthbound(EnvBackend(), AuditLogger())
-        assert sb._timeout == 30
+        assert sb._timeout == 90
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
     def test_custom_timeout(self, mock_session_cls):
@@ -244,7 +245,24 @@ class TestSSHSouthboundSendConfig:
         sb.connect()
         ok, msg = sb.send_config(["vlan 10", "name test"])
         mock_session.edit_config.assert_called_once_with(
-            "vlan 10\nname test", target="running"
+            "vlan 10\nname test", target="running", save=False
+        )
+
+    @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
+    def test_send_config_passes_save_true(self, mock_session_cls):
+        from huawei_manager.sdn_controller.southbound import (
+            SSHSouthbound,
+        )
+
+        mock_session = MagicMock()
+        mock_session.edit_config.return_value = (True, "ok")
+        mock_session_cls.return_value = mock_session
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        sb.connect()
+        ok, msg = sb.send_config(["vlan 10", "name test"], save=True)
+        mock_session.edit_config.assert_called_once_with(
+            "vlan 10\nname test", target="running", save=True
         )
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")

@@ -145,30 +145,3 @@ class DeviceRepository:
             log.debug("delete_device: %s", device_id)
             return True
         return False
-
-    # ── Queries de busca ───────────────────────────────────────────────
-
-    def search_devices(self, query: str) -> list[Device]:
-        """Busca dispositivos por nome ou host (case-insensitive)."""
-        pattern = f"%{query}%"
-        rows = self._conn.execute(
-            "SELECT * FROM devices WHERE name LIKE ? OR host LIKE ? ORDER BY name",
-            (pattern, pattern),
-        ).fetchall()
-        return [self._row_to_device(r) for r in rows]
-
-    def get_devices_by_type(self, device_type: str) -> list[Device]:
-        """Filtra dispositivos por tipo (ex: ROUTER, SWITCH). Case-insensitive."""
-        rows = self._conn.execute(
-            "SELECT * FROM devices WHERE type = ? COLLATE NOCASE ORDER BY name",
-            (device_type,),
-        ).fetchall()
-        return [self._row_to_device(r) for r in rows]
-
-    def get_devices_by_status(self, status: str) -> list[Device]:
-        """Filtra dispositivos por status (online, offline, unknown)."""
-        rows = self._conn.execute(
-            "SELECT * FROM devices WHERE status = ? ORDER BY name",
-            (status,),
-        ).fetchall()
-        return [self._row_to_device(r) for r in rows]

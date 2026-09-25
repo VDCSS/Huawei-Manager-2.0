@@ -100,6 +100,21 @@ class TestAddDevice:
         dev2 = service.add_device({"name": "b", "host": "10.0.0.2"})
         assert dev2.id == "dev-002-b"
 
+    def test_add_after_delete_does_not_collide(self, service: DeviceService):
+        # Delecao deixa buracos na sequencia: len() subestimaria e
+        # geraria um ID ja em uso. O proximo ID deve superar o maior existente.
+        d1 = service.add_device({"name": "a", "host": "10.0.0.1"})
+        d2 = service.add_device({"name": "b", "host": "10.0.0.2"})
+        d3 = service.add_device({"name": "c", "host": "10.0.0.3"})
+        assert d1.id == "dev-001-a"
+        assert d2.id == "dev-002-b"
+        assert d3.id == "dev-003-c"
+        service.delete_device(d2.id, service.load_inventory())
+        d4 = service.add_device({"name": "d", "host": "10.0.0.4"})
+        assert d4.id == "dev-004-d"
+        ids = [d.id for d in service.load_inventory()]
+        assert len(ids) == len(set(ids))
+
     def test_add_missing_name_raises(self, service: DeviceService):
         with pytest.raises(ValueError, match="Nome e obrigatorio"):
             service.add_device({"host": "10.0.0.1"})

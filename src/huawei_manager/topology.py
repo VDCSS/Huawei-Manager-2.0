@@ -97,7 +97,6 @@ class TopologyCanvas(QWidget):
         self._selected: Device | None = None
         self._access_level: str = "user"
         self._device_map: dict[str, Device] = {}
-        self._last_hover_device_id: str | None = None
 
         self.setStyleSheet(f"background: {C.BG_BASE};")
         layout = QVBoxLayout(self)
@@ -334,14 +333,6 @@ class TopologyCanvas(QWidget):
             log.exception("_on_click: on_select falhou para %s", device.id)
         self._draw()
 
-    def _on_hover_enter(self, device: Device) -> None:
-        """Registra o Device sob o mouse (tooltip é nativo do Qt)."""
-        self._last_hover_device_id = device.id
-
-    def _on_hover_leave(self) -> None:
-        """Limpa o registro de hover."""
-        self._last_hover_device_id = None
-
     def _on_context_menu(self, event, device: Device) -> None:
         """Exibe menu de contexto com editar/excluir (admin/tecnico)."""
         can_edit = role_meets(self._access_level, "tecnico")
@@ -353,7 +344,7 @@ class TopologyCanvas(QWidget):
             QMenu {{
                 background: {C.BG_INPUT}; color: {C.FG_MAIN};
                 border: 1px solid {C.BORDER_NRM};
-                font: 11px 'Inter';
+                font: 11px {C.FONT_UI_FAMILY};
                 padding: 4px;
             }}
             QMenu::item {{

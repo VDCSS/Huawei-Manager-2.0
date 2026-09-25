@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from _factories import make_device as _make_device
+from ._factories import make_device as _make_device
 
 from huawei_manager.handlers.devices import DevicesMixin
 from huawei_manager.sdn_controller.event_queue import EventType

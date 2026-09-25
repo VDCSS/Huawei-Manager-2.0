@@ -5,11 +5,9 @@ from huawei_manager.sdn_controller.normalizer import (
     ArpEntry,
     InterfaceEntry,
     RouteEntry,
-    VlanEntry,
     parse_arp_table,
     parse_interfaces,
     parse_routing_table,
-    parse_vlans,
 )
 
 # ── Sample CLI outputs ──────────────────────────────────────────────────────
@@ -52,17 +50,6 @@ IP ADDRESS      MAC ADDRESS    EXPIRE(M)  TYPE  INTERFACE      VPN-INSTANCE
 10.10.10.100    aabb-cc01-0102  117        D    GE0/0/0
 10.20.20.1      aabb-cc01-0201  110        D    GE0/0/1
 192.168.1.1     aabb-cc01-0301  95         D    GE0/0/1
-"""
-
-SAMPLE_VLANS = """\
-The total number of vlans is : 4
-U: Up      G: Guard      D: Down      #: Part of learning
-
-VLAN ID   Name            Status     Ports
-1         default         up         GE0/0/0 GE0/0/1
-10        management      up         GE0/0/0
-20        data            up         GE0/0/1
-100       voice           down       GE0/0/2
 """
 
 
@@ -109,20 +96,6 @@ class TestInterfaceEntry:
         )
         assert entry.name == "GigabitEthernet0/0/0"
         assert entry.status == "up"
-
-
-class TestVlanEntry:
-    """VlanEntry dataclass must hold VLAN fields."""
-
-    def test_creates_with_all_fields(self):
-        entry = VlanEntry(
-            vlan_id=10,
-            name="management",
-            status="up",
-            ports=["GE0/0/0"],
-        )
-        assert entry.vlan_id == 10
-        assert entry.ports == ["GE0/0/0"]
 
 
 class TestParseRoutingTable:
@@ -211,35 +184,3 @@ class TestParseArpTable:
 
     def test_returns_empty_for_empty_output(self):
         assert parse_arp_table("") == []
-
-
-class TestParseVlans:
-    """Parse 'display vlan' output."""
-
-    def test_parses_four_vlans(self):
-        vlans = parse_vlans(SAMPLE_VLANS)
-        assert len(vlans) == 4
-
-    def test_parses_vlan_1(self):
-        vlans = parse_vlans(SAMPLE_VLANS)
-        v1 = vlans[0]
-        assert v1.vlan_id == 1
-        assert v1.name == "default"
-        assert v1.status == "up"
-        assert v1.ports == ["GE0/0/0", "GE0/0/1"]
-
-    def test_parses_vlan_with_single_port(self):
-        vlans = parse_vlans(SAMPLE_VLANS)
-        v10 = vlans[1]
-        assert v10.vlan_id == 10
-        assert v10.name == "management"
-        assert v10.ports == ["GE0/0/0"]
-
-    def test_parses_down_vlan(self):
-        vlans = parse_vlans(SAMPLE_VLANS)
-        v100 = vlans[3]
-        assert v100.vlan_id == 100
-        assert v100.status == "down"
-
-    def test_returns_empty_for_empty_output(self):
-        assert parse_vlans("") == []

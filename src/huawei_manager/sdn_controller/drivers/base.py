@@ -14,7 +14,6 @@ from huawei_manager.sdn_controller.normalizer import (
     ArpEntry,
     InterfaceEntry,
     RouteEntry,
-    VlanEntry,
 )
 from huawei_manager.sdn_controller.southbound import SouthboundProtocol
 
@@ -59,7 +58,3 @@ class BaseDriver(ABC):
     @abstractmethod
     def get_arp_table(self) -> list[ArpEntry]:
         """Retorna a tabela ARP do dispositivo."""
-
-    @abstractmethod
-    def get_vlans(self) -> list[VlanEntry]:
-        """Retorna lista de VLANs configuradas no dispositivo."""

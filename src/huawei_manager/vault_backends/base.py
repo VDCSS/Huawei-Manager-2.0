@@ -46,13 +46,6 @@ class SecretsBackend:
     def backend_name(self) -> str:
         return "base"
 
-    @property
-    def last_rotation(self) -> str | None:
-        ts = _TS_FILE
-        if ts and ts.exists():
-            return ts.read_text().strip()
-        return None
-
     def _record_rotation(self) -> None:
         ts = _TS_FILE
         if ts:

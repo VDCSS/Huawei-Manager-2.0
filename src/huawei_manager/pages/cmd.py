@@ -49,7 +49,7 @@ class _CmdReturnFilter(QObject):
                         cursor.insertText("\n")
                     return True
                 else:
-                    self.app._run(lambda cmd=self.app._get_editor_cmd(): self.app._exec_cmd(cmd))
+                    self.app._run_cmd_safe(self.app._get_editor_cmd())
                     return True
         return super().eventFilter(obj, event)
 
@@ -92,7 +92,7 @@ class PageBuilderCmdMixin:
         self._tpl_listbox.setStyleSheet(f"""
             QListWidget {{
                 background: {C.BG_INPUT}; color: {C.NEON_CYAN};
-                border: none; font: 12px 'Inter';
+                border: none; font: 12px {C.FONT_UI_FAMILY};
                 outline: none;
             }}
             QListWidget:focus {{
@@ -150,19 +150,17 @@ class PageBuilderCmdMixin:
         right_layout.addSpacing(6)
 
         btn_exec = action_button(abar, "\u25b6 Executar",
-                                 lambda: self._run(
-                                     lambda cmd=self._get_editor_cmd(): self._exec_cmd(cmd)), C.NEON_CYAN)
+                                 lambda: self._run_cmd_safe(self._get_editor_cmd()), C.NEON_CYAN)
         abar_layout.addWidget(btn_exec)
         abar_layout.addSpacing(6)
         btn_cfg = action_button(abar, "\u2699 Enviar Config",
-                                lambda: self._run(
-                                    lambda cmd=self._get_editor_cmd(): self._exec_config(cmd)), C.NEON_AMBER)
+                                lambda: self._run_config_safe(self._get_editor_cmd()), C.NEON_AMBER)
         abar_layout.addWidget(btn_cfg)
 
         self._sysview_var = False
         sysview_cb = QCheckBox("system-view", abar)
         sysview_cb.setStyleSheet(f"""
-            QCheckBox {{ color: {C.FG_DIM}; background: {C.BG_INPUT}; font: 11px 'Inter'; }}
+            QCheckBox {{ color: {C.FG_DIM}; background: {C.BG_INPUT}; font: 11px {C.FONT_UI_FAMILY}; }}
             QCheckBox::indicator {{ width: 14px; height: 14px; }}
         """)
         sysview_cb.stateChanged.connect(lambda s: setattr(self, '_sysview_var', bool(s)))

@@ -34,7 +34,7 @@ class TestCmdReturnFilter:
         event = _make_key_event(Qt.Key.Key_Return)
         result = filt.eventFilter(obj, event)
         assert result is True
-        app._run.assert_called_once()
+        app._run_cmd_safe.assert_called_once_with("display version")
 
     def test_enter_key_also_triggers(self):
         app = MagicMock()
@@ -44,7 +44,7 @@ class TestCmdReturnFilter:
         event = _make_key_event(Qt.Key.Key_Enter)
         result = filt.eventFilter(obj, event)
         assert result is True
-        app._run.assert_called_once()
+        app._run_cmd_safe.assert_called_once()
 
     def test_shift_enter_inserts_newline(self):
         app = MagicMock()

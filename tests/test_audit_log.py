@@ -188,6 +188,53 @@ class TestHashChain:
         # Alterar HMAC nao deve quebrar a cadeia (hmac é excluido do hash)
         assert AuditLogger.verify_chain(str(audit_logger._path)) is True
 
+    def test_verify_chain_ok_with_key(self, tmp_audit_path):
+        """Com hmac_key correta, cadeia intacta valida."""
+        logger = AuditLogger(str(tmp_audit_path), hmac_key="test-key")
+        logger.log_operation("op1", "u", "h")
+        logger.log_operation("op2", "u", "h")
+        assert AuditLogger.verify_chain(
+            str(logger._path), hmac_key="test-key"
+        ) is True
+
+    def test_verify_chain_detects_hmac_tamper_with_key(self, tmp_audit_path):
+        """Com hmac_key, adulterar hmac quebra a verificacao (fail-closed)."""
+        logger = AuditLogger(str(tmp_audit_path), hmac_key="test-key")
+        logger.log_operation("op1", "u", "h")
+        logger.log_operation("op2", "u", "h")
+
+        lines = logger._path.read_text(encoding="utf-8").splitlines()
+        entry1 = json.loads(lines[0])
+        entry1["hmac"] = "0000deadbeef"
+        lines[0] = json.dumps(entry1, ensure_ascii=False)
+        logger._path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        assert AuditLogger.verify_chain(
+            str(logger._path), hmac_key="test-key"
+        ) is False
+
+    def test_verify_chain_detects_content_tamper_with_key(self, tmp_audit_path):
+        """Com hmac_key, adulterar conteudo quebra mesmo com hashes recalculados."""
+        logger = AuditLogger(str(tmp_audit_path), hmac_key="test-key")
+        logger.log_operation("op1", "u", "h")
+        logger.log_operation("op2", "u", "h")
+
+        lines = logger._path.read_text(encoding="utf-8").splitlines()
+        entry2 = json.loads(lines[1])
+        entry2["user"] = "attacker"
+        lines[1] = json.dumps(entry2, ensure_ascii=False)
+        logger._path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        assert AuditLogger.verify_chain(
+            str(logger._path), hmac_key="test-key"
+        ) is False
+
+    def test_verify_instance_method(self, tmp_audit_path):
+        """verify() usa a chave do logger para validar cadeia + HMAC."""
+        logger = AuditLogger(str(tmp_audit_path), hmac_key="test-key")
+        logger.log_operation("op1", "u", "h")
+        assert logger.verify() is True
+
     def test_first_entry_empty_previous_hash(self, audit_logger):
         """Primeira entrada tem previous_hash vazio (raiz da cadeia)."""
         audit_logger.log_operation("first", "u", "h")

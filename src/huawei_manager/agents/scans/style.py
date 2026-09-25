@@ -28,6 +28,33 @@ QT_EVENT_OVERRIDES: set[str] = {
     "hoverEnterEvent", "hoverMoveEvent", "hoverLeaveEvent",
     "inputMethodEvent", "tabletEvent",
     "nativeEvent", "event", "eventFilter",
+    "setText", "text", "isVisible", "setToolTip", "setCursor",
+    "setOpacity", "setAlignment", "setSizePolicy", "setContentsMargins",
+    "setPixmap", "setFixedWidth", "setFixedHeight",
+    "setMinimumHeight", "setMinimumWidth",
+    "setMaximumHeight", "setMaximumWidth",
+    "setStyleSheet", "setTabOrder", "addTab", "setTab",
+    "setCentralWidget", "setWindowTitle", "setWindowIcon",
+    "setWindowOpacity", "setWindowFlags", "setMinimumSize", "setMaximumSize",
+    "setGeometry", "setHidden", "setVisible",
+    "deleteLater", "findChild", "findChildren",
+    "parentWidget", "children", "parent", "setParent",
+    "layout", "setLayout", "update", "repaint",
+    "setFocus", "hasFocus", "setDisabled", "setEnabled", "isEnabled",
+    "isHidden", "isWindow", "isActiveWindow", "setAttribute", "testAttribute",
+    "setStyle", "setGraphicsEffect", "graphicsEffect",
+    "setContextMenuPolicy", "setAcceptDrops", "setMouseTracking",
+    "setUpdatesEnabled", "unsetCursor",
+    "mapToGlobal", "mapFromGlobal",
+    "rect", "geometry", "width", "height", "size", "pos", "x", "y",
+    "sizeHint", "minimumSizeHint", "sizePolicy",
+    "adjustSize", "setSpacing", "spacing", "setMargin", "margin",
+    "addWidget", "addLayout", "addSpacing", "addStretch", "addSeparator",
+    "insertWidget", "insertLayout", "insertSpacing", "insertStretch",
+    "removeWidget", "removeLayout", "takeAt", "count", "itemAt", "indexOf",
+    "setMenuBar", "setStatusBar", "setCornerWidget",
+    "setTabWidget", "setToolButtonStyle", "setFloating",
+    "setFeatures", "setAllowedAreas", "setWidget", "setWidgetResizable",
 }
 
 
@@ -47,7 +74,7 @@ def scan(root: Path) -> AgentResult:
             continue
         rel = fpath.relative_to(root)
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 # Pula Qt event overrides — não podem ser snake_case
                 if node.name in QT_EVENT_OVERRIDES:
                     pass
