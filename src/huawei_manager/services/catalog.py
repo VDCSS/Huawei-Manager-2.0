@@ -9,6 +9,7 @@ import io
 import logging
 import re
 from datetime import UTC, datetime
+from typing import Any
 
 from huawei_manager.services_data import (
     DEVICE_CATEGORIES,  # noqa: F401 — re-exportado para backward compat
@@ -101,7 +102,7 @@ def parse_params(service: ServiceDef) -> list[tuple[str, str]]:
 def execute_service(
     service: ServiceDef,
     session_type: str = "mock",
-    session=None,
+    session: Any = None,
 ) -> str:
     """Executa um serviço no dispositivo alvo via Netmiko."""
     if session_type == "mock":
@@ -372,7 +373,7 @@ Total stations: 3""",
     return result + f"\n\n  Timestamp: {ts}"
 
 
-def _execute_cli(service: ServiceDef, connection) -> str:
+def _execute_cli(service: ServiceDef, connection: Any) -> str:
     """Executa via CLI (Netmiko)."""
     if connection is None:
         return "Sem conexão CLI ativa"
@@ -382,7 +383,7 @@ def _execute_cli(service: ServiceDef, connection) -> str:
         if service.requires_privilege or service.config_mode:
             prev_mode = connection.send_command_timing("system-view")
 
-        result_parts = []
+        result_parts: list[str] = []
         if service.config_mode:
             out = connection.send_config_set(service.cli_commands, read_timeout=60)
             result_parts.append(f">  Config applied:\n{'─' * 40}\n{clean_output(out)}")

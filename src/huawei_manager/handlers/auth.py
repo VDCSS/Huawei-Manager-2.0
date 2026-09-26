@@ -32,10 +32,12 @@ class AuthMixin:
             self._access_level = "user"
             self._session_tracker.set_role(Role.USER)
             self._sb.set_access_role("user")
+            self._sb.disconnect()
             self._mock_mode = False
             self._watcher.stop()
             self._rebuild_page("topology")
-            log.info("Acesso: deslogado")
+            if log is not None:
+                log.info("Acesso: deslogado")
             return
 
         try:
@@ -64,12 +66,14 @@ class AuthMixin:
                     self._watcher.start()
                 else:
                     self._watcher.stop()
-                log.info("Acesso: %s autenticado", level)
+                if log is not None:
+                    log.info("Acesso: %s autenticado", level)
             else:
                 self._admin_attempts = attempts
                 self._admin_locked_until = locked_until
                 if locked_until > 0:
-                    log.warning("Acesso: lockout por %ds", self.ADMIN_LOCKOUT_SECS)
+                    if log is not None:
+                        log.warning("Acesso: lockout por %ds", self.ADMIN_LOCKOUT_SECS)
 
         overlay = AuthOverlay(
             parent=cast(QWidget, self.content),

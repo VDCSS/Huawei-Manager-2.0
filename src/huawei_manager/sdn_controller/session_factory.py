@@ -195,7 +195,7 @@ class SSHSessionFactory:
         return True
 
     def _create(self, device: Device) -> SSHSouthbound | None:
-        overrides = {
+        overrides: dict[str, Any] = {
             "override_host": device.host,
             "override_port": device.port if device.port else 22,
             "override_username": device.username,

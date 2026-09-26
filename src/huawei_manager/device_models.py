@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 from huawei_manager.device_crypto import _decrypt_val
 
@@ -24,7 +25,7 @@ class Device:
     password:     str = ""
     password_env: str = ""
     ssh_key:      str = ""
-    extra_metadata: dict = field(default_factory=dict)
+    extra_metadata: dict[str, Any] = field(default_factory=dict[str, Any])
 
     def label(self) -> str:
         return self.name or self.id
@@ -33,7 +34,7 @@ class Device:
         return f"{self.host}:{self.port}"
 
     @classmethod
-    def from_dict(cls, data: dict) -> Device:
+    def from_dict(cls, data: dict[str, Any]) -> Device:
         v = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
         if v.password:
             try:

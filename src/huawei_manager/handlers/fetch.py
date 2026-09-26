@@ -7,6 +7,7 @@ import logging
 
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.constants import CLI_FILTERS
+from huawei_manager.exceptions import SdnError
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import CommandExecutedPayload
 
@@ -25,8 +26,9 @@ class FetchMixin:
         self._loading(self.out_config, "Carregando configuracao atual\u2026")
         try:
             output = self._sb.send_command("display current-configuration")
-        except RuntimeError:
+        except SdnError as exc:
             self._sb.invalidate_connection()
+            self._write(self.out_config, f"\u2718 Falha SSH: {exc}")
             return
         self._write(self.out_config, output)
         self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
@@ -40,12 +42,14 @@ class FetchMixin:
         chamar este metodo, pois ele roda na IO thread.
         """
         self._session_tracker.touch()
-        assert fkey, "_fetch_route: fkey must be extracted in UI thread before calling"
+        if not fkey:
+            raise RuntimeError("_fetch_route: fkey must be extracted in UI thread before calling")
         if fkey == "routing":
             try:
                 entries = self._drv.get_routing_table()
-            except RuntimeError:
+            except SdnError as exc:
                 self._sb.invalidate_connection()
+                self._write(self.out_route, f"\u2718 Falha SSH: {exc}")
                 return
             buf = io.StringIO()
             buf.write(f"{'Destino/Mask':<22} {'Proto':<10} {'Pre':>4} {'Custo':>6}  {'NextHop':<16} {'Interface'}\n")
@@ -63,8 +67,9 @@ class FetchMixin:
             self._loading(self.out_route, f"Executando: {cmd}\u2026")
             try:
                 route_out = self._sb.send_command(cmd or "")
-            except RuntimeError:
+            except SdnError as exc:
                 self._sb.invalidate_connection()
+                self._write(self.out_route, f"\u2718 Falha SSH: {exc}")
                 return
             self._write(self.out_route, route_out)
             self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
@@ -76,8 +81,9 @@ class FetchMixin:
         self._session_tracker.touch()
         try:
             entries = self._drv.get_arp_table()
-        except RuntimeError:
+        except SdnError as exc:
             self._sb.invalidate_connection()
+            self._write(self.out_arp, f"\u2718 Falha SSH: {exc}")
             return
         buf = io.StringIO()
         buf.write(f"{'IP Address':<18} {'MAC Address':<20} {'Tipo':<6} {'Interface'}\n")
@@ -107,8 +113,9 @@ class FetchMixin:
                 buf.write(f"{'=' * 70}\n\u25b6  {title}\n{'-' * 70}\n")
                 buf.write(self._sb.send_command(cmd or ""))
                 buf.write("\n\n")
-        except RuntimeError:
+        except SdnError as exc:
             self._sb.invalidate_connection()
+            self._write(self.out_info, f"\u2718 Falha SSH: {exc}")
             return
         buf.write(f"{'=' * 70}\n\u25b6  Interfaces\n{'-' * 70}\n")
         intf_entries = self._drv.get_interfaces()

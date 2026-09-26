@@ -14,7 +14,7 @@ from huawei_manager.device_models import Device
 ITEM_DATA_KEY = 0  # item.setData(ITEM_DATA_KEY, device_id)
 
 
-def _to_qfont(tk_font: tuple) -> QFont:
+def _to_qfont(tk_font: tuple[str, int, *tuple[str, ...]]) -> QFont:
     """Converte tupla de fonte (family, size, [bold]) → QFont."""
     family = tk_font[0] if len(tk_font) > 0 else "Consolas"
     size   = tk_font[1] if len(tk_font) > 1 else 11

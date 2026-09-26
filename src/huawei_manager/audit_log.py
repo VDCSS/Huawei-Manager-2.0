@@ -32,6 +32,7 @@ import json
 import logging
 import threading
 import time
+from collections import deque
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
@@ -77,7 +78,7 @@ class AuditEntry:
     status:         str
     duration_ms:    float
     session_id:     str | None
-    extra:          dict[str, Any] = field(default_factory=dict)
+    extra:          dict[str, Any] = field(default_factory=dict[str, Any])
     previous_hash:  str = ""
     category:       str = "general"
 
@@ -92,7 +93,7 @@ class _TimedCtx:
                  user: str, host: str,
                  datastore: str | None,
                  session_id: str | None,
-                 extra: dict,
+                 extra: dict[str, Any],
                  category: str = "general") -> None:
         """Inicializa o contexto com parametros da operacao a auditar."""
         self._logger     = logger
@@ -157,13 +158,13 @@ class AuditLogger:
         if not raw:
             return ""
         try:
-            last_dict = json.loads(raw.splitlines()[-1].strip())
+            last_dict: dict[str, Any] = json.loads(raw.splitlines()[-1].strip())
         except (OSError, json.JSONDecodeError):
             return ""
         return self._entry_hash(last_dict)
 
     # ── HMAC ────────────────────────────────────────────────────────────
-    def _hmac(self, data: dict) -> str:
+    def _hmac(self, data: dict[str, Any]) -> str:
         """Gera HMAC-SHA256 do dict ordenado, ou string vazia se sem chave."""
         if not self._hmac_key:
             return ""
@@ -173,7 +174,7 @@ class AuditLogger:
         ).hexdigest()
 
     @staticmethod
-    def _verify_hmac(entry: dict, key: str) -> bool:
+    def _verify_hmac(entry: dict[str, Any], key: str) -> bool:
         """Verifica HMAC de uma entrada (remove/add hmac internamente). Retorna True se valido."""
         if not key:
             return True
@@ -186,7 +187,7 @@ class AuditLogger:
         return hmac_mod.compare_digest(computed, expected)
 
     @staticmethod
-    def _entry_hash(entry_dict: dict) -> str:
+    def _entry_hash(entry_dict: dict[str, Any]) -> str:
         """SHA-256 do dict excluindo campo ``hmac``."""
         d = {k: v for k, v in entry_dict.items() if k != "hmac"}
         raw = json.dumps(d, sort_keys=True, ensure_ascii=False)
@@ -233,13 +234,13 @@ class AuditLogger:
             lines = Path(path).read_text(encoding="utf-8").splitlines()
         except OSError:
             return False
-        previous_entry_dict: dict | None = None
+        previous_entry_dict: dict[str, Any] | None = None
         for line in lines:
             line = line.strip()
             if not line:
                 continue
             try:
-                entry_dict = json.loads(line)
+                entry_dict: dict[str, Any] = json.loads(line)
             except json.JSONDecodeError:
                 log.warning("verify_chain: linha invalida ignorada")
                 continue
@@ -321,13 +322,13 @@ class AuditLogger:
             ctx._finish()
 
     # ── leitura das últimas N entradas ────────────────────────────────
-    def tail(self, n: int = 10) -> list[dict]:
+    def tail(self, n: int = 10) -> list[dict[str, Any]]:
         """Retorna as últimas n entradas como lista de dicts.
         Entradas com HMAC inválido são marcadas com _hmac_valid=False."""
         if not self._path.exists():
             return []
-        lines = self._path.read_text(encoding="utf-8").splitlines()
-        entries = []
+        lines = deque(self._path.open(encoding="utf-8"), maxlen=n)
+        entries: list[dict[str, Any]] = []
         for line in reversed(lines):
             line = line.strip()
             if not line:
@@ -353,7 +354,7 @@ class AuditLogger:
         entries = self.tail(n)
         if not entries:
             return "  (nenhuma entrada de auditoria ainda)"
-        lines = []
+        lines: list[str] = []
         for e in entries:
             ts  = e.get("timestamp", "")[:19].replace("T", " ")
             op  = e.get("op",     "?")[:14]

@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QEnterEvent
 from PySide6.QtWidgets import QPushButton, QWidget
 
 import huawei_manager.constants as _C
@@ -160,10 +161,10 @@ class NeonButton(QPushButton):
         self._active = False
         self._apply_style()
 
-    def enterEvent(self, event) -> None:
+    def enterEvent(self, event: QEnterEvent) -> None:
         super().enterEvent(event)
 
-    def leaveEvent(self, event) -> None:
+    def leaveEvent(self, event: QEvent) -> None:
         super().leaveEvent(event)
 
 

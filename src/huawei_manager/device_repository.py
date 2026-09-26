@@ -10,6 +10,7 @@ import json
 import logging
 import sqlite3
 from dataclasses import asdict
+from typing import Any
 
 from huawei_manager.device_crypto import _encrypt_val
 from huawei_manager.device_models import Device
@@ -31,7 +32,7 @@ class DeviceRepository:
 
     def _row_to_device(self, row: sqlite3.Row) -> Device:
         """Converte uma linha do DB para Device (descriptografa senha)."""
-        data = {
+        data: dict[str, Any] = {
             "id": row["id"],
             "name": row["name"],
             "host": row["host"],
@@ -48,7 +49,7 @@ class DeviceRepository:
         }
         return Device.from_dict(data)
 
-    def _device_to_row(self, device: Device) -> dict:
+    def _device_to_row(self, device: Device) -> dict[str, Any]:
         """Converte Device para dict para inserção no DB (criptografa senha)."""
         d = asdict(device)
         extra = d.pop("extra_metadata", {})

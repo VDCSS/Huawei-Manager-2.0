@@ -6,9 +6,12 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-from netmiko import ConnectHandler
-from netmiko.base_connection import BaseConnection as NetmikoConnection
+from netmiko import ConnectHandler  # pyright: ignore[reportMissingTypeStubs]
+from netmiko.base_connection import (  # pyright: ignore[reportMissingTypeStubs]
+    BaseConnection as NetmikoConnection,
+)
 
 from huawei_manager._config import PROJECT_ROOT
 from huawei_manager.audit_log import AuditLogger
@@ -48,6 +51,7 @@ class NetmikoSession(SessionCommandsMixin):
         self._audit   = audit_logger
         self._conn: NetmikoConnection | None = None
         self._lock = threading.Lock()
+        self._closing = False
         self.override_host = override_host
         self.override_port = override_port
         self.override_username = override_username
@@ -121,7 +125,7 @@ class NetmikoSession(SessionCommandsMixin):
 
     # ── validacao pre-conexao ─────────────────────────────────────────
     def _validate_credentials(self) -> None:
-        missing = []
+        missing: list[str] = []
         if not self._host:
             missing.append("ROUTER_HOST")
         if not self._user:
@@ -146,6 +150,7 @@ class NetmikoSession(SessionCommandsMixin):
             from huawei_manager._config import SSH_TIMEOUT
             timeout = SSH_TIMEOUT
         self._validate_credentials()
+        self._closing = False
         mode = self._hk_verify
         ssh_strict = mode == "strict"
 
@@ -180,7 +185,7 @@ class NetmikoSession(SessionCommandsMixin):
             log.debug("Auth com chave SSH: %s", key)
 
         with self._audit.timed("connect", user=self._user, host=self._host) as ctx:
-            kwargs = {k: v for k, v in {
+            params: dict[str, Any] = {
                 "device_type": cfg.device_type,
                 "host": cfg.host,
                 "port": cfg.port,
@@ -192,7 +197,8 @@ class NetmikoSession(SessionCommandsMixin):
                 "use_keys": True if cfg.ssh_key else None,
                 "key_file": cfg.ssh_key,
                 "session_log": cfg.session_log or None,
-            }.items() if v is not None}
+            }
+            kwargs = {k: v for k, v in params.items() if v is not None}
             # Netmiko (>=4) ja filtra password/secret do session_log
             # automaticamente (SessionLog.no_log + SecretsFilter) — nao
             # existe o kwarg `no_log` em ConnectHandler, e passa-lo quebra
@@ -201,7 +207,13 @@ class NetmikoSession(SessionCommandsMixin):
             ctx.set_status("ok")
 
         if mode == "tofu" and self._conn:
-            transport = self._conn.remote_conn_pre.get_transport()
+            channel = self._conn.remote_conn_pre
+            if channel is None:
+                self.disconnect()
+                raise SdnConnectionError(
+                    f"Canal SSH indisponivel para {self._host}"
+                )
+            transport = channel.get_transport()
             if transport is None:
                 self.disconnect()
                 raise SdnConnectionError(
@@ -228,16 +240,20 @@ class NetmikoSession(SessionCommandsMixin):
         )
 
     def disconnect(self) -> None:
-        if self._conn:
+        self._closing = True
+        with self._lock:
+            conn, self._conn = self._conn, None
+        if conn is not None:
             try:
-                self._conn.disconnect()
+                conn.disconnect()
             except Exception as exc:
                 log.warning("disconnect: %s", exc)
-            self._conn = None
             log.info("Sessao SSH encerrada")
 
     @property
     def is_connected(self) -> bool:
+        if self._closing:
+            return False
         return self._conn is not None and self._conn.is_alive()
 
     # ── resolve filter (delega para session_helpers) ───────────────

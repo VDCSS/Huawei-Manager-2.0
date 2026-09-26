@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from huawei_manager.vault_backends.base import SecretsBackend
 
@@ -21,7 +22,7 @@ class VaultBackend(SecretsBackend):
 
         addr = os.getenv("VAULT_ADDR", "http://127.0.0.1:8200")
         token = os.getenv("VAULT_TOKEN", "")
-        self._client = hvac.Client(url=addr, token=token)
+        self._client: Any = hvac.Client(url=addr, token=token)
         self._mount = os.getenv("VAULT_MOUNT", "secret")
         self._path = os.getenv("VAULT_SECRET_PATH", "huawei/manager")
 
@@ -29,12 +30,12 @@ class VaultBackend(SecretsBackend):
             raise RuntimeError("Vault auth falhou — verifique VAULT_ADDR e VAULT_TOKEN")
         log.debug("Vault backend: %s  path=%s", addr, self._path)
 
-    def _read(self) -> dict:
+    def _read(self) -> dict[str, str]:
         resp = self._client.secrets.kv.v2.read_secret_version(
             mount_point=self._mount, path=self._path)
         return resp["data"]["data"]
 
-    def _write(self, data: dict) -> None:
+    def _write(self, data: dict[str, str]) -> None:
         self._client.secrets.kv.v2.create_or_update_secret(
             mount_point=self._mount, path=self._path, secret=data)
 

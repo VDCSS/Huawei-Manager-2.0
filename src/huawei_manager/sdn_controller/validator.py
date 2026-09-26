@@ -29,6 +29,11 @@ _DEFAULT_DENY_PATTERNS: list[str] = [
 # Roles que podem liberar comandos negados (bypass de politica)
 _BYPASS_ROLES: set[str] = {"admin", "tecnico"}
 
+# Separadores de comando aceitos pelo VRP: encadeiam comandos na mesma
+# linha (ex.: ``display version;system-view``). O pipe (``|``) NAO divide:
+# e filtro de output legitimo (``display cpu-usage | include cpu``).
+_CMD_SEPARATORS = re.compile(r"[;\r\n]+")
+
 
 @dataclass
 class ValidationResult:
@@ -75,18 +80,23 @@ class CommandValidator:
     # ── Validation ──────────────────────────────────────────────────────
 
     def validate(self, command: str, role: str = "user") -> ValidationResult:
-        """Valida um comando contra allow-list e deny-list.
+        """Valida um buffer de comandos contra allow-list e deny-list.
 
-        Regras:
-        1. Comando vazio → negado.
-        2. Comando em allow-list → permitido.
-        3. Comando em deny-list + role com bypass → permitido (bypass de
-           politica; exige confirmacao explicita na camada de execucao).
-        4. Comando em deny-list + role sem bypass → negado.
-        5. Comando desconhecido (nem allow nem deny) → negado.
+        O buffer e dividido em comandos logicos por separadores VRP
+        (``;``, ``\\r``, ``\\n``) e cada parte e validada
+        individualmente — um comando negado encadeado a um permitido
+        nao escapa da politica. O pipe (``|``) nao divide.
+
+        Regras por comando logico:
+        1. Deny-list primeiro: deny vence allow.
+        2. Deny-list + role com bypass → permitido (bypass de politica;
+           exige confirmacao explicita na camada de execucao).
+        3. Deny-list + role sem bypass → negado.
+        4. Allow-list → permitido.
+        5. Desconhecido (nem allow nem deny) → negado.
 
         Args:
-            command: Comando CLI a ser validado.
+            command: Buffer de comandos CLI a ser validado.
             role: Papel do usuario (user, tecnico, admin).
 
         Returns:
@@ -95,12 +105,21 @@ class CommandValidator:
         if not command.strip():
             return ValidationResult(allowed=False, reason="Empty command")
 
-        # Check allow-list
-        for pattern in self._allow:
-            if pattern.search(command):
-                return ValidationResult(allowed=True)
+        parts = _split_logical(command)
+        if not parts:
+            return ValidationResult(allowed=False, reason="Empty command")
 
-        # Check deny-list
+        for part in parts:
+            result = self._validate_one(part, role)
+            if not result.allowed:
+                return result
+            if result.bypass_2fa:
+                return result
+        return ValidationResult(allowed=True)
+
+    def _validate_one(self, command: str, role: str) -> ValidationResult:
+        """Valida um comando logico unico (sem separadores)."""
+        # Deny-list primeiro: deny vence allow (invariante de seguranca)
         for pattern in self._deny:
             if pattern.search(command):
                 if role in _BYPASS_ROLES:
@@ -114,8 +133,22 @@ class CommandValidator:
                     reason=f"Command denied by policy: {command}",
                 )
 
+        # Allow-list
+        for pattern in self._allow:
+            if pattern.search(command):
+                return ValidationResult(allowed=True)
+
         # Unknown command
         return ValidationResult(
             allowed=False,
             reason=f"Unknown command: {command}",
         )
+
+
+def _split_logical(command: str) -> list[str]:
+    """Divide um buffer em comandos logicos por separadores VRP."""
+    return [
+        part.strip()
+        for part in _CMD_SEPARATORS.split(command)
+        if part.strip()
+    ]

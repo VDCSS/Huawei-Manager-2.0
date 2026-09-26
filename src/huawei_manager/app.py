@@ -8,8 +8,10 @@ import os
 import threading
 import time
 from collections import deque
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPixmap
@@ -26,6 +28,17 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QComboBox, QListWidget, QListWidgetItem, QRadioButton
+
+    from huawei_manager._protocols import AppCoreProtocol
+    from huawei_manager.agents import AgentResult
+    from huawei_manager.sdn_controller.bus import IEventBus
+    from huawei_manager.sdn_controller.event_queue import Event
+    from huawei_manager.sdn_controller.southbound import SouthboundProtocol
+    from huawei_manager.services import ServiceDef
+    from huawei_manager.topology import TopologyCanvas
 
 import huawei_manager.constants as C
 from huawei_manager._app import apply_theme
@@ -58,8 +71,166 @@ from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_
 log = logging.getLogger("huawei_manager")
 
 
-class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
+class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     """Mixin principal Qt — inicializa janela, layout, navegação e helpers de threading."""
+
+    if TYPE_CHECKING:
+        # ── Membros do AppCoreProtocol que vivem em mixins/builder ──────
+        # (declarações estáticas; as implementações reais ficam em
+        # AppStateMixin / ShortcutsMixin / EventHandlers / PageBuilder e
+        # só existem na composição final HuaweiRouterApp.)
+        ADMIN_MAX_ATTEMPTS: int
+        ADMIN_LOCKOUT_SECS: int
+        _sysview_var: bool
+        route_filter_var: str
+        _route_filter_cb: QComboBox
+        _admin_btn: ActionButton
+        _backup_fmt_lbl: QLabel
+        _svc_cat_var: str
+        _tpl_cmd_map: dict[str, str]
+        _tpl_listbox: QListWidget
+        _manut_rb_group: list[QRadioButton]
+        _mode_btn: ActionButton
+        _watcher_btn: ActionButton
+        _svc_device_lbl: QLabel | None
+        _svc_type_lbl: QLabel | None
+        _svc_status_lbl: QLabel | None
+        _svc_cat_cb: QComboBox | None
+        _svc_listbox: QListWidget | None
+        _svc_detail_frame: QWidget | None
+        _svc_services: list[ServiceDef]
+        _svc_current_svc: ServiceDef | None
+        _dash_conn_status: QLabel | None
+        _dash_conn_host: QLabel | None
+        _dash_device_online: QLabel | None
+        _dash_device_offline: QLabel | None
+        _dash_device_unknown: QLabel | None
+        _dash_audit_text: QTextEdit | None
+        _dash_shortcut_btns: dict[str, str]
+        _manut_summary: QTextEdit | None
+        _manut_output: QTextEdit | None
+        _cmd_editor: QTextEdit | None
+        _backup_entry: QLineEdit | None
+
+        # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
+        def _on_sdn_event(self: AppCoreProtocol, ev: Event | None) -> None: ...
+        def _page_layout(self: AppCoreProtocol, p: QWidget) -> QVBoxLayout: ...
+        def _page_title(
+            self: AppCoreProtocol, parent: QWidget, title: str, color: str,
+            subtitle: str = "",
+        ) -> None: ...
+        def _css_label(
+            self: AppCoreProtocol, color: str, bg: str = "",
+            font_size: int = 12, bold: bool = False,
+        ) -> str: ...
+        def _set_status(self: AppCoreProtocol, text: str, color: str) -> None: ...
+        def _set_conn_btn(
+            self: AppCoreProtocol, text: str = "", disabled: bool = False
+        ) -> None: ...
+        def _tick_dashboard(self: AppCoreProtocol) -> None: ...
+        def _tick_devices(self: AppCoreProtocol) -> None: ...
+        def _check_session_timeout(self: AppCoreProtocol) -> None: ...
+        def _on_watcher_update(
+            self: AppCoreProtocol, results: Sequence[AgentResult]
+        ) -> None: ...
+        def _rebuild_manutencao_if_active(self: AppCoreProtocol) -> None: ...
+        def _refresh_dashboard(self: AppCoreProtocol) -> None: ...
+        def _setup_bindings(self: AppCoreProtocol) -> None: ...
+        def _on_enter(self: AppCoreProtocol) -> None: ...
+        def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None: ...
+        def _on_ctrl_d(self: AppCoreProtocol) -> None: ...
+        def _on_ctrl_l(self: AppCoreProtocol) -> None: ...
+        def _on_ctrl_q(self: AppCoreProtocol) -> None: ...
+        def _on_ctrl_shift_a(self: AppCoreProtocol) -> None: ...
+        def _on_f5(self: AppCoreProtocol) -> None: ...
+        def _on_ctrl_tab(self: AppCoreProtocol) -> None: ...
+        def _on_ctrl_shift_tab(self: AppCoreProtocol) -> None: ...
+        def _on_escape(self: AppCoreProtocol) -> None: ...
+        def _show_auth_dialog(self: AppCoreProtocol) -> None: ...
+        def _require_access(self: AppCoreProtocol, level: str = "admin") -> bool: ...
+        def _get_selected_device(self: AppCoreProtocol) -> Device | None: ...
+        def _ensure_device_ready(
+            self: AppCoreProtocol, action: str
+        ) -> Device | None: ...
+        def _prompt_no_devices(self: AppCoreProtocol, action: str) -> None: ...
+        def _toggle_connect(self: AppCoreProtocol) -> None: ...
+        def _do_connect(
+            self: AppCoreProtocol, on_success_fmt: str, on_error_msg: str
+        ) -> None: ...
+        def _connect_with_device(self: AppCoreProtocol, device: Device) -> None: ...
+        def _fetch_config(self: AppCoreProtocol) -> None: ...
+        def _fetch_route(self: AppCoreProtocol, fkey: str = "") -> None: ...
+        def _fetch_arp(self: AppCoreProtocol) -> None: ...
+        def _fetch_info(self: AppCoreProtocol) -> None: ...
+        def _refresh_devices(self: AppCoreProtocol) -> None: ...
+        def _update_devices_ui(
+            self: AppCoreProtocol, devices: list[Device]
+        ) -> None: ...
+        def _show_device_dialog(
+            self: AppCoreProtocol, device: Device | None = None
+        ) -> None: ...
+        def _delete_device(self: AppCoreProtocol, device: Device) -> None: ...
+        def _on_device_selected(self: AppCoreProtocol, device: Device) -> None: ...
+        def _clear_device_target(self: AppCoreProtocol) -> None: ...
+        def _get_editor_cmd(self: AppCoreProtocol) -> str: ...
+        def _confirm_destructive(self: AppCoreProtocol, cmd: str) -> bool: ...
+        def _run_cmd_safe(self: AppCoreProtocol, cmd: str = "") -> None: ...
+        def _run_config_safe(self: AppCoreProtocol, cmd: str = "") -> None: ...
+        def _exec_cmd(self: AppCoreProtocol, cmd: str = "") -> None: ...
+        def _exec_config(self: AppCoreProtocol, cmd: str = "") -> None: ...
+        def _do_backup(self: AppCoreProtocol, fmt: str = "") -> None: ...
+        def _choose_backup_dir(self: AppCoreProtocol) -> None: ...
+        def _run_service(
+            self: AppCoreProtocol, svc: ServiceDef,
+            final_svc: ServiceDef | None = None,
+        ) -> None: ...
+        def _validate_service(
+            self: AppCoreProtocol, svc: ServiceDef, final_cmds: list[str]
+        ) -> list[tuple[str, str]]: ...
+        def _refresh_service_list(self: AppCoreProtocol) -> None: ...
+        def _show_service_detail(self: AppCoreProtocol, svc: ServiceDef) -> None: ...
+        def _on_svc_cat_changed(self: AppCoreProtocol, text: str) -> None: ...
+        def _on_service_select(self: AppCoreProtocol, row: int) -> None: ...
+        def _clear_detail_panel(self: AppCoreProtocol) -> None: ...
+        def _build_services_info_row(
+            self: AppCoreProtocol, parent: QWidget
+        ) -> None: ...
+        def _build_services_filter_row(
+            self: AppCoreProtocol, parent: QWidget
+        ) -> None: ...
+        def _build_services_split(
+            self: AppCoreProtocol, parent: QWidget
+        ) -> None: ...
+        def _build_param_fields(
+            self: AppCoreProtocol, parent: QWidget, svc: ServiceDef
+        ) -> None: ...
+        def _build_services_page(self: AppCoreProtocol) -> None: ...
+        def _build_home_page(self: AppCoreProtocol) -> None: ...
+        def _build_config_page(self: AppCoreProtocol) -> None: ...
+        def _build_route_page(self: AppCoreProtocol) -> None: ...
+        def _build_arp_page(self: AppCoreProtocol) -> None: ...
+        def _build_info_page(self: AppCoreProtocol) -> None: ...
+        def _build_cmd_page(self: AppCoreProtocol) -> None: ...
+        def _build_backup_page(self: AppCoreProtocol) -> None: ...
+        def _build_topology_page(self: AppCoreProtocol) -> None: ...
+        def _build_manutencao_page(self: AppCoreProtocol) -> None: ...
+        def _run_agents(self: AppCoreProtocol) -> None: ...
+        def _toggle_watcher(self: AppCoreProtocol) -> None: ...
+        def _toggle_probe_mode(self: AppCoreProtocol) -> None: ...
+        def _cancel_and_clear(self: AppCoreProtocol) -> None: ...
+        def _run_setup(self: AppCoreProtocol, mode: str) -> None: ...
+        def _run_dev_cmd(self: AppCoreProtocol, target: str) -> None: ...
+        def _display_watcher_results(
+            self: AppCoreProtocol, results: Sequence[AgentResult]
+        ) -> None: ...
+        def _apply_manut_filter(self: AppCoreProtocol) -> None: ...
+        def _on_manut_filter_toggled(
+            self: AppCoreProtocol, checked: bool, value: str
+        ) -> None: ...
+        def _on_tpl_select(self: AppCoreProtocol, row: int) -> None: ...
+        def _on_tpl_activate(
+            self: AppCoreProtocol, item: QListWidgetItem
+        ) -> None: ...
 
     def __init__(self) -> None:
         super().__init__()
@@ -77,12 +248,16 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         apply_theme("dark")
 
-        assert _secrets is not None, "_config.init() must be called first"
-        assert audit is not None, "_config.init() must be called first"
+        if _secrets is None:
+            raise RuntimeError("_config.init() must be called first")
+        if audit is None:
+            raise RuntimeError("_config.init() must be called first")
         self.session = NetmikoSession(_secrets, audit)
-        self._event_queue = EventQueue(maxsize=1000)
-        self._sb = SSHSouthbound(_secrets, audit, session=self.session)
+        self._event_queue: IEventBus = EventQueue(maxsize=1000)
         self._cmd_validator = CommandValidator()
+        self._sb: SouthboundProtocol = SSHSouthbound(
+            _secrets, audit, session=self.session, validator=self._cmd_validator
+        )
         self._dry_run = DryRunEngine()
         self._controller = ControllerCore(
             event_queue=self._event_queue,
@@ -145,15 +320,15 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
         self._target_device: Device | None = None
         self._devices: list[Device] = []
-        self._topo_canvas: object = None
+        self._topo_canvas: TopologyCanvas | None = None
         io_w = int(os.environ.get("HW_IO_WORKERS", "6"))
         cpu_w = int(os.environ.get("HW_CPU_WORKERS", "2"))
         self._io_executor = ThreadPoolExecutor(max_workers=io_w, thread_name_prefix="hw-io")
         self._cpu_executor = ThreadPoolExecutor(max_workers=cpu_w, thread_name_prefix="hw-cpu")
         atexit.register(self._cleanup_executors)
-        self._ui_queue: deque = deque(maxlen=1000)
+        self._ui_queue: deque[Callable[[], object]] = deque(maxlen=1000)
         self._watcher = Watcher(self, self._on_watcher_update)
-        self._watcher_results: list | None = None
+        self._watcher_results: Sequence[AgentResult] | None = None
 
         self._current_page: str | None = None
         self._PAGE_KEYS = [
@@ -202,7 +377,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._device_info_lbl: QLabel | None = None
         self._device_status_lbl: QLabel | None = None
         self._auth_overlay: QWidget | None = None
-        self._last_manut_results: list = []
+        self._last_manut_results: Sequence[AgentResult] = []
         self._manut_filter: str = "all"
         self._devices_lock = threading.Lock()
         self._devices_gen: int = 0
@@ -218,6 +393,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
             self._svc_mode_var = "mock"
         self._svc_param_entries: dict[str, QLineEdit] = {}
         self._shutdown: bool = False
+        self._event_drop_count: int = 0
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:
@@ -249,7 +425,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         sep.setStyleSheet(f"background: {C.BORDER_NRM}; max-height: 1px; border: none;")
         right_layout.addWidget(sep)
 
-        self.content = QWidget(right)
+        self.content: QWidget | None = QWidget(right)
         self.content.setStyleSheet(f"background: {C.BG_BASE};")
         self.content_layout = QVBoxLayout(self.content)
         self.content_layout.setContentsMargins(18, 18, 18, 18)
@@ -265,7 +441,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._build_footer(right_layout)
 
         self.pages: dict[str, QWidget] = {}
-        self._page_builders = {
+        self._page_builders: dict[str, Callable[[], None]] = {
             "home":       self._build_home_page,
             "config":     self._build_config_page,
             "route":      self._build_route_page,
@@ -350,7 +526,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
     # ── Sidebar ──────────────────────────────────────────────────────
     def _build_sidebar(self) -> None:
         sb = self.sidebar
-        sb_layout = sb.layout()
+        sb_layout = cast(QVBoxLayout, sb.layout())
         sb_layout.setSpacing(0)
 
         logo = QWidget(sb)
@@ -469,7 +645,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
 
     # ── Helpers de pagina ─────────────────────────────────────────────
     def _make_page(self, key: str) -> QWidget:
-        p = super()._make_page(key)
+        p = cast("AppCoreProtocol", super())._make_page(key)
         self.pages[key] = p
         return p
 
@@ -482,7 +658,7 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
             if fn:
                 fn()
         target = self.pages.get(key)
-        if target:
+        if target is not None and self._page_container is not None:
             self._page_container.setCurrentWidget(target)
         btn = self._nav_buttons.get(key)
         if btn:
@@ -493,7 +669,8 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
     def _rebuild_page(self, key: str) -> None:
         if key in self.pages:
             old = self.pages.pop(key)
-            self._page_container.removeWidget(old)
+            if self._page_container is not None:
+                self._page_container.removeWidget(old)
             old.deleteLater()
         if self._current_page == key:
             self._show_page(key)
@@ -608,6 +785,33 @@ class AppCore(QMainWindow, ThreadingMixin, NotifyMixin):
         self._active_btn = None
         self._topo_canvas = None
         self.pages.clear()
+        # Widgets recriados em _build_layout/_rebuild_page: zerar refs para
+        # nao apontar para objetos C++ deletados (RuntimeError/AttributeError).
+        self._svc_output = None
+        self._svc_device_lbl = None
+        self._svc_type_lbl = None
+        self._svc_status_lbl = None
+        self._svc_cat_cb = None
+        self._svc_listbox = None
+        self._svc_detail_frame = None
+        self._svc_param_entries = {}
+        self._svc_services = []
+        self._svc_current_svc = None
+        self._dash_conn_status = None
+        self._dash_conn_host = None
+        self._dash_device_online = None
+        self._dash_device_offline = None
+        self._dash_device_unknown = None
+        self._dash_audit_text = None
+        self._dash_shortcut_btns = {}
+        self._manut_summary = None
+        self._manut_output = None
+        self._cmd_editor = None
+        self._backup_entry = None
+        self._auth_overlay = None
+        self._device_info_lbl = None
+        self._device_status_lbl = None
+        self._ui_queue.clear()
 
         # 3. Destruir UI antiga
         old = self.centralWidget()

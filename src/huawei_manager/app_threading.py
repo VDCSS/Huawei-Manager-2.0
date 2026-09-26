@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.sdn_controller.event_queue import EventType
+
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QTextEdit
 
 _app_log = logging.getLogger("huawei.app")
 
@@ -27,7 +31,7 @@ class ThreadingMixin:
         maxlen = self._ui_queue.maxlen
         if maxlen is not None and len(self._ui_queue) >= maxlen:
             if sdn:
-                self._event_drop_count += 1
+                self._event_drop_count = getattr(self, "_event_drop_count", 0) + 1
                 _app_log.warning(
                     "SDN event drop (%d total): fila UI cheia, descartando callback",
                     self._event_drop_count,
@@ -63,20 +67,20 @@ class ThreadingMixin:
         if drained > 0:
             _app_log.debug("Drained %d SDN events from queue", drained)
 
-    def _spawn_io(self: AppCoreProtocol, fn, *args) -> None:
+    def _spawn_io(self: AppCoreProtocol, fn: Callable[..., object], *args: object) -> None:
         if getattr(self, "_shutdown", False) or self._io_executor is None:
             _app_log.debug("_spawn_io pós-shutdown: no-op (%s)", getattr(fn, "__name__", fn))
             return
         future = self._io_executor.submit(fn, *args)
         future.add_done_callback(lambda f: f.exception() and
-            _app_log.error("Task %s falhou: %s", fn.__name__, f.exception()))
+            _app_log.error("Task %s falhou: %s", getattr(fn, "__name__", fn), f.exception()))
 
-    def _spawn_cpu(self: AppCoreProtocol, fn, *args) -> None:
+    def _spawn_cpu(self: AppCoreProtocol, fn: Callable[..., object], *args: object) -> None:
         future = self._cpu_executor.submit(fn, *args)
         future.add_done_callback(lambda f: f.exception() and
-            _app_log.error("CPU task %s falhou: %s", fn.__name__, f.exception()))
+            _app_log.error("CPU task %s falhou: %s", getattr(fn, "__name__", fn), f.exception()))
 
-    def _run(self: AppCoreProtocol, func) -> None:
+    def _run(self: AppCoreProtocol, func: Callable[[], object]) -> None:
         try:
             if self._ensure_device_ready("executar esta acao") is None:
                 return
@@ -93,8 +97,22 @@ class ThreadingMixin:
             return
         self._spawn_io(func)
 
-    def _write(self: AppCoreProtocol, widget, text: str) -> None:
-        self._dispatch(lambda w=widget, t=text: (w.clear(), w.setPlainText(t)))
+    def _write(self: AppCoreProtocol, widget: QTextEdit | None, text: str) -> None:
+        self._safe_write(widget, text)
 
-    def _loading(self: AppCoreProtocol, widget, msg: str) -> None:
+    def _safe_write(self: AppCoreProtocol, widget: QTextEdit | None, text: str) -> None:
+        def _do_write() -> None:
+            if widget is None:
+                return
+            try:
+                widget.clear()
+                widget.setPlainText(text)
+            except (RuntimeError, AttributeError):
+                _app_log.debug("_safe_write: widget C++ deletado, output descartado")
+
+        self._dispatch(_do_write)
+
+    def _loading(self: AppCoreProtocol, widget: QTextEdit | None, msg: str) -> None:
+        if widget is None:
+            return
         self._dispatch(lambda w=widget, m=msg: (w.clear(), w.setPlainText(f"\u23f3  {m}\n")))

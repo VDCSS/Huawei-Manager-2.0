@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from huawei_manager.exceptions import SdnError
 from huawei_manager.handlers.fetch import FetchMixin
 
 
@@ -45,7 +46,7 @@ class TestFetchConfig:
 
     def test_invalidates_on_error(self):
         mixin = _make_mixin()
-        mixin._sb.send_command.side_effect = RuntimeError("fail")
+        mixin._sb.send_command.side_effect = SdnError("fail")
         mixin._fetch_config()
         mixin._sb.invalidate_connection.assert_called_once()
 
@@ -75,7 +76,7 @@ class TestFetchRoute:
 
     def test_routing_runtime_error_invalidates(self):
         mixin = _make_mixin()
-        mixin._drv.get_routing_table.side_effect = RuntimeError("fail")
+        mixin._drv.get_routing_table.side_effect = SdnError("fail")
         mixin._fetch_route(fkey="routing")
         mixin._sb.invalidate_connection.assert_called_once()
 
@@ -96,7 +97,7 @@ class TestFetchArp:
 
     def test_runtime_error_invalidates(self):
         mixin = _make_mixin()
-        mixin._drv.get_arp_table.side_effect = RuntimeError("fail")
+        mixin._drv.get_arp_table.side_effect = SdnError("fail")
         mixin._fetch_arp()
         mixin._sb.invalidate_connection.assert_called_once()
 
@@ -131,6 +132,6 @@ class TestFetchInfo:
 
     def test_runtime_error_invalidates(self):
         mixin = _make_mixin()
-        mixin._sb.send_command.side_effect = RuntimeError("fail")
+        mixin._sb.send_command.side_effect = SdnError("fail")
         mixin._fetch_info()
         mixin._sb.invalidate_connection.assert_called_once()
