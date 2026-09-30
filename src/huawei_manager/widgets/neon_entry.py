@@ -1,3 +1,5 @@
+from typing import Any
+
 from PySide6.QtWidgets import QLineEdit, QTextEdit, QWidget
 
 import huawei_manager.constants as _C
@@ -6,7 +8,7 @@ from huawei_manager.widgets.helpers import _css_font
 
 def neon_entry(
     parent: QWidget | None = None,
-    textvariable: list | dict | None = None,
+    textvariable: list[str] | dict[str, str] | None = None,
     width: int = 30,
     state: str = "normal",
 ) -> QLineEdit:
@@ -48,7 +50,7 @@ def neon_entry(
     return entry
 
 
-def styled_text(parent: QWidget | None = None, **kw) -> QTextEdit:
+def styled_text(parent: QWidget | None = None, **kw: Any) -> QTextEdit:
     ed = QTextEdit(parent)
     family, size = _C.FONT_LARGE[0], _C.FONT_LARGE[1]
     ed.setFont(font := ed.font())
@@ -76,7 +78,7 @@ def styled_text(parent: QWidget | None = None, **kw) -> QTextEdit:
     return ed
 
 
-def output_text(parent: QWidget | None = None, **kw) -> QTextEdit:
+def output_text(parent: QWidget | None = None, **kw: Any) -> QTextEdit:
     ed = styled_text(parent, **kw)
     ed.setReadOnly(True)
     family, size = _C.FONT_LARGE[0], _C.FONT_LARGE[1]

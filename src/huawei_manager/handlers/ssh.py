@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
+from netmiko.exceptions import (  # pyright: ignore[reportMissingTypeStubs]
+    NetmikoAuthenticationException,
+    NetmikoTimeoutException,
+)
 
 import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol

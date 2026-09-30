@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -27,25 +31,26 @@ class _CmdReturnFilter(QObject):
     Also handles ShortcutOverride to prevent global Return shortcut from stealing the key.
     """
 
-    def __init__(self, app_ref: object) -> None:
+    def __init__(self, app_ref: AppCoreProtocol) -> None:
         super().__init__()
         self.app = app_ref
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         from PySide6.QtCore import Qt as _Qt
 
-        if event.type() == QEvent.Type.ShortcutOverride:
+        if event.type() == QEvent.Type.ShortcutOverride and isinstance(event, QKeyEvent):
             # Accept Return/Enter to prevent global QShortcut("Return") from firing
             if event.key() == _Qt.Key.Key_Return or event.key() == _Qt.Key.Key_Enter:
                 event.accept()
                 return True
             return super().eventFilter(obj, event)
 
-        if event.type() == QEvent.Type.KeyPress:
+        if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
             if event.key() == _Qt.Key.Key_Return or event.key() == _Qt.Key.Key_Enter:
                 if event.modifiers() & _Qt.KeyboardModifier.ShiftModifier:
-                    cursor = obj.textCursor() if hasattr(obj, "textCursor") else None
-                    if cursor:
+                    getter = getattr(obj, "textCursor", None)
+                    cursor: Any = getter() if callable(getter) else None
+                    if cursor is not None:
                         cursor.insertText("\n")
                     return True
                 else:
@@ -141,6 +146,7 @@ class PageBuilderCmdMixin:
         right_layout.addSpacing(6)
 
         cmd_filter = _CmdReturnFilter(self)
+        cmd_filter.setParent(right)
         self._cmd_editor.installEventFilter(cmd_filter)
 
         abar = QWidget(right)
@@ -176,17 +182,21 @@ class PageBuilderCmdMixin:
         self.out_cmd = output_text(right)
         right_layout.addWidget(self.out_cmd, stretch=1)
 
-    def _on_tpl_select(self, row: int) -> None:
+    def _on_tpl_select(self: AppCoreProtocol, row: int) -> None:
         """Atualiza o editor quando a seleção muda (navegação por teclado)."""
         if row >= 0:
             name = self._tpl_listbox.item(row).text()
             cmd = self._tpl_cmd_map.get(name)
             if cmd:
-                self._cmd_editor.setPlainText(cmd)
+                editor = self._cmd_editor
+                if editor is not None:
+                    editor.setPlainText(cmd)
 
-    def _on_tpl_activate(self, item) -> None:
+    def _on_tpl_activate(self: AppCoreProtocol, item: QListWidgetItem) -> None:
         """Enter/Space ativa o template (acessibilidade por teclado)."""
         name = item.text()
         cmd = self._tpl_cmd_map.get(name)
         if cmd:
-            self._cmd_editor.setPlainText(cmd)
+            editor = self._cmd_editor
+            if editor is not None:
+                editor.setPlainText(cmd)

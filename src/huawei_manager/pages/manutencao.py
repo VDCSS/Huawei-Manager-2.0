@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -24,6 +25,11 @@ from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.widgets.neon_button import action_button
 from huawei_manager.widgets.neon_entry import output_text
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from huawei_manager.agents import AgentResult
+
 log = logging.getLogger("huawei.manutencao")
 
 
@@ -37,14 +43,14 @@ class PageBuilderManutencaoMixin:
 
             lbl = QLabel("\U0001f512  Esta pagina e exclusiva para usuarios Tecnico ou Admin.", p)
             lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 13))
-            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._page_layout(p).addSpacing(40)
             self._page_layout(p).addWidget(lbl)
             self._page_layout(p).addSpacing(10)
 
             btn = action_button(p, "\U0001f511  Autenticar como Tecnico / Admin",
                                 self._show_auth_dialog, C.NEON_PURP)
-            self._page_layout(p).addWidget(btn, alignment=Qt.AlignCenter)
+            self._page_layout(p).addWidget(btn, alignment=Qt.AlignmentFlag.AlignCenter)
             return
 
         p = self._make_page("manutencao")
@@ -254,7 +260,7 @@ class PageBuilderManutencaoMixin:
             if self._watcher.is_active:
                 self._loading(self._manut_output, "Watcher ativo — resultados em ate 60s...")
 
-    def _on_manut_filter_toggled(self, checked: bool, value: str) -> None:
+    def _on_manut_filter_toggled(self: AppCoreProtocol, checked: bool, value: str) -> None:
         if checked:
             self._manut_filter = value
             self._apply_manut_filter()
@@ -284,22 +290,31 @@ class PageBuilderManutencaoMixin:
             buf: list[str] = []
             lock = threading.Lock()
 
+            def _append(text: str) -> None:
+                out = self._manut_output
+                if out is not None:
+                    out.append(text)
+
+            def _set_output(text: str) -> None:
+                out = self._manut_output
+                if out is not None:
+                    out.clear()
+                    out.setPlainText(text)
+
             def _flush() -> None:
                 with lock:
                     text = "\n".join(buf)
                     if text:
-                        self._dispatch(lambda t=text: (
-                            self._manut_output.clear(),
-                            self._manut_output.setPlainText(t),
-                        ))
+                        self._dispatch(lambda t=text: _set_output(t))
 
-            proc: subprocess.Popen | None = None
+            proc: subprocess.Popen[str] | None = None
             try:
                 proc = subprocess.Popen(
                     cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, cwd=str(PROJECT_ROOT),
                 )
-                assert proc.stdout is not None
+                if proc.stdout is None:
+                    raise RuntimeError("subprocess stdout is not available")
                 for line in proc.stdout:
                     if cancel.is_set() or (proc.poll() is not None and not line):
                         break
@@ -309,20 +324,20 @@ class PageBuilderManutencaoMixin:
                 if cancel.is_set():
                     proc.kill()
                     proc.wait(timeout=5)
-                    self._dispatch(lambda: self._manut_output.append(
+                    self._dispatch(lambda: _append(
                         "\n\u26a1  Processo cancelado"))
                     return
                 proc.wait(timeout=180)
                 _flush()
                 rc = proc.returncode
                 prefix = "\u2705" if rc == 0 else f"\u274c (exit {rc})"
-                self._dispatch(lambda p=prefix: self._manut_output.append(
+                self._dispatch(lambda p=prefix: _append(
                     f"\n{p}  Concluido"))
             except subprocess.TimeoutExpired:
-                self._dispatch(lambda: self._manut_output.append(
+                self._dispatch(lambda: _append(
                     "\n\u23f0  Timeout (180s)"))
             except Exception as e:
-                self._dispatch(lambda err=str(e): self._manut_output.append(
+                self._dispatch(lambda err=str(e): _append(
                     f"\n\u274c  Erro: {err}"))
             finally:
                 if proc is not None:
@@ -373,18 +388,20 @@ class PageBuilderManutencaoMixin:
         self._write(self._manut_output, log_msg)
         log.info("Probe mode changed to %s", mode)
 
-    def _apply_manut_filter(self) -> None:
+    def _apply_manut_filter(self: AppCoreProtocol) -> None:
         if self._last_manut_results:
             self._display_watcher_results(self._last_manut_results)
 
-    def _display_watcher_results(self: AppCoreProtocol, results) -> None:
+    def _display_watcher_results(
+        self: AppCoreProtocol, results: Sequence[AgentResult]
+    ) -> None:
         self._last_manut_results = results
 
         counts = {"error": 0, "warning": 0, "info": 0, "ok": 0}
         for r in results:
             counts[r.status] = counts.get(r.status, 0) + 1
 
-        lines = []
+        lines: list[str] = []
         for r in results:
             icon = {"ok": "\u2705", "warning": "\u26a0", "error": "\u274c",
                     "info": "\U0001f4a1"}.get(r.status, "\u2753")
@@ -397,12 +414,14 @@ class PageBuilderManutencaoMixin:
                         f"\u2705{counts.get('ok',0)}")
         lines.insert(1, "")
 
-        self._manut_summary.setReadOnly(False)
-        self._manut_summary.setPlainText("\n".join(lines))
-        self._manut_summary.setReadOnly(True)
+        summary = self._manut_summary
+        if summary is not None:
+            summary.setReadOnly(False)
+            summary.setPlainText("\n".join(lines))
+            summary.setReadOnly(True)
 
         filter_val = self._manut_filter
-        items = []
+        items: list[str] = []
         for r in results:
             for it in r.items:
                 if filter_val != "all" and it.severity != filter_val:
@@ -424,7 +443,12 @@ class PageBuilderManutencaoMixin:
         if self._cancel_event is not None:
             self._cancel_event.set()
             self._cancel_event = None
-            self._dispatch(lambda: self._manut_output.append("\n\u26a1  Processo cancelado"))
+            def _note_cancel() -> None:
+                out = self._manut_output
+                if out is not None:
+                    out.append("\n\u26a1  Processo cancelado")
+
+            self._dispatch(_note_cancel)
         else:
             self._write(self._manut_output, "")
 
@@ -446,23 +470,32 @@ class PageBuilderManutencaoMixin:
             buf: list[str] = []
             lock = threading.Lock()
 
+            def _append(text: str) -> None:
+                out = self._manut_output
+                if out is not None:
+                    out.append(text)
+
+            def _set_output(text: str) -> None:
+                out = self._manut_output
+                if out is not None:
+                    out.clear()
+                    out.setPlainText(text)
+
             def _flush() -> None:
                 with lock:
                     text = "\n".join(buf)
                     if text:
-                        self._dispatch(lambda t=text: (
-                            self._manut_output.clear(),
-                            self._manut_output.setPlainText(t),
-                        ))
+                        self._dispatch(lambda t=text: _set_output(t))
 
-            proc: subprocess.Popen | None = None
+            proc: subprocess.Popen[str] | None = None
             try:
                 proc = subprocess.Popen(
                     [setup_script, "install", mode], stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
                     cwd=str(PROJECT_ROOT),
                 )
-                assert proc.stdout is not None
+                if proc.stdout is None:
+                    raise RuntimeError("subprocess stdout is not available")
                 for line in proc.stdout:
                     if cancel.is_set() or (proc.poll() is not None and not line):
                         break
@@ -472,20 +505,20 @@ class PageBuilderManutencaoMixin:
                 if cancel.is_set():
                     proc.kill()
                     proc.wait(timeout=5)
-                    self._dispatch(lambda: self._manut_output.append(
+                    self._dispatch(lambda: _append(
                         "\n\u26a1  Processo cancelado"))
                     return
                 proc.wait(timeout=120)
                 _flush()
                 rc = proc.returncode
                 prefix = "\u2705" if rc == 0 else f"\u274c (exit {rc})"
-                self._dispatch(lambda p=prefix: self._manut_output.append(
+                self._dispatch(lambda p=prefix: _append(
                     f"\n{p}  install.sh install {mode} concluido"))
             except subprocess.TimeoutExpired:
-                self._dispatch(lambda: self._manut_output.append(
+                self._dispatch(lambda: _append(
                     "\n\u23f0  Timeout (120s)"))
             except Exception as e:
-                self._dispatch(lambda err=str(e): self._manut_output.append(
+                self._dispatch(lambda err=str(e): _append(
                     f"\n\u274c  Erro: {err}"))
             finally:
                 if proc is not None:

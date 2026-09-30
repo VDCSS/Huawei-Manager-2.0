@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QBrush, QColor, QContextMenuEvent, QPainter, QPen, QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -54,7 +54,7 @@ class _TopoView(QGraphicsView):
         super().__init__(scene)
         self._canvas = canvas
 
-    def contextMenuEvent(self, event) -> None:
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         item = self.itemAt(event.pos())
         if item:
             device_id = item.data(ITEM_DATA_KEY)
@@ -63,7 +63,7 @@ class _TopoView(QGraphicsView):
                 return
         super().contextMenuEvent(event)
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._canvas._draw()
 
@@ -107,11 +107,13 @@ class TopologyCanvas(QWidget):
 
         self._view = _TopoView(self._scene, self)
         self._view.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self._view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self._view.setFrameShape(QFrame.Shape.NoFrame)
         self._view.setStyleSheet(f"background: {C.BG_BASE}; border: none;")
-        self._view.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._view.setMouseTracking(True)
         layout.addWidget(self._view)
 
@@ -125,9 +127,6 @@ class TopologyCanvas(QWidget):
 
     def update_devices(self, devices: list[Device]) -> None:
         """Atualiza a lista de Devices e redesenha."""
-        if not devices and self._devices:
-            log.warning("update_devices: ignorando lista vazia (existem %d Devices)", len(self._devices))
-            return
         self._devices = devices
         self._device_map = {v.id: v for v in devices}
         self._draw()
@@ -333,7 +332,7 @@ class TopologyCanvas(QWidget):
             log.exception("_on_click: on_select falhou para %s", device.id)
         self._draw()
 
-    def _on_context_menu(self, event, device: Device) -> None:
+    def _on_context_menu(self, event: QContextMenuEvent, device: Device) -> None:
         """Exibe menu de contexto com editar/excluir (admin/tecnico)."""
         can_edit = role_meets(self._access_level, "tecnico")
         if not can_edit:
@@ -355,16 +354,11 @@ class TopologyCanvas(QWidget):
             }}
         """)
         edit_action = menu.addAction("\u270f\ufe0f  Editar Dispositivo")
-        delete_action = menu.addAction("\ud83d\uddd1  Excluir Dispositivo")
+        delete_action = menu.addAction("\U0001f5d1  Excluir Dispositivo")
 
-        # Converte coordenadas do evento para global
-        if hasattr(event, "globalPos"):
-            gpos = event.globalPos()
-        elif hasattr(event, "screenPos"):
-            gpos = event.screenPos().toPoint()
-        else:
-            gpos = self.mapToGlobal(self._view.mapFromScene(
-                event.scenePos() if hasattr(event, "scenePos") else QPoint(0, 0)))
+        # Converte coordenadas do evento para global (caller único é
+        # _TopoView.contextMenuEvent, sempre QContextMenuEvent).
+        gpos = event.globalPos()
 
         action = menu.exec(gpos)
         if action == edit_action and self._edit_cb:

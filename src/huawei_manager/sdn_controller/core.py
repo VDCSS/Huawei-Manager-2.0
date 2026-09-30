@@ -53,7 +53,7 @@ class DeviceState:
     device_type: str
     status: str = "unknown"
     last_seen: datetime | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict[str, Any])
 
     def to_dict(self) -> dict[str, Any]:
         """Serializa para dict (compativel com JSON)."""

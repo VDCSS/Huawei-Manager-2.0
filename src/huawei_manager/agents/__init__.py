@@ -16,4 +16,4 @@ class AgentResult:
     name: str           # "dead_code"
     status: str         # "ok" | "warning" | "error"
     summary: str        # "2 funções não utilizadas"
-    items: list[AgentItem] = field(default_factory=list)
+    items: list[AgentItem] = field(default_factory=list[AgentItem])

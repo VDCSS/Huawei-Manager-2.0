@@ -8,11 +8,13 @@ logout, copiar IP, abrir docs.
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, cast
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QKeyEvent, QKeySequence, QShortcut, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -28,6 +30,11 @@ from PySide6.QtWidgets import (
 
 import huawei_manager.constants as C
 from huawei_manager.widgets.helpers import _css_font
+
+if TYPE_CHECKING:
+    from huawei_manager._protocols import AppCoreProtocol
+
+log = logging.getLogger("huawei_manager")
 
 
 @dataclass(frozen=True)
@@ -163,7 +170,7 @@ class CommandPalette(QFrame):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._search:
-            if event.type() == QEvent.Type.KeyPress:
+            if isinstance(event, QKeyEvent):
                 key = event.key()
                 if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
                     self._list.setFocus()
@@ -172,7 +179,7 @@ class CommandPalette(QFrame):
                     self.hide()
                     return True
         elif watched is self._list:
-            if event.type() == QEvent.Type.KeyPress:
+            if isinstance(event, QKeyEvent):
                 key = event.key()
                 if key == Qt.Key.Key_Escape:
                     self._search.setFocus()
@@ -259,7 +266,7 @@ class CommandPalette(QFrame):
             self.hide()
             cmd.action()
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         # Centraliza na tela do parent
         parent = self.parentWidget()
@@ -278,7 +285,7 @@ class CommandPalette(QFrame):
         if self._filtered_commands:
             self._list.setCurrentRow(0)
 
-    def keyPressEvent(self, event) -> None:
+    def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
         # Se o foco está na lista, Escape volta para a busca (não fecha)
         if self._list.hasFocus() and key == Qt.Key.Key_Escape:
@@ -306,7 +313,7 @@ class CommandPalette(QFrame):
             super().keyPressEvent(event)
 
 
-def create_default_commands(app) -> list[Command]:
+def create_default_commands(app: AppCoreProtocol) -> list[Command]:
     """
     Cria a lista padrão de comandos para a aplicação.
     Recebe a instância do app (HuaweiRouterApp) para chamar métodos.
@@ -407,21 +414,22 @@ def create_default_commands(app) -> list[Command]:
     return cmds
 
 
-def _copy_router_ip(app) -> None:
+def _copy_router_ip(app: AppCoreProtocol) -> None:
     """Copia o IP do roteador para o clipboard."""
     ip = getattr(app, "_router_ip", None) or getattr(app, "_secrets", {}).get("host")
     if ip:
         QApplication.clipboard().setText(ip)
-        app._notify("IP copiado", f"{ip} copiado para a área de transferência", "success")
+        log.info("IP do roteador copiado para o clipboard")
 
 
-def _has_router_ip(app) -> bool:
+def _has_router_ip(app: AppCoreProtocol) -> bool:
     router_ip = getattr(app, "_router_ip", None)
     if isinstance(router_ip, str) and router_ip:
         return True
     secrets = getattr(app, "_secrets", None)
     if isinstance(secrets, dict):
-        host = secrets.get("host")
+        payload = cast(dict[str, Any], secrets)
+        host: str | None = payload.get("host")
         if isinstance(host, str) and host:
             return True
     return False

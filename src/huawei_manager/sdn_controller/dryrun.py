@@ -23,9 +23,9 @@ class DiffReport:
     """
 
     has_changes: bool = False
-    added: list[str] = field(default_factory=list)
-    removed: list[str] = field(default_factory=list)
-    context_lines: list[str] = field(default_factory=list)
+    added: list[str] = field(default_factory=list[str])
+    removed: list[str] = field(default_factory=list[str])
+    context_lines: list[str] = field(default_factory=list[str])
 
     @property
     def total_added(self) -> int:

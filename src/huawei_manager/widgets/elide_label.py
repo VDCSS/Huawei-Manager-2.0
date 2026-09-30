@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFontMetrics
+from PySide6.QtGui import QFontMetrics, QResizeEvent
 from PySide6.QtWidgets import QLabel, QWidget
 
 
@@ -19,7 +19,7 @@ class ElideLabel(QLabel):
         self._full_text = text
         self._apply_elide()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._apply_elide()
 

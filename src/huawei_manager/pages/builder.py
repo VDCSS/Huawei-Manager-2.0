@@ -53,18 +53,20 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
 
     def _page_layout(self, p: QWidget) -> QVBoxLayout:
         layout = p.layout()
-        assert isinstance(layout, QVBoxLayout)
+        if not isinstance(layout, QVBoxLayout):
+            raise TypeError("page layout must be a QVBoxLayout")
         return layout
 
     def _page_title(self, parent: QWidget, title: str, color: str, subtitle: str = "") -> None:
+        layout = self._page_layout(parent)
         lbl = QLabel(title, parent)
         lbl.setStyleSheet(f"color: {color}; font: bold {C.FONT_TITLE}px {C.FONT_UI_FAMILY}; padding: 0px; margin: 0px;")
-        parent.layout().addWidget(lbl)
+        layout.addWidget(lbl)
         if subtitle:
             sub = QLabel(subtitle, parent)
             sub.setStyleSheet(f"color: {C.FG_DIM}; font: {C.FONT_SUBHEAD}px {C.FONT_UI_FAMILY}; padding: 0px;")
-            parent.layout().addWidget(sub)
-        parent.layout().addSpacing(8)
+            layout.addWidget(sub)
+        layout.addSpacing(8)
 
     def _css_label(self, color: str, bg: str = "", font_size: int = 12, bold: bool = False) -> str:
         weight = "bold" if bold else "normal"
@@ -278,59 +280,59 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
         self._page_layout(p).addWidget(row1, stretch=3)
         self._page_layout(p).addSpacing(10)
 
-        def _make_card(parent: QWidget) -> QFrame:
+        def _make_card(parent: QWidget) -> tuple[QFrame, QVBoxLayout]:
             card = QFrame(parent)
             card.setStyleSheet(f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
             card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            card._clayout = QVBoxLayout(card)
-            card._clayout.setContentsMargins(12, 10, 12, 10)
-            card._clayout.setSpacing(2)
-            return card
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 10, 12, 10)
+            card_layout.setSpacing(2)
+            return card, card_layout
 
-        def _card_title(card: QFrame, text: str, color: str) -> QLabel:
+        def _card_title(card: QFrame, card_layout: QVBoxLayout, text: str, color: str) -> QLabel:
             lbl = QLabel(text, card)
             lbl.setStyleSheet(self._css_label(color, C.BG_INPUT, 12, True))
-            card._clayout.addWidget(lbl)
-            card._clayout.addSpacing(4)
+            card_layout.addWidget(lbl)
+            card_layout.addSpacing(4)
             return lbl
 
         # Card: Conexao
-        card1 = _make_card(row1)
-        _card_title(card1, "\U0001f50c CONEXAO", C.NEON_CYAN)
+        card1, card1_layout = _make_card(row1)
+        _card_title(card1, card1_layout, "\U0001f50c CONEXAO", C.NEON_CYAN)
         row1_layout.addWidget(card1)
 
         self._dash_conn_status = QLabel("Desconectado", card1)
         self._dash_conn_status.setStyleSheet(
             f"color: {C.NEON_RED}; font: bold 14px {C.FONT_UI_FAMILY};"
             f" background: {C.BG_INPUT};")
-        card1._clayout.addWidget(self._dash_conn_status)
+        card1_layout.addWidget(self._dash_conn_status)
 
         self._dash_conn_host = QLabel("Host: ---", card1)
         self._dash_conn_host.setStyleSheet(self._css_label(C.FG_DIM, C.BG_INPUT, 11))
-        card1._clayout.addWidget(self._dash_conn_host)
-        card1._clayout.addStretch()
+        card1_layout.addWidget(self._dash_conn_host)
+        card1_layout.addStretch()
 
         # Card: Devices
-        card2 = _make_card(row1)
-        _card_title(card2, "\U0001f4e1 DISPOSITIVOS", C.NEON_MAG)
+        card2, card2_layout = _make_card(row1)
+        _card_title(card2, card2_layout, "\U0001f4e1 DISPOSITIVOS", C.NEON_MAG)
         row1_layout.addWidget(card2)
 
         self._dash_device_online = QLabel("Online: 0", card2)
         self._dash_device_online.setStyleSheet(self._css_label(C.NEON_CYAN, C.BG_INPUT, 11))
-        card2._clayout.addWidget(self._dash_device_online)
+        card2_layout.addWidget(self._dash_device_online)
 
         self._dash_device_offline = QLabel("Offline: 0", card2)
         self._dash_device_offline.setStyleSheet(self._css_label(C.NEON_RED, C.BG_INPUT, 11))
-        card2._clayout.addWidget(self._dash_device_offline)
+        card2_layout.addWidget(self._dash_device_offline)
 
         self._dash_device_unknown = QLabel("Desconhecido: 0", card2)
         self._dash_device_unknown.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_INPUT, 11))
-        card2._clayout.addWidget(self._dash_device_unknown)
-        card2._clayout.addStretch()
+        card2_layout.addWidget(self._dash_device_unknown)
+        card2_layout.addStretch()
 
         # Card: Ultimas Operacoes
-        card3 = _make_card(row1)
-        _card_title(card3, "\U0001f4cb ULTIMAS OPERACOES", C.NEON_AMBER)
+        card3, card3_layout = _make_card(row1)
+        _card_title(card3, card3_layout, "\U0001f4cb ULTIMAS OPERACOES", C.NEON_AMBER)
         row1_layout.addWidget(card3)
 
         self._dash_audit_text = QTextEdit(card3)
@@ -343,17 +345,16 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
             }}
         """)
         self._dash_audit_text.setMinimumHeight(60)
-        card3._clayout.addWidget(self._dash_audit_text, stretch=1)
+        card3_layout.addWidget(self._dash_audit_text, stretch=1)
 
         # Card: Atalhos Rapidos (full width)
         card4 = QFrame(p)
         card4.setStyleSheet(f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
         card4_layout = QVBoxLayout(card4)
         card4_layout.setContentsMargins(12, 10, 12, 10)
-        card4._clayout = card4_layout
         self._page_layout(p).addWidget(card4, stretch=2)
 
-        _card_title(card4, "\u2328 ATALHOS RAPIDOS", C.NEON_PURP)
+        _card_title(card4, card4_layout, "\u2328 ATALHOS RAPIDOS", C.NEON_PURP)
 
         bar = QWidget(card4)
         bar_layout = QHBoxLayout(bar)
@@ -380,4 +381,5 @@ class PageBuilder(PageBuilderServicesMixin, PageBuilderManutencaoMixin, PageBuil
             None, "Escolha o diretorio", self.backup_path)
         if d:
             self.backup_path = d
-            self._backup_entry.setText(d)
+            if self._backup_entry is not None:
+                self._backup_entry.setText(d)

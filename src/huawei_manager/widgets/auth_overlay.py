@@ -2,6 +2,7 @@ import time
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QKeyEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -95,7 +96,7 @@ class AuthOverlay(QWidget):
         self._error_lbl = QLabel("", self._card)
         self._error_lbl.setWordWrap(True)
         self._error_lbl.setStyleSheet(
-            "color: #ff4444; background: transparent; border: none; font: 12px {_C.FONT_UI_FAMILY};")
+            f"color: {_C.NEON_RED}; background: transparent; border: none; font: 12px {_C.FONT_UI_FAMILY};")
         self._error_lbl.hide()
         card_layout.addWidget(self._error_lbl)
 
@@ -118,7 +119,7 @@ class AuthOverlay(QWidget):
 
         self._pw_entry.returnPressed.connect(self._verify)
 
-    def keyPressEvent(self, event) -> None:
+    def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key.Key_Escape:
             self.close_()
         super().keyPressEvent(event)
@@ -131,7 +132,7 @@ class AuthOverlay(QWidget):
         self.raise_()
         self._user_entry.setFocus()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         parent = self.parent()
         if isinstance(parent, QWidget):
             self.setGeometry(parent.rect())

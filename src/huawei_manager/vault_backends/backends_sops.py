@@ -22,7 +22,7 @@ class SopsBackend(SecretsBackend):
                 "Crie com: sops --encrypt .env > secrets.enc.yaml\n"
                 "Requer: sops CLI + chave age (SOPS_AGE_KEY_FILE)"
             )
-        self._cache: dict = {}
+        self._cache: dict[str, str] = {}
         self._refresh()
 
     def _refresh(self) -> None:

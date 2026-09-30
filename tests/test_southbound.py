@@ -493,7 +493,9 @@ class TestSSHSouthboundWithValidator:
     def test_validator_called_on_send_config(self, sb, mock_validator):
         sb.connect()
         sb.send_config(["vlan 10", "name test"])
-        mock_validator.validate.assert_called_once_with("vlan 10\nname test", "user")
+        assert mock_validator.validate.call_count == 2
+        mock_validator.validate.assert_any_call("vlan 10", "user")
+        mock_validator.validate.assert_any_call("name test", "user")
 
     def test_send_command_blocked_by_validator(self, sb, mock_validator):
         sb.connect()

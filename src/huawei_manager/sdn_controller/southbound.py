@@ -12,13 +12,17 @@ import threading
 import time
 from abc import ABC, abstractmethod
 
-from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
+from netmiko.exceptions import (  # pyright: ignore[reportMissingTypeStubs]
+    NetmikoAuthenticationException,
+    NetmikoTimeoutException,
+)
 
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.exceptions import (
     SdnAuthError,
     SdnCommandError,
     SdnConnectionError,
+    SdnError,
     SdnValidationError,
 )
 from huawei_manager.sdn_controller.validator import CommandValidator, ValidationResult
@@ -57,6 +61,23 @@ class SouthboundProtocol(ABC):
     @abstractmethod
     def is_alive(self) -> bool:
         """Retorna True se a conexao esta ativa."""
+
+    @abstractmethod
+    def invalidate_connection(self) -> None:
+        """Invalida o cache de conexao e marca como desconectado."""
+
+    @abstractmethod
+    def set_access_role(self, role: str) -> None:
+        """Atualiza o papel de acesso usado pelo validator."""
+
+    @abstractmethod
+    def send_service_commands(
+        self,
+        commands: list[str],
+        config_mode: bool = False,
+        requires_privilege: bool = False,
+    ) -> str:
+        """Executa comandos de servico (show ou config) e retorna o output."""
 
 
 def _sanitize(msg: str) -> str:
@@ -219,8 +240,8 @@ class SSHSouthbound(SouthboundProtocol):
         """Envia comandos de configuracao.
 
         Se um ``validator`` foi configurado, valida cada comando
-        antes de executar. Comandos negados disparam ``SdnAuthError``.
-        A validacao e feita no comando completo (join por newline).
+        individualmente antes de executar. Comandos negados disparam
+        ``SdnAuthError``.
 
         Falhas de execucao nao levantam: retornam ``(False, mensagem)``
         com a mensagem sanitizada (sem credenciais).
@@ -231,12 +252,12 @@ class SSHSouthbound(SouthboundProtocol):
         if not self._connected:
             raise SdnConnectionError("Not connected")
         if self._validator is not None:
-            full_cmd = "\n".join(commands)
-            vr = self._validator.validate(full_cmd, self._access_role)
-            if not vr.allowed:
-                msg = f"Config denied by policy: {vr.reason}"
-                log.warning("send_config blocked: %s — %s", full_cmd[:60], vr.reason)
-                raise SdnAuthError(msg)
+            for cmd in commands:
+                vr = self._validator.validate(cmd, self._access_role)
+                if not vr.allowed:
+                    msg = f"Config denied by policy: {vr.reason}"
+                    log.warning("send_config blocked: %s — %s", cmd[:60], vr.reason)
+                    raise SdnAuthError(msg)
         config_text = "\n".join(commands)
         try:
             ok, msg = self._session.edit_config(config_text, target="running", save=save)
@@ -271,15 +292,19 @@ class SSHSouthbound(SouthboundProtocol):
             self._session.run_cli_rpc("system-view")
 
         parts: list[str] = []
-        for cmd in commands:
-            if config_mode:
-                ok, msg = self.send_config([cmd])
-                parts.append(f">  Config applied:\n{'─' * 40}\n{msg}")
-            else:
-                out = self.send_command(cmd)
-                parts.append(f">  {cmd}\n{'─' * 40}\n{out}")
-
-        if need_sysview:
-            self._session.run_cli_rpc("quit")
+        try:
+            for cmd in commands:
+                if config_mode:
+                    ok, msg = self.send_config([cmd])
+                    parts.append(f">  Config applied:\n{'─' * 40}\n{msg}")
+                else:
+                    out = self.send_command(cmd)
+                    parts.append(f">  {cmd}\n{'─' * 40}\n{out}")
+        except SdnError:
+            self.invalidate_connection()
+            raise
+        finally:
+            if need_sysview:
+                self._session.run_cli_rpc("return")
 
         return "\n\n".join(parts)

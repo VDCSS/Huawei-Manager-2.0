@@ -9,6 +9,7 @@ import re
 import huawei_manager.constants as C
 from huawei_manager._config import audit, log
 from huawei_manager._protocols import AppCoreProtocol
+from huawei_manager.exceptions import SdnError
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import CommandExecutedPayload, ConfigChangedPayload
@@ -23,7 +24,8 @@ class CommandsMixin:
     # ══════════════════════════════════════════════════════════════════
     def _get_editor_cmd(self: AppCoreProtocol) -> str:
         """Retorna o texto atual do editor de comandos."""
-        return self._cmd_editor.toPlainText().strip()
+        editor = self._cmd_editor
+        return "" if editor is None else editor.toPlainText().strip()
 
     def _confirm_destructive(self: AppCoreProtocol, cmd: str) -> bool:
         """Valida o comando e pede confirmacao explicita para bypass de politica.
@@ -88,15 +90,17 @@ class CommandsMixin:
                           "system-view \u2192 " + cmd.splitlines()[0] + " \u2192 quit\u2026")
             try:
                 _ok, result = self._sb.send_config(cmd.strip().splitlines())
-            except RuntimeError:
+            except SdnError as exc:
                 self._sb.invalidate_connection()
+                self._write(self.out_cmd, f"\u2718  Falha SSH: {exc}")
                 return
         else:
             self._loading(self.out_cmd, f"Executando: {cmd}\u2026")
             try:
                 result = self._sb.send_command(cmd or "")
-            except RuntimeError:
+            except SdnError as exc:
                 self._sb.invalidate_connection()
+                self._write(self.out_cmd, f"\u2718  Falha SSH: {exc}")
                 return
         self._write(self.out_cmd, result)
         self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
@@ -138,7 +142,8 @@ class CommandsMixin:
             except Exception:
                 # Protecao falhou -> NAO aplicar: seguir sem preview violaria
                 # o contrato de dry-run (mudanca de estado sem visibilidade).
-                log.exception("Dry-run falhou \u2014 abortando aplicacao de config")
+                if log is not None:
+                    log.exception("Dry-run falhou \u2014 abortando aplicacao de config")
                 self._write(
                     self.out_cmd,
                     "\u2718  Dry-run falhou \u2014 configuracao NAO aplicada. Verifique o log.",
@@ -147,9 +152,9 @@ class CommandsMixin:
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
         try:
             ok, msg = self._sb.send_config(cmd.strip().splitlines())
-        except RuntimeError:
+        except SdnError as exc:
             self._sb.invalidate_connection()
-            self._write(self.out_cmd, "\u2718  Sessao SSH inativa. Conecte-se primeiro.")
+            self._write(self.out_cmd, f"\u2718  Falha SSH: {exc}")
             return
         self._write(self.out_cmd, msg)
         self._event_queue.put(Event(EventType.CONFIG_CHANGED,
@@ -168,12 +173,14 @@ class CommandsMixin:
         extraído na UI thread antes de chamar este método (roda na IO thread).
         """
         self._session_tracker.touch()
-        assert fmt, "_do_backup: fmt must be extracted from UI before calling"
+        if not fmt:
+            raise RuntimeError("_do_backup: fmt must be extracted from UI before calling")
         self._loading(self.out_backup, "Coletando configuracao para backup\u2026")
         try:
             conteudo = self._sb.send_command("display current-configuration")
-        except RuntimeError:
+        except SdnError as exc:
             self._sb.invalidate_connection()
+            self._write(self.out_backup, f"\u2718  Falha SSH: {exc}")
             return
         ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         ext  = "txt"
@@ -204,9 +211,11 @@ class CommandsMixin:
             )
             self._write(self.out_backup, resumo)
             self._dispatch(lambda: self._set_status(f"Backup: {nome}", C.NEON_CYAN))
-            audit.log_operation("backup", user=self.session._user,
-                                host=host, status="ok", file=path)
-            log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
+            if audit is not None:
+                audit.log_operation("backup", user=self.session._user,
+                                    host=host, status="ok", file=path)
+            if log is not None:
+                log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
             self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
                                         source="backup",
                                         payload=CommandExecutedPayload(
@@ -214,5 +223,6 @@ class CommandsMixin:
                                             data={"file": path},
                                         )))
         except OSError as ex:
-            log.error("Backup falhou: %s", ex)
+            if log is not None:
+                log.error("Backup falhou: %s", ex)
             self._write(self.out_backup, f"\u2718  Erro ao salvar:\n  {ex}")

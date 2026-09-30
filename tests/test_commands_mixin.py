@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, mock_open, patch, call
 
+from huawei_manager.exceptions import SdnError
 from huawei_manager.handlers.commands import CommandsMixin
 
 
@@ -98,7 +99,7 @@ class TestExecCmd:
 
     def test_runtime_error_invalidates_connection(self):
         mixin = _make_mixin()
-        mixin._sb.send_command.side_effect = RuntimeError("connection lost")
+        mixin._sb.send_command.side_effect = SdnError("connection lost")
         mixin._exec_cmd("display version")
         mixin._sb.invalidate_connection.assert_called_once()
 
@@ -136,7 +137,7 @@ class TestExecConfig:
 
     def test_runtime_error_invalidates_connection(self):
         mixin = _make_mixin()
-        mixin._sb.send_config.side_effect = RuntimeError("connection lost")
+        mixin._sb.send_config.side_effect = SdnError("connection lost")
         mixin._exec_config("interface GigabitEthernet0/0/1")
         mixin._sb.invalidate_connection.assert_called_once()
 
@@ -172,6 +173,6 @@ class TestDoBackup:
 
     def test_backup_handles_runtime_error(self):
         mixin = _make_mixin()
-        mixin._sb.send_command.side_effect = RuntimeError("connection lost")
+        mixin._sb.send_command.side_effect = SdnError("connection lost")
         mixin._do_backup(fmt="txt")
         mixin._sb.invalidate_connection.assert_called_once()

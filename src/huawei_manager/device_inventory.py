@@ -7,6 +7,7 @@ import logging
 from dataclasses import asdict
 from pathlib import Path
 from threading import Lock
+from typing import Any
 
 from huawei_manager.device_crypto import _encrypt_val
 from huawei_manager.device_models import Device
@@ -43,7 +44,7 @@ def load_devices(filename: str = DEVICE_INVENTORY_FILE) -> list[Device]:
 
 
 def save_devices(devices: list[Device], filename: str = DEVICE_INVENTORY_FILE) -> None:
-    data = {"devices": []}
+    data: dict[str, list[dict[str, Any]]] = {"devices": []}
     for v in devices:
         d = asdict(v)
         if d["password"]:

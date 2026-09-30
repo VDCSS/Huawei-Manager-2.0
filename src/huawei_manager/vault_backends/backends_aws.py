@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from typing import Any
 
 from huawei_manager.vault_backends.base import SecretsBackend
 
@@ -16,15 +17,15 @@ class AWSBackend(SecretsBackend):
 
     def __init__(self) -> None:
         try:
-            import boto3  # pyright: ignore[reportMissingImports]
+            import boto3  # pyright: ignore[reportMissingImports, reportMissingTypeStubs]
             self._boto3 = boto3
         except ImportError:
             raise RuntimeError("boto3 não instalado: pip install boto3")
 
         region = os.getenv("AWS_REGION", "us-east-1")
         self._secret_name = os.getenv("AWS_SECRET_NAME", "huawei/manager/creds")
-        self._client = boto3.client("secretsmanager", region_name=region)
-        self._cache: dict = {}
+        self._client: Any = boto3.client("secretsmanager", region_name=region)  # pyright: ignore[reportUnknownMemberType]
+        self._cache: dict[str, str] = {}
         self._refresh()
         log.debug("AWS Secrets Manager: %s  region=%s", self._secret_name, region)
 

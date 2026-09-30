@@ -23,19 +23,21 @@ class DevicesMixin:
             devices = self._device_service.load_inventory()
             if not devices:
                 log.warning("_refresh_devices: load_inventory retornou 0 devices")
-            devices = self._device_service.probe_or_simulate(devices, self._mock_mode)
-            try:
-                self._device_service.save_inventory(devices)
-            except Exception as exc:
-                log.error(
-                    "_refresh_devices: falha ao salvar inventario (mantendo "
-                    "estado em memoria): %s", exc,
-                )
-            self._devices_gen += 1
-            self._dispatch(lambda: self._update_devices_ui(devices))
         finally:
             if lock is not None:
                 lock.release()
+        # I/O pesado (probe TCP 5s/device + escrita) FORA do lock para nao
+        # travar o refresh do dashboard nem concorrer com _delete_device.
+        devices = self._device_service.probe_or_simulate(devices, self._mock_mode)
+        try:
+            self._device_service.save_inventory(devices)
+        except Exception as exc:
+            log.error(
+                "_refresh_devices: falha ao salvar inventario (mantendo "
+                "estado em memoria): %s", exc,
+            )
+        self._devices_gen += 1
+        self._dispatch(lambda: self._update_devices_ui(devices))
 
     def _update_devices_ui(self: AppCoreProtocol, devices: list[Device]) -> None:
         self._devices = devices
@@ -112,10 +114,9 @@ class DevicesMixin:
         (admin e convidado a cadastrar via dialog modal; nao-admin recebe aviso)
         ou se nenhum device estiver selecionado.
         """
-        devices = getattr(self, "_devices", None)
+        devices = self._devices
         if not devices:
-            svc = getattr(self, "_device_service", None)
-            devices = svc.load_inventory() if svc is not None else []
+            devices = self._device_service.load_inventory()
         if not devices:
             self._prompt_no_devices(action)
             return None

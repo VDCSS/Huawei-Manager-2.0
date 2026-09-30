@@ -77,7 +77,8 @@ class ServicesMixin:
         label = f"Servico: {svc.name}  |  Modo: {mode}"
         if device:
             label += f"  |  Alvo: {device.name} ({device.host})"
-        self._svc_device_lbl.setText(label)
+        if self._svc_device_lbl is not None:
+            self._svc_device_lbl.setText(label)
 
         _REJECT_PARAM = re.compile(r"[;&|`$(){}]")
 

@@ -31,6 +31,7 @@ def _mixin() -> _QObjectHost:
     mixin = _QObjectHost()
     mixin._PAGE_KEYS = PAGE_KEYS
     mixin._show_page = MagicMock()
+    mixin._toggle_command_palette = MagicMock()
     mixin._setup_bindings()
     return mixin
 

@@ -49,4 +49,3 @@ fixable = ["E", "F", "W", "I"]
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "setup"]
-skips = ["B101"]  # assert used in tests is fine

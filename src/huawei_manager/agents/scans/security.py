@@ -13,7 +13,7 @@ from huawei_manager.agents import AgentItem, AgentResult
 
 log = logging.getLogger("huawei.agents.security")
 
-SENSITIVE_PATTERNS: list[tuple[re.Pattern, str]] = [
+SENSITIVE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # Requer aspas no valor — evita matches em variáveis
     (re.compile(r'(?i)(password|passwd|secret|token|apikey)\s*[=:]\s*["\'][^"\']{4,}["\']'),
      "Credencial em texto claro"),

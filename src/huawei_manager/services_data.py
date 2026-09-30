@@ -51,7 +51,7 @@ class ServiceDef:
     description: str
     category: str
     device_types: list[str]
-    cli_commands: list[str] = field(default_factory=list)
+    cli_commands: list[str] = field(default_factory=list[str])
     yang_filter: str | None = None
     yang_source: str = "get"
     output_format: str = "text"

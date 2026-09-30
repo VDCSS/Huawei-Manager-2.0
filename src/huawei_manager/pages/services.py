@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -35,14 +36,17 @@ class PageBuilderServicesMixin:
 
     # ── Services: sub-builders ────────────────────────────────────────
 
-    def _build_services_info_row(self, parent: QWidget) -> None:
+    def _build_services_info_row(self: AppCoreProtocol, parent: QWidget) -> None:
         info_row = QWidget(parent)
         info_row.setStyleSheet(f"background: {C.BG_CARD};")
         info_row.setMaximumHeight(40)
         info_layout = QHBoxLayout(info_row)
         info_layout.setContentsMargins(0, 0, 0, 0)
-        parent.layout().addWidget(info_row)
-        parent.layout().addSpacing(10)
+        parent_layout = parent.layout()
+        if not isinstance(parent_layout, QBoxLayout):
+            raise TypeError("parent layout must be a QBoxLayout")
+        parent_layout.addWidget(info_row)
+        parent_layout.addSpacing(10)
 
         self._svc_device_lbl = QLabel("Device: (selecione um device na aba Topologia)", info_row)
         self._svc_device_lbl.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_CARD, 12, True))
@@ -58,14 +62,17 @@ class PageBuilderServicesMixin:
         self._svc_status_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
         info_layout.addStretch()
 
-    def _build_services_filter_row(self, parent: QWidget) -> None:
+    def _build_services_filter_row(self: AppCoreProtocol, parent: QWidget) -> None:
         filt_row = QWidget(parent)
         filt_row.setStyleSheet(f"background: {C.BG_CARD};")
         filt_row.setMaximumHeight(40)
         filt_layout = QHBoxLayout(filt_row)
         filt_layout.setContentsMargins(0, 0, 0, 0)
-        parent.layout().addWidget(filt_row)
-        parent.layout().addSpacing(8)
+        parent_layout = parent.layout()
+        if not isinstance(parent_layout, QBoxLayout):
+            raise TypeError("parent layout must be a QBoxLayout")
+        parent_layout.addWidget(filt_row)
+        parent_layout.addSpacing(8)
 
         cat_lbl = QLabel("Categoria:", filt_row)
         cat_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
@@ -91,15 +98,16 @@ class PageBuilderServicesMixin:
 
         self._svc_cat_cb.currentTextChanged.connect(self._on_svc_cat_changed)
 
-    def _build_services_split(self, parent: QWidget) -> None:
+    def _build_services_split(self: AppCoreProtocol, parent: QWidget) -> None:
         card = QFrame(parent)
         card.setStyleSheet(f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(12, 8, 12, 8)
         parent_layout = parent.layout()
-        assert isinstance(parent_layout, QVBoxLayout)
+        if not isinstance(parent_layout, QVBoxLayout):
+            raise TypeError("parent layout must be a QVBoxLayout")
         parent_layout.addWidget(card, stretch=1)
-        parent.layout().addSpacing(8)
+        parent_layout.addSpacing(8)
 
         split = QWidget(card)
         split_layout = QHBoxLayout(split)
@@ -178,31 +186,39 @@ class PageBuilderServicesMixin:
     # ── Services: listbox population ──────────────────────────────────
 
     def _refresh_service_list(self: AppCoreProtocol) -> None:
-        if "_svc_listbox" not in self.__dict__ or self._svc_listbox is None:
+        if "_svc_listbox" not in self.__dict__:
             return
-        self._svc_listbox.clear()
+        listbox = self._svc_listbox
+        device_lbl = self._svc_device_lbl
+        type_lbl = self._svc_type_lbl
+        status_lbl = self._svc_status_lbl
+        cat_cb = self._svc_cat_cb
+        if (listbox is None or device_lbl is None or type_lbl is None
+                or status_lbl is None or cat_cb is None):
+            return
+        listbox.clear()
         self._svc_services.clear()
 
         device = self._target_device
         if not device:
-            self._svc_device_lbl.setText("Device: (nenhum selecionado)")
-            self._svc_type_lbl.setText("Tipo: \u2014")
-            self._svc_cat_cb.blockSignals(True)
-            self._svc_cat_cb.clear()
-            self._svc_cat_cb.addItems(["Todas as Categorias"])
-            self._svc_cat_cb.blockSignals(False)
+            device_lbl.setText("Device: (nenhum selecionado)")
+            type_lbl.setText("Tipo: \u2014")
+            cat_cb.blockSignals(True)
+            cat_cb.clear()
+            cat_cb.addItems(["Todas as Categorias"])
+            cat_cb.blockSignals(False)
             self._clear_detail_panel()
             return
 
         device_type = device.type.upper()
         host_info = f"{device.host}:{device.port}" if role_meets(self._access_level, "tecnico") else device.host
-        self._svc_device_lbl.setText(f"Device: {device.name} ({host_info})")
-        self._svc_type_lbl.setText(f"Tipo: {DEVICE_TYPES.get(device_type, device_type)}")
+        device_lbl.setText(f"Device: {device.name} ({host_info})")
+        type_lbl.setText(f"Tipo: {DEVICE_TYPES.get(device_type, device_type)}")
 
         status_color = {"online": C.NEON_CYAN, "offline": C.NEON_RED,
                         "unknown": C.NEON_AMBER}.get(device.status, C.NEON_AMBER)
-        self._svc_status_lbl.setText(f"Status: {device.status}")
-        self._svc_status_lbl.setStyleSheet(
+        status_lbl.setText(f"Status: {device.status}")
+        status_lbl.setStyleSheet(
             f"color: {status_color}; background: {C.BG_CARD}; font: 11px {C.FONT_UI_FAMILY};")
 
         all_cats = get_categories_for(device_type)
@@ -210,15 +226,15 @@ class PageBuilderServicesMixin:
         cat_labels = [SERVICE_CAT_LABELS.get(c, c) for c in config_cats]
         all_labels = ["Todas as Categorias"] + cat_labels
 
-        self._svc_cat_cb.blockSignals(True)
-        self._svc_cat_cb.clear()
-        self._svc_cat_cb.addItems(all_labels)
+        cat_cb.blockSignals(True)
+        cat_cb.clear()
+        cat_cb.addItems(all_labels)
         if self._svc_cat_var in all_labels:
-            self._svc_cat_cb.setCurrentText(self._svc_cat_var)
+            cat_cb.setCurrentText(self._svc_cat_var)
         else:
-            self._svc_cat_cb.setCurrentText("Todas as Categorias")
+            cat_cb.setCurrentText("Todas as Categorias")
             self._svc_cat_var = "Todas as Categorias"
-        self._svc_cat_cb.blockSignals(False)
+        cat_cb.blockSignals(False)
 
         selected_cat = self._svc_cat_var
         label_to_cat = {v: k for k, v in SERVICE_CAT_LABELS.items()}
@@ -228,20 +244,20 @@ class PageBuilderServicesMixin:
         self._svc_services = services
 
         if not services:
-            self._svc_listbox.addItem("  Nenhum servico de configuracao para este tipo de Device")
+            listbox.addItem("  Nenhum servico de configuracao para este tipo de Device")
             self._clear_detail_panel()
             return
 
         for svc in services:
-            self._svc_listbox.addItem(f"  \u2699 {svc.name}")
+            listbox.addItem(f"  \u2699 {svc.name}")
 
-        self._svc_listbox.setCurrentRow(0)
+        listbox.setCurrentRow(0)
 
-    def _on_svc_cat_changed(self, text: str) -> None:
+    def _on_svc_cat_changed(self: AppCoreProtocol, text: str) -> None:
         self._svc_cat_var = text
         self._refresh_service_list()
 
-    def _on_service_select(self, row: int) -> None:
+    def _on_service_select(self: AppCoreProtocol, row: int) -> None:
         if row < 0 or row >= len(self._svc_services):
             self._clear_detail_panel()
             return
@@ -249,19 +265,24 @@ class PageBuilderServicesMixin:
         self._svc_current_svc = svc
         self._show_service_detail(svc)
 
-    def _clear_detail_panel(self) -> None:
-        layout = self._svc_detail_frame.layout()
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                if item and item.widget():
-                    item.widget().deleteLater()
+    def _clear_detail_panel(self: AppCoreProtocol) -> None:
+        frame = self._svc_detail_frame
+        if frame is not None:
+            layout = frame.layout()
+            if layout is not None:
+                while layout.count():
+                    item = layout.takeAt(0)
+                    w = item.widget() if item is not None else None
+                    if w is not None:
+                        w.deleteLater()
         self._svc_param_entries.clear()
         self._svc_current_svc = None
 
     def _show_service_detail(self: AppCoreProtocol, svc: ServiceDef) -> None:
         self._clear_detail_panel()
         p = self._svc_detail_frame
+        if p is None:
+            return
         p_layout = self._page_layout(p)
 
         mode_label = "Configurando" if svc.config_mode else "Executando"
@@ -269,12 +290,12 @@ class PageBuilderServicesMixin:
 
         title_lbl = QLabel(f"{mode_label}: {svc.name}", p)
         title_lbl.setStyleSheet(self._css_label(title_color, C.BG_INPUT, 13, True))
-        p_layout.addWidget(title_lbl, alignment=Qt.AlignLeft)
+        p_layout.addWidget(title_lbl, alignment=Qt.AlignmentFlag.AlignLeft)
         p_layout.addSpacing(4)
 
         cat_lbl = QLabel(f"Categoria: {svc.category}", p)
         cat_lbl.setStyleSheet(self._css_label(C.NEON_PURP, C.BG_INPUT, 10))
-        p_layout.addWidget(cat_lbl, alignment=Qt.AlignLeft)
+        p_layout.addWidget(cat_lbl, alignment=Qt.AlignmentFlag.AlignLeft)
         p_layout.addSpacing(2)
 
         cmd_frame = QFrame(p)
@@ -308,7 +329,8 @@ class PageBuilderServicesMixin:
                                     C.NEON_PURP)
         abar_layout.addWidget(btn_svc_clr)
 
-    def _build_param_fields(self, parent: QWidget, svc: ServiceDef) -> None:
+    def _build_param_fields(self: AppCoreProtocol, parent: QWidget,
+                            svc: ServiceDef) -> None:
         params = parse_params(svc)
         if not params:
             return
@@ -317,8 +339,11 @@ class PageBuilderServicesMixin:
         pf.setStyleSheet(f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
         pf_layout = QVBoxLayout(pf)
         pf_layout.setContentsMargins(8, 4, 8, 4)
-        parent.layout().addWidget(pf)
-        parent.layout().addSpacing(8)
+        parent_layout = parent.layout()
+        if not isinstance(parent_layout, QBoxLayout):
+            raise TypeError("parent layout must be a QBoxLayout")
+        parent_layout.addWidget(pf)
+        parent_layout.addSpacing(8)
 
         param_header = QLabel("PAR\u00c2METROS", pf)
         param_header.setStyleSheet(self._css_label(C.FG_DIM, C.BG_INPUT, 10, True))

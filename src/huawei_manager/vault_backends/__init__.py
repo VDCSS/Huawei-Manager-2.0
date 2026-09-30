@@ -6,6 +6,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from huawei_manager.vault_backends.backends_aws import AWSBackend
 from huawei_manager.vault_backends.backends_crypto import CryptoEnvBackend
@@ -38,7 +39,7 @@ def get_backend(project_root: str = "") -> SecretsBackend:
 
 def rotate_ssh_key(
     backend: SecretsBackend,
-    netmiko_connection=None,
+    netmiko_connection: Any = None,
 ) -> tuple[bool, str]:
     try:
         priv, pub = _generate_ed25519()

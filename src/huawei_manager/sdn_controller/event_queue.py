@@ -80,6 +80,7 @@ class EventQueue(IEventBus):
         self._subscribers: dict[EventType, list[Callable[[Event], None]]] = {}
         self._lock = threading.Lock()
         self._counter = itertools.count()
+        self._drop_count = 0
 
     def put(
         self,
@@ -98,8 +99,13 @@ class EventQueue(IEventBus):
         try:
             self._queue.put(item, block=block, timeout=timeout)
         except queue.Full:
-            _LOG.warning("EventQueue cheia (%d), descartando %s/%s",
-                         self._queue.maxsize, event.type.name, event.source)
+            self._drop_count += 1
+            if self._drop_count == 1 or self._drop_count % 100 == 0:
+                _LOG.warning(
+                    "EventQueue cheia (%d), descartando %s/%s (total: %d)",
+                    self._queue.maxsize, event.type.name, event.source,
+                    self._drop_count,
+                )
             return
         self._notify(event)
 

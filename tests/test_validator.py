@@ -181,10 +181,84 @@ class TestEdgeCases:
 
     def test_partial_match_not_denied(self, validator):
         """delete inside a word should not match deny pattern."""
-        result = validator.validate("display delete", role="user")
+        result = validator.validate("display deleted", role="user")
         assert result.allowed is True
 
     def test_reset_in_show_not_denied(self, validator):
-        """reset inside a show command should not match."""
-        result = validator.validate("display reset-reason", role="user")
+        """reset inside a word should not match deny pattern."""
+        result = validator.validate("display resetting", role="user")
         assert result.allowed is True
+
+    def test_reset_word_in_show_denied_fail_closed(self, validator):
+        """reset as a standalone word is denied even in a show command
+        (deny-first policy: fail closed on ambiguous input)."""
+        result = validator.validate("display reset-reason", role="user")
+        assert result.allowed is False
+
+
+# ── Separator invariants (security) ──────────────────────────────────────────
+
+
+class TestSeparatorInvariants:
+    """Invariantes de seguranca do buffer: deny vence allow, separadores
+    nao encadeiam comando negado, pipe nao divide."""
+
+    def test_deny_wins_over_allow_same_part(self, validator):
+        """Invariante 1: deny-list vence allow-list na mesma parte."""
+        result = validator.validate("display reset saved-configuration", role="user")
+        assert result.allowed is False
+
+    def test_semicolon_does_not_chain_denied(self, validator):
+        """Invariante 2: ; nao encadeia comando negado apos permitido."""
+        result = validator.validate(
+            "display version;reset saved-configuration", role="user"
+        )
+        assert result.allowed is False
+
+    def test_newline_does_not_chain_denied(self, validator):
+        result = validator.validate(
+            "display version\nreset saved-configuration", role="user"
+        )
+        assert result.allowed is False
+
+    def test_cr_does_not_chain_denied(self, validator):
+        result = validator.validate(
+            "display version\rreset saved-configuration", role="user"
+        )
+        assert result.allowed is False
+
+    def test_three_part_chain_denied(self, validator):
+        """Cenario do relatorio: display;system-view;reset e negado."""
+        result = validator.validate(
+            "display version;system-view;reset saved-configuration", role="user"
+        )
+        assert result.allowed is False
+
+    def test_pipe_does_not_split(self, validator):
+        """Invariante 3: pipe e filtro de output, nao separador."""
+        result = validator.validate(
+            "display cpu-usage | include cpu", role="user"
+        )
+        assert result.allowed is True
+
+    def test_pipe_with_denied_word_fail_closed(self, validator):
+        """Palavra negada apos pipe e negada (deny-first: fail closed)."""
+        result = validator.validate(
+            "display version | include reset", role="user"
+        )
+        assert result.allowed is False
+
+    def test_bypass_applies_to_chained_part(self, validator):
+        """Admin libera a parte negada do buffer encadeado (bypass)."""
+        result = validator.validate(
+            "display version;reset saved-configuration", role="admin"
+        )
+        assert result.allowed is True
+        assert result.bypass_2fa is True
+
+    def test_unknown_part_after_allowed_denied(self, validator):
+        """Parte desconhecida apos permitido tambem e negada."""
+        result = validator.validate(
+            "display version;some-random-command", role="user"
+        )
+        assert result.allowed is False

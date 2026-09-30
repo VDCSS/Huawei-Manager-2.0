@@ -16,7 +16,8 @@ def get_app() -> QApplication:
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
         )
         app = QApplication([])
-    assert isinstance(app, QApplication)
+    if not isinstance(app, QApplication):
+        raise TypeError("app must be a QApplication instance")
     return app
 
 
@@ -32,7 +33,7 @@ def apply_theme(name: str) -> None:
     if _current_theme == name:
         return
     app = QApplication.instance()
-    if app is not None:
+    if isinstance(app, QApplication):
         app.setStyleSheet(qss)
     _current_theme = name
     log.info("Theme switched to %s", name)

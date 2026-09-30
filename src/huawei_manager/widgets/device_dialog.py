@@ -91,7 +91,7 @@ class DeviceDialog(QDialog):
             "Editar Dispositivo" if is_editing else "Cadastrar Dispositivo"
         )
         self.setMinimumSize(500, 480)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         self.setStyleSheet(f"background: {C.BG_CARD};")
 
         layout = QVBoxLayout(self)

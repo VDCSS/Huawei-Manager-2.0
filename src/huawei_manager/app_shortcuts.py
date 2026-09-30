@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QObject
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -8,9 +8,12 @@ from PySide6.QtWidgets import QTextEdit, QWidget
 
 import huawei_manager.constants as C
 
+if TYPE_CHECKING:
+    from huawei_manager._protocols import AppCoreProtocol
+
 
 class ShortcutsMixin:
-    def _setup_bindings(self) -> None:
+    def _setup_bindings(self: AppCoreProtocol) -> None:
         parent = cast(QObject, self)
         QShortcut(QKeySequence("Return"), parent).activated.connect(self._on_enter)
         QShortcut(QKeySequence("Ctrl+Shift+Return"), parent).activated.connect(
@@ -31,7 +34,7 @@ class ShortcutsMixin:
             QShortcut(QKeySequence(seq), parent).activated.connect(
                 lambda *args, k=key: self._show_page(k))
 
-    def _on_enter(self) -> None:
+    def _on_enter(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
@@ -56,7 +59,7 @@ class ShortcutsMixin:
         elif page == "backup":
             self._run(lambda: self._do_backup(C.BACKUP_FMT_TEXT))
 
-    def _on_ctrl_shift_enter(self) -> None:
+    def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
@@ -65,13 +68,13 @@ class ShortcutsMixin:
             if cmd:
                 self._run_config_safe(cmd)
 
-    def _on_ctrl_d(self) -> None:
+    def _on_ctrl_d(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         self._toggle_connect()
 
-    def _on_ctrl_l(self) -> None:
+    def _on_ctrl_l(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
@@ -91,19 +94,19 @@ class ShortcutsMixin:
         elif page == "services" and self._svc_output is not None:
             self._write(self._svc_output, "")
 
-    def _on_ctrl_q(self) -> None:
+    def _on_ctrl_q(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         self.close()
 
-    def _on_ctrl_shift_a(self) -> None:
+    def _on_ctrl_shift_a(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         self._show_auth_dialog()
 
-    def _on_f5(self) -> None:
+    def _on_f5(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
@@ -115,7 +118,7 @@ class ShortcutsMixin:
         else:
             self._on_enter()
 
-    def _on_ctrl_tab(self) -> None:
+    def _on_ctrl_tab(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
@@ -127,7 +130,7 @@ class ShortcutsMixin:
         except ValueError:
             self._show_page(self._PAGE_KEYS[0])
 
-    def _on_ctrl_shift_tab(self) -> None:
+    def _on_ctrl_shift_tab(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
@@ -139,12 +142,8 @@ class ShortcutsMixin:
         except ValueError:
             self._show_page(self._PAGE_KEYS[0])
 
-    def _on_escape(self) -> None:
+    def _on_escape(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         self._on_ctrl_l()
-
-    def _toggle_command_palette(self) -> None:
-        """Override in app to show/hide command palette (Ctrl+K)."""
-        pass

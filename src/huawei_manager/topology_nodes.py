@@ -10,7 +10,13 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QGraphicsRectItem
+from PySide6.QtWidgets import (
+    QGraphicsRectItem,
+    QGraphicsSceneHoverEvent,
+    QGraphicsSceneMouseEvent,
+    QStyleOptionGraphicsItem,
+    QWidget,
+)
 
 from huawei_manager.topology_items import ITEM_DATA_KEY
 
@@ -59,7 +65,8 @@ class _DeviceNodeRect(QGraphicsRectItem):
         path.addRoundedRect(self.rect(), _RADIUS, _RADIUS)
         return path
 
-    def paint(self, painter, option, widget=None) -> None:
+    def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem,
+              widget: QWidget | None = None) -> None:
         """Draw a rounded rect with current brush and pen."""
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
@@ -72,20 +79,20 @@ class _DeviceNodeRect(QGraphicsRectItem):
 
     # ── Events ─────────────────────────────────────────────────────
 
-    def mousePressEvent(self, event) -> None:
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._canvas._on_click(self._device)
             event.accept()
         else:
             super().mousePressEvent(event)
 
-    def hoverEnterEvent(self, event) -> None:
+    def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         self.setBrush(self._hover_brush)
         if self._hover_pen is not None:
             self.setPen(self._hover_pen)
         super().hoverEnterEvent(event)
 
-    def hoverLeaveEvent(self, event) -> None:
+    def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         self.setBrush(self._normal_brush)
         if self._normal_pen is not None:
             self.setPen(self._normal_pen)

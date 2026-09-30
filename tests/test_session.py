@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from huawei_manager.audit_log import AuditLogger
-from huawei_manager.exceptions import SdnConnectionError, SdnValidationError
+from huawei_manager.exceptions import SdnCommandError, SdnConnectionError, SdnValidationError
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import EnvBackend
 
@@ -151,9 +151,10 @@ class TestDisconnect:
 
 
 class TestCmd:
-    def test_no_conn_returns_sem_conexao(self, session):
+    def test_no_conn_raises(self, session):
         session._conn = None
-        assert "Sem conexao" in session._cmd("display version")
+        with pytest.raises(SdnConnectionError):
+            session._cmd("display version")
 
     def test_returns_clean_output(self, session):
         mock_conn = MagicMock()
@@ -164,10 +165,10 @@ class TestCmd:
 
 
 class TestEditConfig:
-    def test_no_conn_returns_false(self, session):
+    def test_no_conn_raises(self, session):
         session._conn = None
-        ok, msg = session.edit_config("config text")
-        assert not ok
+        with pytest.raises(SdnConnectionError):
+            session.edit_config("config text")
 
     def test_success_returns_true(self, session):
         mock_conn = MagicMock()
@@ -209,9 +210,10 @@ class TestRunCliRpc:
         result = session.run_cli_rpc("display version")
         assert "output" in result
 
-    def test_no_conn_returns_sem_conexao(self, session):
+    def test_no_conn_raises(self, session):
         session._conn = None
-        assert "Sem conexao" in session.run_cli_rpc("display version")
+        with pytest.raises(SdnConnectionError):
+            session.run_cli_rpc("display version")
 
 
 class TestGet:
@@ -266,25 +268,25 @@ class TestProperties:
 class TestCmdPaths:
     """Additional _cmd and run_cli_timing path tests."""
 
-    def test_cmd_exception_returns_error(self, session):
-        """_cmd returns error message when command fails."""
+    def test_cmd_exception_raises(self, session):
+        """_cmd raises SdnCommandError when command fails."""
         mock_conn = MagicMock()
         mock_conn.send_command.side_effect = RuntimeError("timeout")
         session._conn = mock_conn
-        result = session._cmd("display invalid")
-        assert "ERRO" in result
+        with pytest.raises(SdnCommandError):
+            session._cmd("display invalid")
 
-    def test_run_cli_timing_no_conn(self, session):
-        """run_cli_timing returns 'Sem conexao' when not connected."""
+    def test_run_cli_timing_no_conn_raises(self, session):
+        """run_cli_timing raises SdnConnectionError when not connected."""
         session._conn = None
-        result = session.run_cli_timing("display clock")
-        assert "Sem conexao" in result
+        with pytest.raises(SdnConnectionError):
+            session.run_cli_timing("display clock")
 
-    def test_get_no_conn(self, session):
-        """get returns 'Sem conexao' when not connected."""
+    def test_get_no_conn_raises(self, session):
+        """get raises SdnConnectionError when not connected."""
         session._conn = None
-        result = session.get("full_config")
-        assert "Sem conexao" in result
+        with pytest.raises(SdnConnectionError):
+            session.get("full_config")
 
 
 class TestDisconnectErrors:

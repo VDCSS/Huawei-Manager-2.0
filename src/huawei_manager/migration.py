@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from huawei_manager.db import get_connection, init_database
 from huawei_manager.device_crypto import _decrypt_val
@@ -41,15 +42,15 @@ def load_json_inventory(json_path: str | Path) -> list[dict[str, Any]]:
         log.warning("JSON inventory not found: %s", path)
         return []
 
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw: Any = json.loads(path.read_text(encoding="utf-8"))
 
     if isinstance(raw, list):
-        return raw
+        return cast(list[dict[str, Any]], raw)
 
     if isinstance(raw, dict):
         for key in ("vnfs", "devices"):
             if key in raw and isinstance(raw[key], list):
-                return raw[key]
+                return cast(list[dict[str, Any]], raw[key])
 
     log.warning("JSON inventory has unrecognized structure: %s", path)
     return []
@@ -66,7 +67,8 @@ def _decrypt_if_present(value: str) -> str:
         return value
 
 
-def migrate_json_inventory(json_path: str | Path, conn=None) -> int:
+def migrate_json_inventory(json_path: str | Path,
+                            conn: sqlite3.Connection | None = None) -> int:
     """Migrate devices from a JSON inventory file into SQLite.
 
     Uses ``DeviceRepository.create_device`` (which re-encrypts passwords
@@ -81,7 +83,7 @@ def migrate_json_inventory(json_path: str | Path, conn=None) -> int:
         Number of devices migrated.
     """
     own_conn = conn is None
-    if own_conn:
+    if conn is None:
         conn = get_connection()
         init_database(conn)
 
