@@ -58,26 +58,25 @@ class NetmikoSession(SessionCommandsMixin):
         self.override_password = override_password
         self.override_ssh_key = override_ssh_key
 
-    # ── credenciais dinamicas ─────────────────────────────────────────
+    # ── credenciais dinamicas (somente overrides do Device — SQLite) ──
+    # NÃO há fallback para env: host/port/username/password vêm sempre do
+    # Device selecionado (cadastro SQLite, senha cifrada com VNF_ENCRYPT_KEY).
+    # Sem override → valor vazio → _validate_credentials() falha fechado.
     @property
     def _host(self) -> str:
-        return self.override_host or self._backend.get("ROUTER_HOST")
+        return self.override_host or ""
 
     @property
     def _port(self) -> int:
-        return self.override_port or int(self._backend.get("ROUTER_PORT", "22"))
+        return self.override_port or 22
 
     @property
     def _user(self) -> str:
-        if self.override_username:
-            return self.override_username
-        return self._backend.get("ROUTER_USERNAME")
+        return self.override_username or ""
 
     @property
     def _pass(self) -> str:
-        if self.override_password:
-            return self.override_password
-        return self._backend.get("ROUTER_PASSWORD")
+        return self.override_password or ""
 
     @property
     def _ssh_key(self) -> str | None:
@@ -127,20 +126,20 @@ class NetmikoSession(SessionCommandsMixin):
     def _validate_credentials(self) -> None:
         missing: list[str] = []
         if not self._host:
-            missing.append("ROUTER_HOST")
+            missing.append("host")
         if not self._user:
-            missing.append("ROUTER_USERNAME")
+            missing.append("username")
         pw = self._pass
         key = self._ssh_key
         if not pw and not key:
-            missing.append("ROUTER_PASSWORD ou ROUTER_SSH_KEY")
+            missing.append("password ou ssh_key")
         if missing:
             log.warning(
-                "Credenciais incompletas: %s — verifique .env ou cadastre um device",
+                "Credenciais incompletas: %s — cadastre/selecione um device",
                 ", ".join(missing),
             )
             raise SdnValidationError(
-                "Credenciais incompletas — verifique secrets backend: "
+                "Credenciais incompletas — verifique o device selecionado: "
                 + ", ".join(missing)
             )
 

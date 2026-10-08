@@ -165,7 +165,7 @@ class TestClearDeviceTarget:
         target_lbl = MagicMock()
         mixin = _make_mixin(_target_device=_make_device(), _device_target_lbl=target_lbl)
         mixin._clear_device_target()
-        target_lbl.setText.assert_called_once_with("(roteador padrao)")
+        target_lbl.setText.assert_called_once_with("(nenhum device)")
 
     def test_publishes_event_when_connected(self):
         sb = MagicMock()

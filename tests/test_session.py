@@ -27,12 +27,12 @@ class TestInit:
 class TestValidateCredentials:
     def test_empty_host_raises(self, session):
         with patch.object(type(session), "_host", new_callable=PropertyMock, return_value=""):
-            with pytest.raises(SdnValidationError, match="ROUTER_HOST"):
+            with pytest.raises(SdnValidationError, match="host"):
                 session._validate_credentials()
 
     def test_empty_user_raises(self, session):
         with patch.object(type(session), "_user", new_callable=PropertyMock, return_value=""):
-            with pytest.raises(SdnValidationError, match="ROUTER_USERNAME"):
+            with pytest.raises(SdnValidationError, match="username"):
                 session._validate_credentials()
 
     def test_ok(self, session):
@@ -50,7 +50,7 @@ class TestValidateCredentials:
             patch.object(type(session), "_pass", new_callable=PropertyMock, return_value=""),
             patch.object(type(session), "_ssh_key", new_callable=PropertyMock, return_value=None),
         ):
-            with pytest.raises(SdnValidationError, match="ROUTER_PASSWORD"):
+            with pytest.raises(SdnValidationError, match="password ou ssh_key"):
                 session._validate_credentials()
 
 
@@ -79,7 +79,7 @@ class TestResolveFilter:
 class TestConnect:
     def test_empty_host_raises_validation_error(self, session):
         with patch.object(type(session), "_host", new_callable=PropertyMock, return_value=""):
-            with pytest.raises(SdnValidationError, match="ROUTER_HOST"):
+            with pytest.raises(SdnValidationError, match="host"):
                 session.connect()
 
     def test_empty_user_raises_validation_error(self, session):
@@ -87,7 +87,7 @@ class TestConnect:
             patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
             patch.object(type(session), "_user", new_callable=PropertyMock, return_value=""),
         ):
-            with pytest.raises(SdnValidationError, match="ROUTER_USERNAME"):
+            with pytest.raises(SdnValidationError, match="username"):
                 session.connect()
 
     def test_no_pass_no_key_raises_validation_error(self, session):
@@ -97,7 +97,7 @@ class TestConnect:
             patch.object(type(session), "_pass", new_callable=PropertyMock, return_value=""),
             patch.object(type(session), "_ssh_key", new_callable=PropertyMock, return_value=None),
         ):
-            with pytest.raises(SdnValidationError, match="ROUTER_PASSWORD"):
+            with pytest.raises(SdnValidationError, match="password ou ssh_key"):
                 session.connect()
 
     @patch("huawei_manager.session.ConnectHandler")
@@ -233,21 +233,22 @@ class TestProperties:
         session.override_username = "root"
         assert session._user == "root"
 
-    def test_user_fallback(self, session):
-        """_user falls back to backend when override is empty."""
+    def test_user_no_override_is_empty(self, session):
+        """Sem override → vazio (sem fallback para env): valida fail-closed."""
         session.override_username = ""
-        # Set via backend
-        assert session._user == session._backend.get("ROUTER_USERNAME")
+        session._backend.put("ROUTER_USERNAME", "admin")
+        assert session._user == ""
 
     def test_pass_override(self, session):
         """_pass returns override_password when set."""
         session.override_password = "s3cret"
         assert session._pass == "s3cret"
 
-    def test_pass_fallback(self, session):
-        """_pass falls back to backend when override is empty."""
+    def test_pass_no_override_is_empty(self, session):
+        """Sem override → vazio (sem fallback para env): valida fail-closed."""
         session.override_password = ""
-        assert session._pass == session._backend.get("ROUTER_PASSWORD")
+        session._backend.put("ROUTER_PASSWORD", "x")
+        assert session._pass == ""
 
     def test_ssh_key_none_when_empty(self, session):
         """_ssh_key returns None when no key is configured."""

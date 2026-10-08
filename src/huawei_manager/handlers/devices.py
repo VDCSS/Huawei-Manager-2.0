@@ -158,7 +158,7 @@ class DevicesMixin:
         self.session.override_ssh_key = None
         if self._topo_canvas is not None:
             self._topo_canvas.deselect()
-        self._device_target_lbl.setText("(roteador padrao)")
+        self._device_target_lbl.setText("(nenhum device)")
         if self._device_info_lbl is not None:
             self._device_info_lbl.setText("  Nenhum device selecionado")
         if self._sb.is_alive():

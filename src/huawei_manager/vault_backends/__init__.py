@@ -56,7 +56,8 @@ def rotate_ssh_key(
         deployed = False
         push_msg = "  (sem conexão SSH ativa — chave salva localmente)"
         if netmiko_connection and netmiko_connection.is_alive():
-            username = backend.get("ROUTER_USERNAME", "admin")
+            # Username da própria conexão ativa (netmiko) — sem ler env.
+            username = getattr(netmiko_connection, "username", None) or "admin"
             pub_b64 = pub.split()[1] if len(pub.split()) >= 2 else pub
             cmds = [
                 "system-view",

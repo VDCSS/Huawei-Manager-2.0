@@ -91,10 +91,12 @@ class SshMixin:
     def _connect_with_device(self: AppCoreProtocol, device: Device) -> None:
         if self._sb.is_alive():
             self._sb.disconnect()
+        # Fail-closed: sem fallback para env — credenciais vêm só do Device.
+        # Device sem username/password ssh_key → _validate_credentials() aborta.
         self.session.override_host = device.host
         self.session.override_port = device.port
-        self.session.override_username = device.username or None
-        self.session.override_password = device.password or None
+        self.session.override_username = device.username
+        self.session.override_password = device.password
         self.session.override_ssh_key = device.ssh_key or None
         self._set_status(f"Conectando ao device {device.name}\u2026", C.NEON_AMBER)
         self._set_conn_btn(disabled=True)
