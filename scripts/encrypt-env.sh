@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Encrypt .env to .env.enc using SECRETS_KEY
+# Encrypt the user .env (~/.config/huawei-manager/.env) to .env.enc using SECRETS_KEY
 # Usage: ./scripts/encrypt-env.sh [input_file] [output_file]
-# Requires: SECRETS_KEY env var or .env with SECRETS_KEY set
+# Requires: SECRETS_KEY env var or SECRETS_KEY no .env do usuario
+# Default INPUT = ~/.config/huawei-manager/.env (fonte de verdade; ver setup/ensure_env.py)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+USER_ENV="$HOME/.config/huawei-manager/.env"
 
-INPUT="${1:-$PROJECT_ROOT/.env}"
+INPUT="${1:-$USER_ENV}"
 OUTPUT="${2:-$PROJECT_ROOT/.env.enc}"
 KEY="${SECRETS_KEY:-}"
 
 if [ -z "$KEY" ]; then
-  if [ -f "$PROJECT_ROOT/.env" ]; then
-    KEY=$(grep -E '^SECRETS_KEY=' "$PROJECT_ROOT/.env" | cut -d= -f2-)
+  if [ -f "$USER_ENV" ]; then
+    KEY=$(grep -E '^SECRETS_KEY=' "$USER_ENV" | cut -d= -f2-)
   fi
 fi
 

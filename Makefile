@@ -60,6 +60,12 @@ encrypt-env:
 decrypt-env:
 	SECRETS_KEY=$${SECRETS_KEY} scripts/decrypt-env.sh
 
+# Regenera secrets.enc.yaml (backend sops) a partir do .env do usuario.
+# --output-type yaml é obrigatório: SopsBackend faz yaml.safe_load() no output.
+encrypt-sops:
+	sops --encrypt --input-type dotenv --output-type yaml \
+	  ~/.config/huawei-manager/.env > secrets.enc.yaml
+
 # ── Testes / CI ─────────────────────────────────────────────────────
 test:
 	$(PY) -m pytest
@@ -90,4 +96,4 @@ clean-all: clean
 
 help:
 	@echo "Targets: install install-prod fonts run reinstall reinstall-prod uninstall"
-	@echo "         test lint typecheck coverage ci encrypt-env decrypt-env clean clean-all"
+	@echo "         test lint typecheck coverage ci encrypt-env decrypt-env encrypt-sops clean clean-all"

@@ -2,17 +2,18 @@
 set -euo pipefail
 # Decrypt .env.enc to stdout using SECRETS_KEY
 # Usage: ./scripts/decrypt-env.sh [input_file]
-# Requires: SECRETS_KEY env var
+# Requires: SECRETS_KEY env var (fallback: SECRETS_KEY no .env do usuario)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+USER_ENV="$HOME/.config/huawei-manager/.env"
 
 INPUT="${1:-$PROJECT_ROOT/.env.enc}"
 KEY="${SECRETS_KEY:-}"
 
 if [ -z "$KEY" ]; then
-  if [ -f "$PROJECT_ROOT/.env" ]; then
-    KEY=$(grep -E '^SECRETS_KEY=' "$PROJECT_ROOT/.env" | cut -d= -f2-)
+  if [ -f "$USER_ENV" ]; then
+    KEY=$(grep -E '^SECRETS_KEY=' "$USER_ENV" | cut -d= -f2-)
   fi
 fi
 

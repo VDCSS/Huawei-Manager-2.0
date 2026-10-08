@@ -186,12 +186,8 @@ O arquivo `.env` é auto-gerado em `~/.config/huawei-manager/.env` no primeiro b
 Edite-o para configurar credenciais e backends:
 
 ```ini
-ROUTER_HOST=192.168.1.1
-ROUTER_PORT=22
-ROUTER_USERNAME=admin
-ROUTER_PASSWORD=
+# host/port/username/password vêm do cadastro de devices (SQLite)
 ROUTER_SSH_KEY=~/.ssh/huawei_ed25519
-# Verificação de host key: strict | tofu | off
 ROUTER_HOSTKEY_VERIFY=strict
 
 # Secrets backend: env | crypto | sops | vault | aws
@@ -234,8 +230,9 @@ make coverage        # pytest --cov + relatório de cobertura
 make ci              # lint + test + typecheck (pipeline completa)
 
 # Secrets
-make encrypt-env     # Criptografa .env → .env.enc
-make decrypt-env     # Descriptografa .env.enc → .env
+make encrypt-env     # Criptografa ~/.config/huawei-manager/.env → .env.enc
+make decrypt-env     # Descriptografa .env.enc → stdout
+make encrypt-sops    # Regenera secrets.enc.yaml (sops/age) a partir do .env do usuario
 
 # Manutenção
 make reinstall       # pip install -e ".[dev,vault,aws]" (após git pull)

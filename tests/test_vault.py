@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -140,10 +141,19 @@ class TestCryptoEnvBackend:
 
 
 class TestSopsBackend:
-    def test_no_secret_file_raises(self, tmp_path, monkeypatch):
+    def test_no_secret_file_raises(self, tmp_path):
+        """Arquivo inexistente (path explícito) → RuntimeError antes do subprocess."""
+        with pytest.raises(RuntimeError, match="nao encontrado"):
+            SopsBackend(secret_file=tmp_path / "nao_existe.yaml")
+
+    def test_default_path_is_repo_root_not_cwd(self, tmp_path, monkeypatch):
+        """Default aponta para a raiz do repo mesmo com CWD em outro lugar."""
+        from huawei_manager.vault_backends.backends_sops import _default_secret_file
+
+        repo_root = Path(__file__).resolve().parents[1]
         monkeypatch.chdir(tmp_path)
-        with pytest.raises(RuntimeError):
-            SopsBackend()
+        assert _default_secret_file() == repo_root / "secrets.enc.yaml"
+        assert _default_secret_file().is_absolute()
 
 
 class TestGetBackend:

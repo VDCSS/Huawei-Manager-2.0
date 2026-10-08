@@ -11,15 +11,27 @@ from huawei_manager.vault_backends.base import SecretsBackend
 log = logging.getLogger("huawei.vault")
 
 
+def _default_secret_file() -> Path:
+    """Caminho padrão de secrets.enc.yaml — raiz do repo, independente do CWD."""
+    # src/huawei_manager/vault_backends/backends_sops.py → parents[3]
+    return Path(__file__).resolve().parents[3] / "secrets.enc.yaml"
+
+
 class SopsBackend(SecretsBackend):
     """Le de secrets.enc.yaml descriptografado via SOPS (age)."""
 
-    def __init__(self) -> None:
-        self._secret_file = Path("secrets.enc.yaml")
+    def __init__(self, secret_file: Path | None = None) -> None:
+        # Raiz do repo — não depender do CWD.
+        self._secret_file = secret_file or _default_secret_file()
         if not self._secret_file.exists():
             raise RuntimeError(
-                "Arquivo secrets.enc.yaml nao encontrado.\n"
-                "Crie com: sops --encrypt .env > secrets.enc.yaml\n"
+                f"Arquivo {self._secret_file.name} nao encontrado em "
+                f"{self._secret_file.parent}.\n"
+                "Crie com: make encrypt-sops\n"
+                "  (sops --encrypt --input-type dotenv --output-type yaml "
+                "~/.config/huawei-manager/.env > secrets.enc.yaml)\n"
+                "O --output-type yaml e obrigatorio: este backend faz "
+                "yaml.safe_load() no output.\n"
                 "Requer: sops CLI + chave age (SOPS_AGE_KEY_FILE)"
             )
         self._cache: dict[str, str] = {}
