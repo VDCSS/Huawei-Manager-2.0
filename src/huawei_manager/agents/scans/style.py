@@ -3,6 +3,8 @@
 False-positives intencionalmente ignorados:
 - Qt event overrides (mousePressEvent, closeEvent, enterEvent, etc.) —
   o Qt exige camelCase e não podem ser snake_case.
+- Qt API methods usados via self nos mixins (focusWidget, setText, ...) —
+  mesmo motivo: o nome é do Qt, não nosso.
 - Métodos privados (_prefixo) — são auto-documentados pelo nome.
 """
 
@@ -47,6 +49,7 @@ QT_EVENT_OVERRIDES: set[str] = {
     "setUpdatesEnabled", "unsetCursor",
     "mapToGlobal", "mapFromGlobal",
     "rect", "geometry", "width", "height", "size", "pos", "x", "y",
+    "focusWidget",  # QWidget.focusWidget() — declarado em _protocols.py
     "sizeHint", "minimumSizeHint", "sizePolicy",
     "adjustSize", "setSpacing", "spacing", "setMargin", "margin",
     "addWidget", "addLayout", "addSpacing", "addStretch", "addSeparator",

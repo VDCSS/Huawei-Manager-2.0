@@ -35,6 +35,7 @@ KNOWN_OK: set[str] = {
 LOCAL_PACKAGES: set[str] = {
     "agents", "huawei_manager", "tests",
     "_factories",  # test helper module (tests/_factories.py)
+    "ensure_env",  # script local setup/ensure_env.py (import via sys.path nos testes)
 }
 
 # Package name → módulo importável (quando diferem)
