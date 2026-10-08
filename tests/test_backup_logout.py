@@ -44,6 +44,7 @@ def _make_auth_mixin(**attrs) -> AuthMixin:
         _watcher=MagicMock(),
         _sb=MagicMock(),
         _rebuild_page=MagicMock(),
+        _current_page=None,
         content=MagicMock(),
     )
     for k, v in defaults.items():

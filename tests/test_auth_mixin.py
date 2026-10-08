@@ -5,9 +5,9 @@ com mocks.
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
-from PySide6.QtWidgets import QMessageBox, QWidget
+from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
 from huawei_manager.handlers.auth import AuthMixin
 
@@ -24,6 +24,7 @@ def _make_mixin(**attrs) -> AuthMixin:
         _watcher=MagicMock(),
         _sb=MagicMock(),
         _rebuild_page=MagicMock(),
+        _current_page=None,
         content=MagicMock(),
         ADMIN_MAX_ATTEMPTS=3,
         ADMIN_LOCKOUT_SECS=300,
@@ -116,3 +117,63 @@ class TestShowAuthDialog:
         with patch("huawei_manager.handlers.auth.QMessageBox") as mock_msgbox:
             mixin._show_auth_dialog()
         mock_msgbox.warning.assert_called_once()
+
+
+class TestRebuildForAccessChange:
+    """Troca de nível de acesso reconstrói a página ATUAL (não só topology).
+
+    Regressão: login com a aba Manutenção aberta deixava a página presa em
+    "Acesso Restrito" (o botão de auth passava a perguntar sair da sessão).
+    """
+
+    def test_current_manutencao_rebuilt_then_topology(self):
+        mixin = _make_mixin(_current_page="manutencao")
+        mixin._rebuild_for_access_change()
+        assert mixin._rebuild_page.call_args_list == [
+            call("manutencao"),
+            call("topology"),
+        ]
+
+    def test_current_topology_rebuilt_once(self):
+        mixin = _make_mixin(_current_page="topology")
+        mixin._rebuild_for_access_change()
+        mixin._rebuild_page.assert_called_once_with("topology")
+
+    def test_no_current_page_defaults_to_topology(self):
+        mixin = _make_mixin(_current_page=None)
+        mixin._rebuild_for_access_change()
+        mixin._rebuild_page.assert_called_once_with("topology")
+
+    def test_login_rebuilds_current_page(self):
+        """Login com Manutenção ativa reconstrói a própria aba."""
+        if QApplication.instance() is None:
+            QApplication([])
+        mixin = _make_mixin(_current_page="manutencao", content=QWidget())
+        mixin._show_auth_dialog()
+        overlay = mixin._auth_overlay
+        assert overlay is not None
+
+        overlay.on_result("tecnico", 0, 0)
+
+        assert mixin._access_level == "tecnico"
+        assert mixin._rebuild_page.call_args_list == [
+            call("manutencao"),
+            call("topology"),
+        ]
+        mixin._watcher.start.assert_called_once()
+
+    def test_logout_rebuilds_current_page(self):
+        mixin = _make_mixin(_access_level="admin", _current_page="manutencao")
+        with (
+            patch("huawei_manager.handlers.auth.log"),
+            patch(
+                "huawei_manager.handlers.auth.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ),
+        ):
+            mixin._show_auth_dialog()
+        assert mixin._access_level == "user"
+        assert mixin._rebuild_page.call_args_list == [
+            call("manutencao"),
+            call("topology"),
+        ]

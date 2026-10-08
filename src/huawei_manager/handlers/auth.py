@@ -35,7 +35,7 @@ class AuthMixin:
             self._sb.disconnect()
             self._mock_mode = False
             self._watcher.stop()
-            self._rebuild_page("topology")
+            self._rebuild_for_access_change()
             if log is not None:
                 log.info("Acesso: deslogado")
             return
@@ -61,7 +61,7 @@ class AuthMixin:
                 self._sb.set_access_role(level)
                 self._admin_attempts = 0
                 self._admin_locked_until = 0
-                self._rebuild_page("topology")
+                self._rebuild_for_access_change()
                 if level == "tecnico":
                     self._watcher.start()
                 else:
@@ -85,6 +85,20 @@ class AuthMixin:
         )
         self._auth_overlay = overlay
         overlay.show()
+
+    def _rebuild_for_access_change(self: AppCoreProtocol) -> None:
+        """Reconstrói as páginas após troca de nível de acesso.
+
+        A página ATUAL é reconstruída — sem isso ela mantém a UI do nível
+        anterior (ex.: aba Manutenção presa em "Acesso Restrito" depois do
+        login, e o botão de auth passa a perguntar se quer sair da sessão).
+        A topology é invalidada para rebuild lazy na próxima visita, quando
+        não é a página corrente.
+        """
+        current = self._current_page or "topology"
+        self._rebuild_page(current)
+        if current != "topology":
+            self._rebuild_page("topology")
 
     def _require_access(self: AppCoreProtocol, level: str = "admin") -> bool:
         """Verifica se o nivel de acesso atual atende ao requisito.
