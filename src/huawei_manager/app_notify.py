@@ -15,8 +15,14 @@ if TYPE_CHECKING:
 
 _app_log = logging.getLogger("huawei.app")
 
+# Base só para tipagem: o Pyrefly rejeita expressão condicional como base de
+# classe (`invalid-inheritance`). Em tempo de checagem é QMainWindow (para
+# tipar super().closeEvent); em runtime é object — o MRO concreto vem da
+# composição (AppCore → NotifyMixin → QMainWindow → ThreadingMixin).
+_NotifyBase = QMainWindow if TYPE_CHECKING else object
 
-class NotifyMixin(QMainWindow if TYPE_CHECKING else object):
+
+class NotifyMixin(_NotifyBase):
     if TYPE_CHECKING:
         # Membros do AppCore usados aqui (self é implícito: closeEvent precisa
         # de super(), que não funciona com self de protocolo).

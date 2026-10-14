@@ -223,7 +223,12 @@ class PageBuilderServicesMixin:
 
         all_cats = get_categories_for(device_type)
         config_cats = [c for c in all_cats if c.startswith("config-")]
-        cat_labels = [SERVICE_CAT_LABELS.get(c, c) for c in config_cats]
+        # Tipos sem serviços de configuração (ex.: FIREWALL, AP) passam a listar
+        # as categorias de leitura, para não deixar a aba vazia.
+        type_has_config = any(s.config_mode
+                              for s in get_services_for(device_type))
+        cats = config_cats if type_has_config else all_cats
+        cat_labels = [SERVICE_CAT_LABELS.get(c, c) for c in cats]
         all_labels = ["Todas as Categorias"] + cat_labels
 
         cat_cb.blockSignals(True)
@@ -237,19 +242,21 @@ class PageBuilderServicesMixin:
         cat_cb.blockSignals(False)
 
         selected_cat = self._svc_cat_var
-        label_to_cat = {v: k for k, v in SERVICE_CAT_LABELS.items()}
+        label_to_cat = dict(zip(cat_labels, cats))
         cat_filter = None if selected_cat == "Todas as Categorias" else label_to_cat.get(selected_cat)
         services = get_services_for(device_type, category=cat_filter)
-        services = [s for s in services if s.config_mode]
+        if type_has_config:
+            services = [s for s in services if s.config_mode]
         self._svc_services = services
 
         if not services:
-            listbox.addItem("  Nenhum servico de configuracao para este tipo de Device")
+            listbox.addItem("  Nenhum servico disponivel para este tipo de Device")
             self._clear_detail_panel()
             return
 
         for svc in services:
-            listbox.addItem(f"  \u2699 {svc.name}")
+            icon = "\u2699" if svc.config_mode else "\u25b6"
+            listbox.addItem(f"  {icon} {svc.name}")
 
         listbox.setCurrentRow(0)
 

@@ -79,19 +79,18 @@ def parse_params(service: ServiceDef) -> list[tuple[str, str]]:
     names = re.findall(r"<([^>]+)>", desc)
     if not names:
         return params
-    parts = re.split(r"<[^>]+>", desc)
-    tokens = default_cmd.split()
-    idx = 0
-    for name in names:
-        label = name.replace("|", "/")
-        default = ""
-        template_before = parts[len(params)].strip()
-        before_tokens = template_before.split() if template_before else []
-        idx += len(before_tokens)
-        if idx < len(tokens):
-            default = tokens[idx]
-            idx += 1
-        params.append((label, default))
+
+    # Casa os literais entre placeholders contra o comando concreto para
+    # extrair os defaults. Tolerante a espaços e preserva placeholders
+    # repetidos (ex.: `<ip> ... <ip>` de NAT server), que antes colapsavam.
+    literals = re.split(r"<[^>]+>", desc)
+    pattern = r"\s*(\S+)\s*".join(
+        re.escape(" ".join(literal.split())) for literal in literals
+    )
+    match = re.match(pattern, " ".join(default_cmd.split()))
+    defaults = list(match.groups()) if match else [""] * len(names)
+    for name, default in zip(names, defaults):
+        params.append((name.replace("|", "/"), default))
     return params
 
 

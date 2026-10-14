@@ -126,7 +126,7 @@ CLI_FILTERS: dict[str, str] = {
     "vrfs":                "display ip vpn-instance",
     "ospf":                "display ospf peer",
     "lldp":                "display lldp neighbor brief",
-    "qos":                 "display qos policy",
+    "qos":                 "display traffic policy",
     "huawei_mpls":         "display mpls ldp peer",
 }
 
@@ -165,7 +165,7 @@ BUILTIN_CMDS: frozenset[str] = frozenset({
     "display interface", "display counters interface",
     "display ip routing-table", "display bgp peer",
     "display ip vpn-instance", "display ospf peer",
-    "display qos policy", "display mpls ldp peer",
+    "display traffic policy", "display mpls ldp peer",
 })
 
 CMD_TEMPLATES: dict[str, str] = {

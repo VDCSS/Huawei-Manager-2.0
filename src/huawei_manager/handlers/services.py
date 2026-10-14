@@ -33,9 +33,17 @@ def _template_to_pattern(tpl: str) -> re.Pattern[str]:
 
 
 def _build_service_allow_patterns(svc: ServiceDef) -> list[re.Pattern[str]]:
-    """Monta a allowlist a partir do template (description) e comandos concretos."""
+    """Monta a allowlist a partir do template (description) e comandos concretos.
+
+    Cada template entra como padrão literal (``<x>`` → ``.+``) E é quebrado em
+    ``|`` como alternância de comandos possíveis (ex.: ``"shutdown | undo
+    shutdown"``). O padrão literal é necessário para templates que usam ``|``
+    como filtro de CLI (ex.: ``display current-configuration | include sysname``),
+    onde a quebra por ``|`` produziria alternativas inúteis.
+    """
     patterns: list[re.Pattern[str]] = []
     for tpl in [svc.description, *svc.cli_commands]:
+        patterns.append(_template_to_pattern(tpl))
         for alt in tpl.split("|"):
             alt = alt.strip()
             if alt:
@@ -85,14 +93,26 @@ class ServicesMixin:
         final_svc = svc
         if svc.config_mode and self._svc_param_entries:
             cmd = svc.description
-            for name, entry in self._svc_param_entries.items():
+            # Substituição posicional: usa o texto REAL do placeholder (ex.:
+            # `<permit|deny>`, que o label de UI exibe como `permit/deny`) e
+            # substitui apenas a 1ª ocorrência de cada um, preservando
+            # placeholders repetidos (ex.: dois `<ip>` em NAT server).
+            placeholders = re.findall(r"<[^>]+>", cmd)
+            entries = list(self._svc_param_entries.values())
+            if len(placeholders) != len(entries):
+                self._write(self._svc_output,
+                    "\u2718  Servico inconsistente: "
+                    f"{len(placeholders)} placeholder(s) para {len(entries)} "
+                    "campo(s). Nada foi executado.")
+                return
+            for placeholder, entry in zip(placeholders, entries):
                 val = entry.text().strip()
                 if _REJECT_PARAM.search(val):
                     self._write(self._svc_output,
-                        f"\u2718  Parametro '{name}' contem caracteres invalidos "
-                        f"(& ; | ` $ ( ) {{ }}).")
+                        f"\u2718  Parametro '{placeholder}' contem caracteres "
+                        "invalidos (& ; | ` $ ( ) { }).")
                     return
-                cmd = cmd.replace(f"<{name}>", val)
+                cmd = cmd.replace(placeholder, val, 1)
             final_svc = ServiceDef(
                 id=svc.id, name=svc.name, description=svc.description,
                 category=svc.category, device_types=svc.device_types,
