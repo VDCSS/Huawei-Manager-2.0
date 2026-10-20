@@ -7,6 +7,7 @@ import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.authz import role_meets
+from huawei_manager.sdn_controller.drivers.factory import driver_for
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import DeviceDisconnectedPayload
 from huawei_manager.widgets.device_dialog import DeviceDialog
@@ -85,6 +86,9 @@ class DevicesMixin:
 
     def _on_device_selected(self: AppCoreProtocol, device: Device) -> None:
         self._target_device = device
+        # Factory (Gap 1): o driver passa a refletir o tipo do dispositivo
+        # selecionado (ROUTER/SWITCH/FIREWALL) — contrato BaseDriver.
+        self._drv = driver_for(device, self._sb, self._event_queue)
         overrides = self._device_service.set_target(device)
         if overrides.host:
             self.session.override_host = overrides.host

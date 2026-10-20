@@ -7,9 +7,10 @@ import os
 import re
 
 import huawei_manager.constants as C
-from huawei_manager._config import audit, log
+from huawei_manager import _config
 from huawei_manager._protocols import AppCoreProtocol
-from huawei_manager.exceptions import SdnError
+from huawei_manager.command import ConfigCommand, audit_config_op
+from huawei_manager.exceptions import SdnError, SnapshotError
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import CommandExecutedPayload, ConfigChangedPayload
@@ -142,26 +143,140 @@ class CommandsMixin:
             except Exception:
                 # Protecao falhou -> NAO aplicar: seguir sem preview violaria
                 # o contrato de dry-run (mudanca de estado sem visibilidade).
-                if log is not None:
-                    log.exception("Dry-run falhou \u2014 abortando aplicacao de config")
+                if _config.log is not None:
+                    _config.log.exception("Dry-run falhou \u2014 abortando aplicacao de config")
                 self._write(
                     self.out_cmd,
                     "\u2718  Dry-run falhou \u2014 configuracao NAO aplicada. Verifique o log.",
                 )
                 return
         self._loading(self.out_cmd, "Aplicando configuracao\u2026")
+        # Command pattern: snapshot pré-mudança (fail-closed) + mutação.
+        # Sem snapshot não há rollback possível — nada é aplicado.
+        command = ConfigCommand(
+            cmd.strip().splitlines(),
+            read_state=lambda: self._sb.send_command(
+                "display current-configuration"),
+            apply_fn=lambda lines: self._sb.send_config(lines),
+            dry_run=dry_run,
+        )
         try:
-            ok, msg = self._sb.send_config(cmd.strip().splitlines())
-        except SdnError as exc:
+            result = command.execute()
+        except SnapshotError as exc:
             self._sb.invalidate_connection()
-            self._write(self.out_cmd, f"\u2718  Falha SSH: {exc}")
+            self._write(self.out_cmd,
+                         f"\u2718  {exc} \u2014 configura\u00e7\u00e3o N\u00c3O aplicada.")
+            audit_config_op(
+                _config.audit,
+                op="config_apply",
+                user=self.session._user,
+                host=self.session._host,
+                status="blocked",
+                reason="snapshot falhou",
+            )
             return
-        self._write(self.out_cmd, msg)
+        except SdnError as exc:
+            # Falha na aplicação: a conexão pode ter caído no meio da
+            # mutação — invalida e mantém o comando (snapshot válido)
+            # para permitir rollback depois de reconectar.
+            self._sb.invalidate_connection()
+            self._last_config_command = command
+            self._write(self.out_cmd, f"\u2718  Falha SSH: {exc}")
+            audit_config_op(
+                _config.audit,
+                op="config_apply",
+                user=self.session._user,
+                host=self.session._host,
+                status="error",
+                reason="falha ssh",
+                lines=len(command.lines),
+            )
+            return
+        self._last_config_command = command
+        self._write(self.out_cmd, result.message)
+        audit_config_op(
+            _config.audit,
+            op="config_apply",
+            user=self.session._user,
+            host=self.session._host,
+            status=result.status,
+            duration_ms=result.duration_ms,
+            lines=len(command.lines),
+        )
         self._event_queue.put(Event(EventType.CONFIG_CHANGED,
                                     source="editor",
                                     payload=ConfigChangedPayload(
-                                        status="ok" if ok else "error",
+                                        status=result.status,
                                     )))
+
+    # ══════════════════════════════════════════════════════════════════
+    #  ROLLBACK (Command pattern)
+    # ══════════════════════════════════════════════════════════════════
+    def _rollback_last_config(self: AppCoreProtocol) -> None:
+        """Desfaz a última configuração aplicada (UI thread → _run).
+
+        Sem snapshot registrado não faz nada (nada a desfazer). O
+        trabalho pesado (leitura/diff/envio) roda na IO thread via
+        ``_run``, que também garante dispositivo selecionado + sessão.
+        """
+        command = self._last_config_command
+        if command is None:
+            self._write(
+                self.out_cmd,
+                "\u2139  Nada a desfazer \u2014 nenhuma configura\u00e7\u00e3o "
+                "aplicada nesta sess\u00e3o.",
+            )
+            return
+        self._run(lambda: self._do_rollback_config(command))
+
+    def _do_rollback_config(self: AppCoreProtocol,
+                            command: ConfigCommand) -> None:
+        """Executa o rollback do ``command`` (IO thread)."""
+        self._session_tracker.touch()
+        self._loading(self.out_cmd, "Desfazendo \u00faltima configura\u00e7\u00e3o\u2026")
+        try:
+            result = command.rollback()
+        except SdnError as exc:
+            self._sb.invalidate_connection()
+            self._write(self.out_cmd,
+                         f"\u2718  Falha SSH no rollback: {exc}")
+            audit_config_op(
+                _config.audit,
+                op="config_rollback",
+                user=self.session._user,
+                host=self.session._host,
+                status="error",
+                reason="falha ssh",
+            )
+            self._dispatch(lambda: self._set_status(
+                "Rollback: falha SSH", C.NEON_RED))
+            return
+        self._write(self.out_cmd, result.message)
+        if result.ok:
+            # Restauração completa confirmada por verificação — não há
+            # mais o que desfazer; parcial/error mantêm o snapshot para
+            # nova tentativa ou diagnóstico.
+            self._last_config_command = None
+        audit_config_op(
+            _config.audit,
+            op="config_rollback",
+            user=self.session._user,
+            host=self.session._host,
+            status=result.status,
+            duration_ms=result.duration_ms,
+            restored=result.restored,
+            pending=result.pending,
+        )
+        self._event_queue.put(Event(EventType.CONFIG_CHANGED,
+                                    source="editor",
+                                    payload=ConfigChangedPayload(
+                                        status=result.status,
+                                    )))
+        color = (C.NEON_CYAN if result.ok
+                 else C.NEON_AMBER if result.status == "partial"
+                 else C.NEON_RED)
+        self._dispatch(lambda: self._set_status(
+            f"Rollback: {result.status}", color))
 
     # ══════════════════════════════════════════════════════════════════
     #  BACKUP
@@ -211,11 +326,11 @@ class CommandsMixin:
             )
             self._write(self.out_backup, resumo)
             self._dispatch(lambda: self._set_status(f"Backup: {nome}", C.NEON_CYAN))
-            if audit is not None:
-                audit.log_operation("backup", user=self.session._user,
+            if _config.audit is not None:
+                _config.audit.log_operation("backup", user=self.session._user,
                                     host=host, status="ok", file=path)
-            if log is not None:
-                log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
+            if _config.log is not None:
+                _config.log.info("Backup salvo: %s (%d bytes)", path, os.path.getsize(path))
             self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
                                         source="backup",
                                         payload=CommandExecutedPayload(
@@ -223,6 +338,6 @@ class CommandsMixin:
                                             data={"file": path},
                                         )))
         except OSError as ex:
-            if log is not None:
-                log.error("Backup falhou: %s", ex)
+            if _config.log is not None:
+                _config.log.error("Backup falhou: %s", ex)
             self._write(self.out_backup, f"\u2718  Erro ao salvar:\n  {ex}")

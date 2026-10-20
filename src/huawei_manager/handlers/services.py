@@ -6,10 +6,20 @@ import logging
 import re
 
 from huawei_manager._protocols import AppCoreProtocol
+from huawei_manager.audit_log import AuditLogger
+from huawei_manager.command import ConfigCommand, audit_config_op
+from huawei_manager.exceptions import SdnError, SnapshotError
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import CommandExecutedPayload
+from huawei_manager.sdn_controller.napalm_backend import (
+    BACKEND_NAPALM,
+    NapalmVRPBackend,
+    resolve_backend,
+)
 from huawei_manager.sdn_controller.validator import _DEFAULT_DENY_PATTERNS
 from huawei_manager.services import ServiceDef, execute_service
+from huawei_manager.services.ui_bridge import ask_from_worker
+from huawei_manager.utils import sanitize_command
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +59,33 @@ def _build_service_allow_patterns(svc: ServiceDef) -> list[re.Pattern[str]]:
             if alt:
                 patterns.append(_template_to_pattern(alt))
     return patterns
+
+
+def _audit_napalm_blocked(audit: AuditLogger | None, *, user: str,
+                          host: str, session_id: str | None,
+                          service: str, reason: str) -> None:
+    """Registra no AuditLogger um bloqueio do caminho NAPALM.
+
+    Preserva o schema de auditoria (``op``/``user``/``host``/``status``/
+    ``session_id``/``category``); ``reason``/``backend``/``service`` entram no
+    ``extra``. Auditoria nunca pode derrubar a operação (fail-closed).
+    """
+    if audit is None:
+        return
+    try:
+        audit.log_operation(
+            "config_apply",
+            user=user,
+            host=host,
+            status="blocked",
+            session_id=session_id,
+            category="config",
+            backend=BACKEND_NAPALM,
+            service=service,
+            reason=reason,
+        )
+    except Exception:  # justificativa: auditoria nunca derruba a operação
+        log.exception("audit de bloqueio NAPALM falhou")
 
 
 class ServicesMixin:
@@ -163,6 +200,79 @@ class ServicesMixin:
                 return
 
             if mode == "cli":
+                # Caminho NAPALM (flag HW_BACKEND=napalm): preview → diff →
+                # confirmação do usuário → apply → auditoria. Devolve True
+                # quando assumiu (sucesso OU recusa explícita, sem fallback
+                # silencioso); False → caminho Netmiko padrão.
+                if self._run_service_napalm(svc, final_svc):
+                    return
+                if final_svc.config_mode:
+                    # Serviço de configuração altera estado: Command pattern
+                    # com snapshot pré-mudança (fail-closed — sem snapshot,
+                    # nada é aplicado) + rollback via paleta de comandos.
+                    session = getattr(self, "session", None)
+                    user = getattr(session, "_user", "unknown")
+                    host = getattr(session, "_host", "unknown")
+                    session_id = getattr(session, "_session_id", None)
+                    audit: AuditLogger | None = getattr(
+                        self, "audit_logger", None)
+                    service_cmd = ConfigCommand(
+                        final_svc.cli_commands,
+                        read_state=lambda: self._sb.send_command(
+                            "display current-configuration"),
+                        apply_fn=lambda lines: (
+                            True,
+                            self._sb.send_service_commands(
+                                lines,
+                                config_mode=final_svc.config_mode,
+                                requires_privilege=(
+                                    final_svc.requires_privilege),
+                            ),
+                        ),
+                        dry_run=getattr(self, "_dry_run", None),
+                    )
+                    try:
+                        svc_result = service_cmd.execute()
+                    except SnapshotError as exc:
+                        self._sb.invalidate_connection()
+                        self._write(self._svc_output,
+                                    f"\u2718  {exc} \u2014 nada foi aplicado.")
+                        audit_config_op(
+                            audit, op="config_apply", user=user, host=host,
+                            session_id=session_id, status="blocked",
+                            reason="snapshot falhou", service=svc.name,
+                            backend="netmiko",
+                        )
+                        return
+                    except SdnError as exc:
+                        # Conexão pode ter caído no meio da mutação:
+                        # invalida e mantém o snapshot p/ rollback posterior.
+                        self._sb.invalidate_connection()
+                        self._last_config_command = service_cmd
+                        self._write(self._svc_output,
+                                    f"\u2718  Falha SSH: {exc}")
+                        audit_config_op(
+                            audit, op="config_apply", user=user, host=host,
+                            session_id=session_id, status="error",
+                            reason="falha ssh", service=svc.name,
+                            backend="netmiko",
+                        )
+                        return
+                    self._last_config_command = service_cmd
+                    self._write(self._svc_output, svc_result.message)
+                    audit_config_op(
+                        audit, op="config_apply", user=user, host=host,
+                        session_id=session_id, status=svc_result.status,
+                        duration_ms=svc_result.duration_ms,
+                        service=svc.name, backend="netmiko",
+                    )
+                    self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                                source="service",
+                                                payload=CommandExecutedPayload(
+                                                    command=svc.name,
+                                                    data={"mode": "cli"},
+                                                )))
+                    return
                 result = self._sb.send_service_commands(
                     final_svc.cli_commands,
                     config_mode=final_svc.config_mode,
@@ -180,6 +290,130 @@ class ServicesMixin:
             self._write(self._svc_output, f"Modo desconhecido: {mode}")
 
         self._spawn_io(_do)
+
+    def _run_service_napalm(self: AppCoreProtocol, svc: ServiceDef,
+                            final_svc: ServiceDef) -> bool:
+        """Caminho NAPALM do servico (modo cli): preview → diff → confirmação
+        do usuário → apply → auditoria.
+
+        Chamado apenas da branch ``mode == "cli"`` de ``_run_service``. O modo
+        mock e os serviços de leitura (``config_mode=False``) nunca passam por
+        aqui — o caminho Netmiko padrão permanece bit a bit igual ao de hoje.
+
+        Returns:
+            ``False`` quando o caminho Netmiko padrão deve ser usado (backend
+            efetivo != napalm OU serviço sem ``config_mode``). ``True`` quando
+            o caminho NAPALM assumiu — sucesso **ou** recusa explícita (preview
+            falhou / diff vazio / usuário cancelou); recusa nunca cai no
+            Netmiko silenciosamente (o usuário optou por NAPALM via flag —
+            fail-closed).
+        """
+        backend, warning = resolve_backend()
+        if warning:
+            log.warning("resolve_backend: %s", warning)
+        if backend != BACKEND_NAPALM or not final_svc.config_mode:
+            return False
+
+        session = getattr(self, "session", None)
+        user = getattr(session, "_user", "unknown")
+        host = getattr(session, "_host", "unknown")
+        session_id = getattr(session, "_session_id", None)
+        audit: AuditLogger | None = getattr(self, "audit_logger", None)
+        conn = self._sb.connection
+        if conn is None:
+            # Sem handle Netmiko bruto não há como fazer preview/apply via
+            # NAPALM: recusa auditada, nunca fallback silencioso para o Netmiko
+            # (o usuário optou pela flag — falhar fechado).
+            self._write(self._svc_output,
+                        "\u2718  NAPALM: sem sessao Netmiko ativa \u2014 nada foi aplicado.")
+            _audit_napalm_blocked(audit, user=user, host=host,
+                                  session_id=session_id, service=svc.name,
+                                  reason="sem conexao Netmiko exposta")
+            return True
+        executor = NapalmVRPBackend(
+            conn,  # sessão Netmiko existente (sem 2º SSH)
+            user=user, host=host, session_id=session_id, audit=audit,
+        )
+
+        # 1) dry-run: diff running × candidate. Falha → recusa visível auditada.
+        try:
+            # sanitize_command: defesa em profundidade — o diff é derivado da
+            # configuração running, que pode conter senha/secret/key/token.
+            diff = sanitize_command(executor.preview(final_svc.cli_commands))
+        except Exception as exc:
+            # justificativa (exceção genérica): fronteira com o driver NAPALM
+            # de terceiros — qualquer erro vira recusa auditada e parada;
+            # nunca exceção silenciosa nem fallback para Netmiko.
+            err = sanitize_command(str(exc))
+            self._write(self._svc_output,
+                        f"\u2718  NAPALM: preview (dry-run) falhou — nada foi "
+                        f"aplicado.\n{err}")
+            _audit_napalm_blocked(audit, user=user, host=host,
+                                  session_id=session_id, service=svc.name,
+                                  reason=f"preview falhou: {err}")
+            return True
+
+        # 2) diff vazio: nada mudaria — encerra sem apply e sem diálogo.
+        if not diff.strip():
+            self._write(self._svc_output, "Sem mudancas a aplicar.")
+            return True
+
+        # 3) confirmação do usuário com o diff na tela (thread-safe via
+        #    UiBridge). Sem bridge (app sem GUI / testes headless) aplica sem
+        #    confirmação: comportamento nunca pior que hoje (hoje não há diff).
+        bridge = getattr(self, "_ui_bridge", None)
+        if bridge is None:
+            log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmacao",
+                        svc.name)
+            approved = True
+        else:
+            approved = ask_from_worker(bridge,
+                                       title=f"Aplicar '{svc.name}'?",
+                                       message=diff)
+        if not approved:
+            self._write(self._svc_output,
+                        "Cancelado pelo usuario — nada foi aplicado.")
+            _audit_napalm_blocked(audit, user=user, host=host,
+                                  session_id=session_id, service=svc.name,
+                                  reason="cancelado pelo usuario")
+            return True
+
+        # 4) apply com snapshot pré-mudança (capturado pelo próprio backend).
+        try:
+            result = executor.apply(final_svc.cli_commands)
+        except SdnError as exc:
+            # o backend já auditou (status blocked/error) — só reporta aqui.
+            self._write(self._svc_output,
+                        f"\u2718  NAPALM: aplicacao recusada pelo dispositivo — "
+                        f"alteracoes descartadas.\n{sanitize_command(str(exc))}")
+            return True
+        except Exception as exc:
+            # justificativa (exceção genérica): o snapshot é capturado fora do
+            # try interno do backend e o driver de terceiros pode levantar erro
+            # cru — vira recusa auditada, nunca fallback Netmiko.
+            err = sanitize_command(str(exc))
+            self._write(self._svc_output,
+                        f"\u2718  NAPALM: falha ao aplicar — nada foi "
+                        f"confirmado.\n{err}")
+            _audit_napalm_blocked(audit, user=user, host=host,
+                                  session_id=session_id, service=svc.name,
+                                  reason=f"apply falhou: {err}")
+            return True
+
+        self._write(self._svc_output,
+                    f">  NAPALM: {len(final_svc.cli_commands)} comando(s) "
+                    f"aplicado(s) em {result.duration_ms:.0f} ms  |  "
+                    f"snapshot pre-mudanca: "
+                    f"{len(result.snapshot.splitlines())} linha(s)\n"
+                    f"{'─' * 40}\n{result.output}")
+        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
+                                    source="service",
+                                    payload=CommandExecutedPayload(
+                                        command=svc.name,
+                                        data={"mode": "cli",
+                                              "backend": BACKEND_NAPALM},
+                                    )))
+        return True
 
     def _validate_service(self: AppCoreProtocol, svc: ServiceDef,
                           final_cmds: list[str]) -> list[tuple[str, str]]:

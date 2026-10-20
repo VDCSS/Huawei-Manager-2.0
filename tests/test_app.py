@@ -119,3 +119,37 @@ class TestTheme:
         AppCore._unlock_theme(app)
         assert app._theme_toggling is False
         app.theme_btn.setEnabled.assert_called_once_with(True)
+
+
+class TestBootRegression:
+    """Regressão: o app real precisa construir sem exceção (offscreen).
+
+    Bug de 20/10/2026: ``start_alert_listeners(self._event_queue)`` ficou
+    em ``_init_common_attrs()``, executado no ``__init__`` ANTES da linha
+    que cria o ``EventQueue`` — ``AttributeError`` e a aplicação não abria.
+    Reproduz aqui o mesmo caminho do ``main()`` sem ``app.exec()``.
+    """
+
+    def test_full_boot_wires_listeners_after_event_queue(self):
+        import huawei_manager._config as cfg
+
+        # Outros testes podem deixar o estado de _config resetado
+        # (tests/test_config.py zera _INITIALIZED/_secrets/audit).
+        if cfg._secrets is None or cfg.audit is None:
+            cfg._INITIALIZED = False
+            cfg.init()
+
+        from huawei_manager._app import apply_theme, get_app
+        qapp = get_app()
+        apply_theme("dark")
+
+        from huawei_manager.app import HuaweiRouterApp
+        window = HuaweiRouterApp()
+        try:
+            assert window._event_queue is not None
+            # Opt-in por ambiente: fora de teste não há listener ativo,
+            # mas o atributo precisa existir (o _on_close depende dele).
+            assert window._alert_listeners == []
+        finally:
+            window.close()
+            qapp.processEvents()

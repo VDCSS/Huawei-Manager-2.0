@@ -41,13 +41,15 @@ if TYPE_CHECKING:
     from huawei_manager.topology import TopologyCanvas
 
 import huawei_manager.constants as C
+from huawei_manager import _config
 from huawei_manager._app import apply_theme
-from huawei_manager._config import PROJECT_ROOT, _s, _secrets, audit
+from huawei_manager._config import PROJECT_ROOT, _s
 from huawei_manager.agents.watcher import Watcher
 from huawei_manager.app_notify import NotifyMixin
 from huawei_manager.app_shortcuts import ShortcutsMixin
 from huawei_manager.app_state import AppStateMixin
 from huawei_manager.app_threading import ThreadingMixin
+from huawei_manager.command import ConfigCommand
 from huawei_manager.constants import set_theme
 from huawei_manager.db import get_connection, init_database
 from huawei_manager.device_models import Device
@@ -57,14 +59,16 @@ from huawei_manager.migration import migrate_json_inventory
 from huawei_manager.pages import PageBuilder
 from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.sdn_controller.core import ControllerCore
-from huawei_manager.sdn_controller.drivers.router import RouterDriver
+from huawei_manager.sdn_controller.drivers.factory import driver_for
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import EventQueue
+from huawei_manager.sdn_controller.listeners import start_alert_listeners
 from huawei_manager.sdn_controller.polling_manager import PollingManager
 from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.sdn_controller.validator import CommandValidator
 from huawei_manager.services.device_service import DeviceService
+from huawei_manager.services.ui_bridge import UiBridge
 from huawei_manager.session import NetmikoSession
 from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button, neon_button
 
@@ -179,12 +183,19 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _run_config_safe(self: AppCoreProtocol, cmd: str = "") -> None: ...
         def _exec_cmd(self: AppCoreProtocol, cmd: str = "") -> None: ...
         def _exec_config(self: AppCoreProtocol, cmd: str = "") -> None: ...
+        def _rollback_last_config(self: AppCoreProtocol) -> None: ...
+        def _do_rollback_config(
+            self: AppCoreProtocol, command: ConfigCommand
+        ) -> None: ...
         def _do_backup(self: AppCoreProtocol, fmt: str = "") -> None: ...
         def _choose_backup_dir(self: AppCoreProtocol) -> None: ...
         def _run_service(
             self: AppCoreProtocol, svc: ServiceDef,
             final_svc: ServiceDef | None = None,
         ) -> None: ...
+        def _run_service_napalm(
+            self: AppCoreProtocol, svc: ServiceDef, final_svc: ServiceDef
+        ) -> bool: ...
         def _validate_service(
             self: AppCoreProtocol, svc: ServiceDef, final_cmds: list[str]
         ) -> list[tuple[str, str]]: ...
@@ -221,6 +232,14 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _cancel_and_clear(self: AppCoreProtocol) -> None: ...
         def _run_setup(self: AppCoreProtocol, mode: str) -> None: ...
         def _run_dev_cmd(self: AppCoreProtocol, target: str) -> None: ...
+        def _spawn_stream(
+            self: AppCoreProtocol,
+            cmd_list: list[str],
+            *,
+            timeout_s: int,
+            done_label: str,
+            cwd: str,
+        ) -> None: ...
         def _display_watcher_results(
             self: AppCoreProtocol, results: Sequence[AgentResult]
         ) -> None: ...
@@ -249,17 +268,30 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         apply_theme("dark")
 
-        if _secrets is None:
+        # Globais de _config lidos em tempo de uso (não fixados no import):
+        # um `from _config import _secrets` capturaria None se app.py fosse
+        # importado antes do init(), quebrando o boot por ordem de import.
+        secrets = _config._secrets
+        audit_log = _config.audit
+        if secrets is None:
             raise RuntimeError("_config.init() must be called first")
-        if audit is None:
+        if audit_log is None:
             raise RuntimeError("_config.init() must be called first")
-        self.session = NetmikoSession(_secrets, audit)
+        self.session = NetmikoSession(secrets, audit_log)
         self._event_queue: IEventBus = EventQueue(maxsize=1000)
+        # Gap 2: fontes push (traps SNMP / syslog), opt-in por ambiente.
+        # Cada listener é isolado — bind negado vira warning, não crash.
+        # Precisa nascer DEPOIS do barramento (start_alert_listeners usa
+        # _event_queue); _init_common_attrs roda antes deste ponto.
+        self._alert_listeners = start_alert_listeners(self._event_queue)
         self._cmd_validator = CommandValidator()
         self._sb: SouthboundProtocol = SSHSouthbound(
-            _secrets, audit, session=self.session, validator=self._cmd_validator
+            secrets, audit_log, session=self.session, validator=self._cmd_validator
         )
         self._dry_run = DryRunEngine()
+        # Última mutação de configuração (Editor/Serviços) com snapshot
+        # pré-mudança — alimenta o rollback da paleta de comandos.
+        self._last_config_command: ConfigCommand | None = None
         self._controller = ControllerCore(
             event_queue=self._event_queue,
             dump_path=str(Path.home() / ".huawei_manager" / "sdn_state.json"),
@@ -298,7 +330,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
                 "HW_ADAPTIVE_POLLING=1 mas VNF_ENCRYPT_KEY ausente — polling desabilitado"
             )
             self._polling_enabled = False
-        self._session_factory = SSHSessionFactory(_secrets, audit)
+        self._session_factory = SSHSessionFactory(secrets, audit_log)
         self._polling_mgr = PollingManager(
             factory=self._session_factory,
             device_service=self._device_service,
@@ -308,7 +340,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._adaptive_timer.timeout.connect(self._tick_adaptive_polling)
         self._adaptive_timer.start(C.POLL_TICK_FLOOR_MS)
 
-        self._drv = RouterDriver(southbound=self._sb, event_queue=self._event_queue)
+        # Factory (Gap 1): driver resolvido pelo tipo do dispositivo; no
+        # boot não há device selecionado, então vale o perfil padrão (VRP).
+        self._drv = driver_for(None, self._sb, self._event_queue)
         self._session_tracker = SessionTracker(timeout_secs=300)
         self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
@@ -395,6 +429,14 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._svc_param_entries: dict[str, QLineEdit] = {}
         self._shutdown: bool = False
         self._event_drop_count: int = 0
+        # Logger de auditoria do app (era inacessível aos mixins; o caminho
+        # NAPALM e o audit de comandos negados dependem dele).
+        # Lido em tempo de uso: _init_common_attrs roda antes do __init__
+        # montar os serviços, e o audit nasce no _config.init().
+        self.audit_logger = _config.audit
+        # Ponte I/O→GUI: workers pedem confirmação via ask_from_worker()
+        # (QMessageBox nunca fora da thread GUI — ver services/ui_bridge.py).
+        self._ui_bridge: UiBridge | None = UiBridge(self)
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:

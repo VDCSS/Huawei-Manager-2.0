@@ -152,6 +152,8 @@ SERVICE_CAT_LABELS: dict[str, str] = {
     "config-bgp":      "BGP",
     "config-ospf":     "OSPF",
     "config-vlan":     "VLAN",
+    "config-qos":      "QoS / Tráfego",
+    "config-route":    "Rotas",
 }
 
 

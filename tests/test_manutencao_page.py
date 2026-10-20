@@ -6,11 +6,16 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from huawei_manager.handlers.maintenance import MaintenanceMixin
 from huawei_manager.pages.manutencao import PageBuilderManutencaoMixin
 
 
+class _PageAndHandler(PageBuilderManutencaoMixin, MaintenanceMixin):
+    """Composição mínima: View (build/filtro) + handler (execução)."""
+
+
 def _make_mixin(**attrs) -> PageBuilderManutencaoMixin:
-    mixin = PageBuilderManutencaoMixin()
+    mixin = _PageAndHandler()
     defaults = dict(
         _manut_summary=MagicMock(),
         _manut_output=MagicMock(),

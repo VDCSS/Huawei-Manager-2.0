@@ -180,3 +180,15 @@ class TestCreateDefaultCommands:
         cmds = create_default_commands(mock_app)
         copy_cmd = next(c for c in cmds if c.id == "copy_ip")
         assert copy_cmd.enabled is False
+
+    def test_creates_undo_config_command(self):
+        mock_app = MagicMock()
+        mock_app._show_page = MagicMock()
+        mock_app._secrets = {"host": "192.168.1.1"}
+        cmds = create_default_commands(mock_app)
+        undo_cmd = next(c for c in cmds if c.id == "undo_config")
+        # Sempre habilitado: a ação própria decide (mensagem "Nada a
+        # desfazer") — o estado só existe em runtime, não na criação.
+        assert undo_cmd.enabled is True
+        undo_cmd.action()
+        mock_app._rollback_last_config.assert_called_once()

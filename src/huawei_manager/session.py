@@ -100,6 +100,16 @@ class NetmikoSession(SessionCommandsMixin):
     def _session_id(self) -> str | None:
         return f"{self._host}:{self._port}" if self._conn else None
 
+    @property
+    def connection(self) -> NetmikoConnection | None:
+        """Handle Netmiko bruto da sessao (somente leitura).
+
+        Permite ao backend NAPALM reaproveitar o SSH ja autenticado (nenhuma
+        segunda autenticacao, nenhum segredo novo manipulado). ``None`` quando
+        nao ha conexao ativa (fail-closed).
+        """
+        return self._conn
+
     # ── TOFU host key cache ────────────────────────────────────────
     @property
     def _known_hosts_path(self) -> Path:

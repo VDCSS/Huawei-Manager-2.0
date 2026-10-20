@@ -12,6 +12,9 @@ import threading
 import time
 from abc import ABC, abstractmethod
 
+from netmiko.base_connection import (  # pyright: ignore[reportMissingTypeStubs]
+    BaseConnection as NetmikoConnection,
+)
 from netmiko.exceptions import (  # pyright: ignore[reportMissingTypeStubs]
     NetmikoAuthenticationException,
     NetmikoTimeoutException,
@@ -78,6 +81,17 @@ class SouthboundProtocol(ABC):
         requires_privilege: bool = False,
     ) -> str:
         """Executa comandos de servico (show ou config) e retorna o output."""
+
+    @property
+    def connection(self) -> NetmikoConnection | None:
+        """Handle Netmiko bruto da sessao ativa (somente leitura).
+
+        Exposto apenas para o backend NAPALM reaproveitar a conexao SSH ja
+        aberta (nenhuma segunda autenticacao, nenhum segredo novo manipulado).
+        Padrao ``None`` (fail-closed): implementacoes que nao expoem a
+        conexao seguem bloqueando o caminho NAPALM.
+        """
+        return None
 
 
 def _sanitize(msg: str) -> str:
@@ -207,6 +221,16 @@ class SSHSouthbound(SouthboundProtocol):
         with self._lock:
             self._alive_cache = (False, time.time())
             self._connected = False
+
+    @property
+    def connection(self) -> NetmikoConnection | None:
+        """Handle Netmiko bruto da sessao ativa (somente leitura).
+
+        O backend NAPALM (``HW_BACKEND=napalm``) reutiliza essa conexao para
+        preview/apply sem abrir um segundo SSH. Nao expoe credenciais — o
+        objeto Netmiko as retira do ``SecretsBackend`` sob demanda.
+        """
+        return self._session.connection
 
     def set_access_role(self, role: str) -> None:
         """Atualiza o papel de acesso usado pelo validator."""

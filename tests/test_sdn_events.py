@@ -41,9 +41,15 @@ class TestOnSdnEvent:
 
     def test_unmapped_event_ignored(self) -> None:
         app = _FakeApp()
-        app._on_sdn_event(Event(EventType.ALERT, source="core"))
+        app._on_sdn_event(Event(EventType.AN_TRIGGER, source="core"))
         app._topo_canvas.set_device_status.assert_not_called()
         app._tick_dashboard.assert_not_called()
+
+    def test_alert_event_refreshes_dashboard(self) -> None:
+        # Gap 2: alerta push (trap SNMP / syslog) é evento mapeado.
+        app = _FakeApp()
+        app._on_sdn_event(Event(EventType.ALERT, source="10.0.0.1"))
+        app._tick_dashboard.assert_called_once()
 
     def test_canvas_exception_caught(self) -> None:
         app = _FakeApp()

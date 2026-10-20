@@ -58,4 +58,5 @@ class TestServicesSubtitle:
             len([s for s in get_services_for(t) if s.config_mode])
             for t in DEVICE_TYPES
         )
-        assert total == 25
+        # 25 originais + 14 novos serviços de config (todos ROUTER+SWITCH, contam 2x)
+        assert total == 53

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 import huawei_manager.constants as C
-from huawei_manager._config import audit
+from huawei_manager import _config
 from huawei_manager._protocols import AppCoreProtocol
 
 log = logging.getLogger(__name__)
@@ -51,7 +51,12 @@ class DashboardMixin:
         unknown_lbl.setText(f"Desconhecido: {unknown}")
 
         try:
-            text = audit.format_tail(5) if audit is not None else "  (nenhuma entrada de auditoria ainda)"
+            audit_log = _config.audit
+            text = (
+                audit_log.format_tail(5)
+                if audit_log is not None
+                else "  (nenhuma entrada de auditoria ainda)"
+            )
         except Exception:
             text = "  (erro ao ler auditoria)"
         audit_text.setReadOnly(False)

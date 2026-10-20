@@ -14,6 +14,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from huawei_manager.command import ConfigCommand
 from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.sdn_controller.bus import IEventBus
@@ -39,11 +40,13 @@ if TYPE_CHECKING:
 
     from huawei_manager.agents import AgentResult
     from huawei_manager.agents.watcher import Watcher
+    from huawei_manager.audit_log import AuditLogger
     from huawei_manager.sdn_controller.core import ControllerCore
-    from huawei_manager.sdn_controller.drivers.router import RouterDriver
+    from huawei_manager.sdn_controller.drivers.base import BaseDriver
     from huawei_manager.sdn_controller.event_queue import Event
     from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
     from huawei_manager.services import ServiceDef
+    from huawei_manager.services.ui_bridge import UiBridge
     from huawei_manager.session import NetmikoSession
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.neon_button import ActionButton, NeonButton
@@ -54,6 +57,7 @@ class AppCoreProtocol(Protocol):
     # ── Núcleo / SDN ────────────────────────────────────────────────
     _sb: SouthboundProtocol
     session: NetmikoSession
+    audit_logger: AuditLogger | None
     _target_device: Device | None
 
     _event_queue: IEventBus
@@ -74,8 +78,9 @@ class AppCoreProtocol(Protocol):
 
     _cmd_validator: CommandValidator | None
     _dry_run: DryRunEngine | None
+    _last_config_command: ConfigCommand | None
     _controller: ControllerCore
-    _drv: RouterDriver
+    _drv: BaseDriver
 
     _auth_overlay: QWidget | None
     _admin_attempts: int
@@ -147,6 +152,8 @@ class AppCoreProtocol(Protocol):
     _svc_param_entries: dict[str, QLineEdit]
     _svc_services: list[ServiceDef]
     _svc_current_svc: ServiceDef | None
+    # Ponte I/O→GUI para confirmações (UiBridge); None = app sem GUI.
+    _ui_bridge: UiBridge | None
 
     # ── Comandos / templates ────────────────────────────────────────
     _tpl_cmd_map: dict[str, str]
@@ -247,6 +254,8 @@ class AppCoreProtocol(Protocol):
     def _run_config_safe(self, cmd: str = "") -> None: ...
     def _exec_cmd(self, cmd: str = "") -> None: ...
     def _exec_config(self, cmd: str = "") -> None: ...
+    def _rollback_last_config(self) -> None: ...
+    def _do_rollback_config(self, command: ConfigCommand) -> None: ...
     def _do_backup(self, fmt: str = "") -> None: ...
     def _choose_backup_dir(self) -> None: ...
 
@@ -254,6 +263,9 @@ class AppCoreProtocol(Protocol):
     def _run_service(
         self, svc: ServiceDef, final_svc: ServiceDef | None = None
     ) -> None: ...
+    def _run_service_napalm(
+        self, svc: ServiceDef, final_svc: ServiceDef
+    ) -> bool: ...
     def _validate_service(
         self, svc: ServiceDef, final_cmds: list[str]
     ) -> list[tuple[str, str]]: ...
@@ -286,6 +298,14 @@ class AppCoreProtocol(Protocol):
     def _cancel_and_clear(self) -> None: ...
     def _run_setup(self, mode: str) -> None: ...
     def _run_dev_cmd(self, target: str) -> None: ...
+    def _spawn_stream(
+        self,
+        cmd_list: list[str],
+        *,
+        timeout_s: int,
+        done_label: str,
+        cwd: str,
+    ) -> None: ...
     def _display_watcher_results(self, results: Sequence[AgentResult]) -> None: ...
     def _apply_manut_filter(self) -> None: ...
     def _on_manut_filter_toggled(self, checked: bool, value: str) -> None: ...

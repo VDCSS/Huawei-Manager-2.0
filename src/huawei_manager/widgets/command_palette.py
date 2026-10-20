@@ -378,6 +378,17 @@ def create_default_commands(app: AppCoreProtocol) -> list[Command]:
             shortcut="F5",
             action=app._on_f5,
         ),
+        Command(
+            id="undo_config",
+            label="Desfazer última configuração",
+            description=(
+                "Rollback best-effort da última configuração aplicada "
+                "(Editor de Comandos ou Serviços)"
+            ),
+            category="Ações",
+            shortcut=None,
+            action=app._rollback_last_config,
+        ),
     ])
 
     # --- Sessão / Auth ---

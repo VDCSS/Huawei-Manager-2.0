@@ -91,7 +91,7 @@ class TestRefreshDashboard:
     def test_handles_audit_error(self):
         mixin = _make_mixin()
         mixin._sb.is_alive.return_value = False
-        with patch("huawei_manager.handlers.dashboard.audit") as mock_audit:
+        with patch("huawei_manager._config.audit") as mock_audit:
             mock_audit.format_tail.side_effect = Exception("read fail")
             mixin._refresh_dashboard()
         mixin._dash_audit_text.setPlainText.assert_called_once_with(

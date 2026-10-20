@@ -28,6 +28,11 @@ class AppStateMixin:
                     self._topo_canvas.set_device_status(ev.source, "online")
             elif ev.type is EventType.CONFIG_CHANGED:
                 self._tick_dashboard()
+            elif ev.type is EventType.ALERT:
+                # Gap 2: alerta push (trap SNMP / syslog). Observável no log
+                # e reflete no dashboard; UI dedicada é evolução futura.
+                log.info("alerta recebido: %s", ev.payload)
+                self._tick_dashboard()
             else:
                 log.debug("_on_sdn_event sem efeito na UI: %s/%s", ev.type.name, ev.source)
         except Exception:
