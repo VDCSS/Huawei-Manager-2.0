@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
 import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.constants import ROUTE_FILTER_LABELS
-from huawei_manager.pages.cmd import PageBuilderCmdMixin
 from huawei_manager.pages.services import PageBuilderServicesMixin
 from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
@@ -29,7 +28,7 @@ from huawei_manager.widgets.neon_button import action_button
 from huawei_manager.widgets.neon_entry import neon_entry, output_text
 
 
-class PageBuilder(PageBuilderServicesMixin, PageBuilderCmdMixin):
+class PageBuilder(PageBuilderServicesMixin):
     """Mixin com métodos de construção das páginas da interface PySide6."""
 
     # ── Helpers ────────────────────────────────────────────────────────

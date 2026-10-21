@@ -7,7 +7,7 @@ import pytest
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import QApplication, QPlainTextEdit, QWidget
 
-from huawei_manager.pages.cmd import _CmdReturnFilter
+from huawei_manager.tabs.cmd.page import _CmdReturnFilter
 
 
 class TestEditorEnter:
@@ -63,7 +63,7 @@ class TestEditorEnter:
         assert result is False  # Deve chamar super()
 
     def test_enter_keypress_executes_command(self):
-        """KeyPress Enter (sem Shift) deve executar comando via app._run_cmd_safe."""
+        """KeyPress Enter (sem Shift) deve executar comando via tab.run_cmd_safe."""
         app_mock = MagicMock()
         filter_obj = _CmdReturnFilter(app_mock)
         editor = QPlainTextEdit()
@@ -75,7 +75,7 @@ class TestEditorEnter:
         result = filter_obj.eventFilter(editor, event)
 
         assert result is True
-        app_mock._run_cmd_safe.assert_called_once()
+        app_mock.run_cmd_safe.assert_called_once()
 
     def test_shift_enter_inserts_newline(self):
         """Shift+Enter deve inserir newline no editor."""
@@ -95,7 +95,7 @@ class TestEditorEnter:
 
         assert result is True
         assert editor.toPlainText() == "display version\n"
-        app_mock._run_cmd_safe.assert_not_called()
+        app_mock.run_cmd_safe.assert_not_called()
 
     def test_other_keys_pass_through(self):
         """Outras teclas devem passar normalmente (chamar super)."""

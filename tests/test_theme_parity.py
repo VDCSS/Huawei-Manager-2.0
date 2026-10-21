@@ -137,22 +137,26 @@ class TestFocusRules:
 
 class TestTemplatesAccessible:
     def test_cmd_templates_use_qlistwidget(self):
-        from huawei_manager.pages.builder import PageBuilder
-        from huawei_manager.widgets.neon_button import ActionButton
-        from PySide6.QtWidgets import QListWidget, QStackedWidget
+        from huawei_manager.tabs._contract import TabContext
+        from huawei_manager.tabs.cmd import CmdTab
+        from PySide6.QtWidgets import QListWidget
         from PySide6.QtCore import Qt
         from unittest.mock import MagicMock
         QApplication.instance() or QApplication([])
-        builder = PageBuilder()
-        builder._page_container = QStackedWidget()
-        builder._access_level = "user"
-        builder._target_device = None
-        builder._run = MagicMock()
-        builder._get_editor_cmd = MagicMock(return_value="display version")
-        builder._exec_cmd = MagicMock()
-        builder._exec_config = MagicMock()
-        builder._build_cmd_page()
-        page = builder._page_container.widget(0)
+        ctx = TabContext(
+            sb=MagicMock(), audit=None, event_bus=MagicMock(),
+            role=lambda: "admin", device=lambda: None,
+            dispatch=lambda fn: fn() if callable(fn) else None,
+            require_access=lambda level: True,
+            spawn_io=lambda fn, *args: None, spawn_cpu=lambda fn, *args: None,
+            watcher=MagicMock(), is_mock=lambda: False, toggle_mock=lambda: False,
+            show_auth_dialog=lambda: None, watcher_results=lambda: None,
+            set_watcher_results=MagicMock(), session=MagicMock(), run=MagicMock(),
+            set_status=MagicMock(), touch_session=MagicMock(), cmd_validator=None,
+            dry_run=None, get_last_config_command=lambda: None,
+            set_last_config_command=MagicMock(),
+        )
+        page = CmdTab().build(ctx)
         tpl_list = page.findChild(QListWidget)
         assert tpl_list is not None
         assert tpl_list.count() > 0

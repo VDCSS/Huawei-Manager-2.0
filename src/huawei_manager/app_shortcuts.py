@@ -87,8 +87,10 @@ class ShortcutsMixin:
             self._write(self.out_arp, "")
         elif page == "info" and self.out_info is not None:
             self._write(self.out_info, "")
-        elif page == "cmd" and self.out_cmd is not None:
-            self._write(self.out_cmd, "")
+        elif page == "cmd":
+            out = self._cmd_out()
+            if out is not None:
+                self._write(out, "")
         elif page == "backup" and self.out_backup is not None:
             self._write(self.out_backup, "")
         elif page == "services" and self._svc_output is not None:

@@ -32,6 +32,14 @@ def _make_ctx(**overrides: Any) -> TabContext:
         show_auth_dialog=lambda: None,
         watcher_results=lambda: None,
         set_watcher_results=MagicMock(),
+        session=MagicMock(),
+        run=MagicMock(),
+        set_status=MagicMock(),
+        touch_session=MagicMock(),
+        cmd_validator=None,
+        dry_run=None,
+        get_last_config_command=lambda: None,
+        set_last_config_command=MagicMock(),
     )
     fields.update(overrides)
     return TabContext(**fields)

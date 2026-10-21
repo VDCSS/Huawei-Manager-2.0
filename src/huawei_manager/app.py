@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QComboBox, QListWidget, QListWidgetItem
+    from PySide6.QtWidgets import QComboBox, QListWidget
 
     from huawei_manager._protocols import AppCoreProtocol
     from huawei_manager.agents import AgentResult
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
     from huawei_manager.services import ServiceDef
     from huawei_manager.tabs._contract import TabDef
+    from huawei_manager.tabs.cmd import CmdTab
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
@@ -89,14 +90,11 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # só existem na composição final HuaweiRouterApp.)
         ADMIN_MAX_ATTEMPTS: int
         ADMIN_LOCKOUT_SECS: int
-        _sysview_var: bool
         route_filter_var: str
         _route_filter_cb: QComboBox
         _admin_btn: ActionButton
         _backup_fmt_lbl: QLabel
         _svc_cat_var: str
-        _tpl_cmd_map: dict[str, str]
-        _tpl_listbox: QListWidget
         _svc_device_lbl: QLabel | None
         _svc_type_lbl: QLabel | None
         _svc_status_lbl: QLabel | None
@@ -112,7 +110,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         _dash_device_unknown: QLabel | None
         _dash_audit_text: QTextEdit | None
         _dash_shortcut_btns: dict[str, str]
-        _cmd_editor: QTextEdit | None
         _backup_entry: QLineEdit | None
 
         # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
@@ -176,16 +173,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _delete_device(self: AppCoreProtocol, device: Device) -> None: ...
         def _on_device_selected(self: AppCoreProtocol, device: Device) -> None: ...
         def _clear_device_target(self: AppCoreProtocol) -> None: ...
-        def _get_editor_cmd(self: AppCoreProtocol) -> str: ...
-        def _confirm_destructive(self: AppCoreProtocol, cmd: str) -> bool: ...
-        def _run_cmd_safe(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _run_config_safe(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _exec_cmd(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _exec_config(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _rollback_last_config(self: AppCoreProtocol) -> None: ...
-        def _do_rollback_config(
-            self: AppCoreProtocol, command: ConfigCommand
-        ) -> None: ...
         def _do_backup(self: AppCoreProtocol, fmt: str = "") -> None: ...
         def _choose_backup_dir(self: AppCoreProtocol) -> None: ...
         def _run_service(
@@ -221,13 +208,8 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _build_route_page(self: AppCoreProtocol) -> None: ...
         def _build_arp_page(self: AppCoreProtocol) -> None: ...
         def _build_info_page(self: AppCoreProtocol) -> None: ...
-        def _build_cmd_page(self: AppCoreProtocol) -> None: ...
         def _build_backup_page(self: AppCoreProtocol) -> None: ...
         def _build_topology_page(self: AppCoreProtocol) -> None: ...
-        def _on_tpl_select(self: AppCoreProtocol, row: int) -> None: ...
-        def _on_tpl_activate(
-            self: AppCoreProtocol, item: QListWidgetItem
-        ) -> None: ...
 
     def __init__(self) -> None:
         super().__init__()
@@ -382,7 +364,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self.out_route: QTextEdit | None = None
         self.out_arp: QTextEdit | None = None
         self.out_info: QTextEdit | None = None
-        self.out_cmd: QTextEdit | None = None
         self.out_backup: QTextEdit | None = None
         self._svc_output: QTextEdit | None = None
         self._page_container: QStackedWidget | None = None
@@ -474,6 +455,15 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             show_auth_dialog=self._show_auth_dialog,
             watcher_results=lambda: self._watcher_results,
             set_watcher_results=self._set_watcher_results,
+            session=self.session,
+            run=self._run,
+            set_status=self._set_status,
+            touch_session=self._session_tracker.touch,
+            cmd_validator=self._cmd_validator,
+            dry_run=self._dry_run,
+            get_last_config_command=lambda: self._last_config_command,
+            set_last_config_command=lambda cmd: setattr(
+                self, "_last_config_command", cmd),
         )
 
         self._build_sidebar()
@@ -688,6 +678,46 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         """Snapshot imutável (R18) dos resultados dos agentes."""
         self._watcher_results = tuple(results)
 
+    # ── Fachadas da aba Editor de Comandos (F2-cmd) ─────────────────
+    def _cmd_tab(self) -> CmdTab | None:
+        """Módulo real da aba cmd (instância única do registry) + contexto.
+
+        ``attach`` é idempotente: injeta o TabContext mesmo sem a UI
+        ter sido construída (rollback via paleta, ex.).
+        """
+        from huawei_manager.tabs.cmd import CmdTab
+
+        td = tab_by_key(self._tabs, "cmd")
+        if td is None or not isinstance(td.module, CmdTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _get_editor_cmd(self) -> str:
+        tab = self._cmd_tab()
+        return "" if tab is None else tab.get_editor_cmd()
+
+    def _run_cmd_safe(self, cmd: str = "") -> None:
+        tab = self._cmd_tab()
+        if tab is not None:
+            tab.run_cmd_safe(cmd)
+
+    def _run_config_safe(self, cmd: str = "") -> None:
+        tab = self._cmd_tab()
+        if tab is not None:
+            tab.run_config_safe(cmd)
+
+    def _rollback_last_config(self) -> None:
+        tab = self._cmd_tab()
+        if tab is not None:
+            tab.rollback_last_config()
+
+    def _cmd_out(self) -> QTextEdit | None:
+        """Widget de saída da aba cmd (Ctrl+L limpa a saída)."""
+        tab = self._cmd_tab()
+        return None if tab is None else tab.out_widget()
+
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
         if self._active_btn:
@@ -867,7 +897,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._dash_device_unknown = None
         self._dash_audit_text = None
         self._dash_shortcut_btns = {}
-        self._cmd_editor = None
         self._backup_entry = None
         self._auth_overlay = None
         self._device_info_lbl = None

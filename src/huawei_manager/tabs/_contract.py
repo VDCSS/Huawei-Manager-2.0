@@ -24,9 +24,13 @@ if TYPE_CHECKING:
     from huawei_manager.agents import AgentResult
     from huawei_manager.agents.watcher import Watcher
     from huawei_manager.audit_log import AuditLogger
+    from huawei_manager.command import ConfigCommand
     from huawei_manager.device_models import Device
     from huawei_manager.sdn_controller.bus import IEventBus
+    from huawei_manager.sdn_controller.dryrun import DryRunEngine
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
+    from huawei_manager.sdn_controller.validator import CommandValidator
+    from huawei_manager.session import NetmikoSession
 
 __all__ = ["LegacyTabAdapter", "TabContext", "TabDef", "TabModule"]
 
@@ -56,6 +60,16 @@ class TabContext:
     show_auth_dialog: Callable[[], None]    # diálogo de login (App._show_auth_dialog)
     watcher_results: Callable[[], Sequence[AgentResult] | None]  # snapshot global
     set_watcher_results: Callable[[Sequence[AgentResult]], None]  # grava snapshot
+    # Fase 2 (aba Editor de Comandos — F2-cmd) — serviços que o módulo consome:
+    session: NetmikoSession            # sessão SSH (is_connected/run_cli_rpc/_user/_host)
+    run: Callable[..., None]           # device + sessão + IO thread (App._run)
+    set_status: Callable[[str, str], None]  # rodapé de status (App._set_status)
+    touch_session: Callable[[], None]  # heartbeat de sessão (SessionTracker.touch)
+    cmd_validator: CommandValidator | None   # RBAC por comando (None = desativado)
+    dry_run: DryRunEngine | None             # pré-visualização de config (None = off)
+    # Snapshot de rollback compartilhado com Serviços (attribute do App):
+    get_last_config_command: Callable[[], ConfigCommand | None]
+    set_last_config_command: Callable[[ConfigCommand | None], None]
 
 
 @runtime_checkable

@@ -39,6 +39,12 @@ class _TabMeta:
     module_factory: Callable[[], TabModule] | None = None  # módulo real (F1+)
 
 
+def _cmd_module() -> TabModule:
+    from huawei_manager.tabs.cmd import CmdTab
+
+    return CmdTab()
+
+
 def _manutencao_module() -> TabModule:
     """Módulo real da Manutenção (Fase 1) — import lazy evita ciclo."""
     from huawei_manager.tabs.manutencao import ManutencaoTab
@@ -59,7 +65,7 @@ _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("info", "Info do Sistema", "\U0001f4bb", C.NEON_MAG, "DISPOSITIVOS",
              "Informações do sistema", "Ctrl+6", "_build_info_page"),
     _TabMeta("cmd", "Editor de Comandos", "⌨", C.NEON_MAG, "FERRAMENTAS",
-             "Executar comandos personalizados", "Ctrl+7", "_build_cmd_page"),
+             "Executar comandos personalizados", "Ctrl+7", "", module_factory=_cmd_module),
     _TabMeta("backup", "Backup", "\U0001f4be", C.NEON_PURP, "FERRAMENTAS",
              "Gerenciar backups de configuração", "Ctrl+8", "_build_backup_page"),
     _TabMeta("services", "Servicos", "⚡", C.NEON_AMBER, "FERRAMENTAS",
@@ -79,7 +85,6 @@ class _HostProtocol(Protocol):
     def _build_route_page(self) -> None: ...
     def _build_arp_page(self) -> None: ...
     def _build_info_page(self) -> None: ...
-    def _build_cmd_page(self) -> None: ...
     def _build_backup_page(self) -> None: ...
     def _build_services_page(self) -> None: ...
 

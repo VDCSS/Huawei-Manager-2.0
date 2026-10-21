@@ -50,11 +50,38 @@ def _show_page(builder: PageBuilder, index: int = 0) -> None:
     QApplication.processEvents()
 
 
+def _cmd_ctx():
+    """TabContext fake completo p/ construir a aba CmdTab."""
+    from huawei_manager.tabs._contract import TabContext
+
+    return TabContext(
+        sb=MagicMock(), audit=None, event_bus=MagicMock(),
+        role=lambda: "admin", device=lambda: None,
+        dispatch=lambda fn: fn() if callable(fn) else None,
+        require_access=lambda level: True,
+        spawn_io=lambda fn, *args: None, spawn_cpu=lambda fn, *args: None,
+        watcher=MagicMock(), is_mock=lambda: False, toggle_mock=lambda: False,
+        show_auth_dialog=lambda: None, watcher_results=lambda: None,
+        set_watcher_results=MagicMock(), session=MagicMock(), run=MagicMock(),
+        set_status=MagicMock(), touch_session=MagicMock(), cmd_validator=None,
+        dry_run=None, get_last_config_command=lambda: None,
+        set_last_config_command=MagicMock(),
+    )
+
+
+def _build_cmd_page(builder: PageBuilder):
+    """Constrói a aba Editor de Comandos via módulo (F2-cmd) no container."""
+    from huawei_manager.tabs.cmd import CmdTab
+
+    page = CmdTab().build(_cmd_ctx())
+    builder._page_container.addWidget(page)
+    return page
+
+
 class TestCmdPageResize:
     def test_buttons_visible_at_800px(self):
         builder = _make_builder()
-        builder._build_cmd_page()
-        page = builder._page_container.widget(0)
+        page = _build_cmd_page(builder)
         _show_page(builder)
 
         buttons = [
@@ -69,8 +96,7 @@ class TestCmdPageResize:
 
     def test_left_panel_flexible_bounds(self):
         builder = _make_builder()
-        builder._build_cmd_page()
-        page = builder._page_container.widget(0)
+        page = _build_cmd_page(builder)
         _show_page(builder)
 
         tpl_list = page.findChild(QListWidget)
@@ -121,6 +147,14 @@ class TestManutencaoPageGrid:
             show_auth_dialog=lambda: None,
             watcher_results=lambda: [],
             set_watcher_results=MagicMock(),
+            session=MagicMock(),
+            run=MagicMock(),
+            set_status=MagicMock(),
+            touch_session=MagicMock(),
+            cmd_validator=None,
+            dry_run=None,
+            get_last_config_command=lambda: None,
+            set_last_config_command=MagicMock(),
         )
         return ManutencaoTab().build(ctx)
 

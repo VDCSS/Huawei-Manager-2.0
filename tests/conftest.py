@@ -13,7 +13,7 @@ except ImportError:
 if not HAS_PYSIDE6:
     collect_ignore = [
         "test_app.py", "test_app_threading.py", "test_auth_mixin.py",
-        "test_cmd_page.py", "test_commands_mixin.py",
+        "test_commands_mixin.py",
         "test_concurrency_patterns.py", "test_dashboard_mixin.py",
         "test_device_dialog.py", "test_fetch_mixin.py", "test_gui_helper.py",
         "test_page_builder.py",
@@ -22,6 +22,8 @@ if not HAS_PYSIDE6:
         "test_ssh_mixin.py", "test_tabs_registry.py", "test_topology.py",
         "test_topology_context_menu.py", "test_vnfs_mixin.py",
         "test_watcher.py", "test_widgets.py",
+        "tabs/cmd/test_cmd_page.py", "tabs/cmd/test_editor_enter.py",
+        "tabs/cmd/test_handlers.py",
         "tabs/manutencao/test_handlers.py", "tabs/manutencao/test_page.py",
     ]
 else:
