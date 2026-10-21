@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 def _make_app() -> MagicMock:
     """Cria mock de AppCore com atributos essenciais preenchidos."""
     from huawei_manager.app import AppCore
+    from huawei_manager.tabs import build_registry
     app = MagicMock(spec=AppCore)
     app._theme = "dark"
     app._theme_toggling = False
@@ -20,6 +21,8 @@ def _make_app() -> MagicMock:
     app._page_container = MagicMock()
     app._nav_buttons = {"home": MagicMock()}
     app.theme_btn = MagicMock()
+    # _rebuild_page consulta o registry (Fase 0) — spec do MagicMock não o expõe.
+    app._tabs = build_registry(MagicMock())
     return app
 
 

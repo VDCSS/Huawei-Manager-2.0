@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from huawei_manager.services import ServiceDef
     from huawei_manager.services.ui_bridge import UiBridge
     from huawei_manager.session import NetmikoSession
+    from huawei_manager.tabs._contract import TabContext, TabDef
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.neon_button import ActionButton, NeonButton
 
@@ -63,6 +64,8 @@ class AppCoreProtocol(Protocol):
     _event_queue: IEventBus
     _session_tracker: SessionTracker
     _access_level: str
+    _tabs: list[TabDef]
+    _tab_context: TabContext
     _mock_mode: bool
 
     _ui_queue: deque[Callable[[], object]]

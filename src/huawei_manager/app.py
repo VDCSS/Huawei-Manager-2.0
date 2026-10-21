@@ -38,7 +38,9 @@ if TYPE_CHECKING:
     from huawei_manager.sdn_controller.event_queue import Event
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
     from huawei_manager.services import ServiceDef
+    from huawei_manager.tabs._contract import TabDef
     from huawei_manager.topology import TopologyCanvas
+    from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
 import huawei_manager.constants as C
 from huawei_manager import _config
@@ -70,6 +72,8 @@ from huawei_manager.sdn_controller.validator import CommandValidator
 from huawei_manager.services.device_service import DeviceService
 from huawei_manager.services.ui_bridge import UiBridge
 from huawei_manager.session import NetmikoSession
+from huawei_manager.tabs import build_registry, tab_by_key
+from huawei_manager.tabs._contract import TabContext
 from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button, neon_button
 
 log = logging.getLogger("huawei_manager")
@@ -480,21 +484,25 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             f"background: {C.BG_CARD}; border-radius: 4px;")
         self.content_layout.addWidget(self._page_container, stretch=1)
 
+        # Registry único de abas (Fase 0 — plano plano-abas-independentes):
+        # sidebar, builders e RBAC derivam de tabs/_TAB_META; builders legados
+        # embrulhados por LegacyTabAdapter até cada aba migrar (Fase 2).
+        self._tabs: list[TabDef] = build_registry(self)
+        self._tab_context = TabContext(
+            sb=self._sb,
+            audit=self.audit_logger,
+            event_bus=self._event_queue,
+            role=lambda: self._access_level,
+            device=self._get_selected_device,
+            dispatch=self._dispatch,
+        )
+
         self._build_sidebar()
         self._build_footer(right_layout)
 
         self.pages: dict[str, QWidget] = {}
         self._page_builders: dict[str, Callable[[], None]] = {
-            "home":       self._build_home_page,
-            "config":     self._build_config_page,
-            "route":      self._build_route_page,
-            "arp":        self._build_arp_page,
-            "info":       self._build_info_page,
-            "cmd":        self._build_cmd_page,
-            "backup":     self._build_backup_page,
-            "topology":   self._build_topology_page,
-            "services":   self._build_services_page,
-            "manutencao": self._build_manutencao_page,
+            td.key: (lambda key=td.key: self._build_tab(key)) for td in self._tabs
         }
 
     # ── Header ───────────────────────────────────────────────────────
@@ -593,28 +601,13 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         self._nav_buttons: dict[str, NeonButton] = {}
 
-        groups = (
-            ("DASHBOARD", (
-                ("home", "\U0001f3e0", "Dashboard", C.NEON_CYAN),
-            )),
-            ("DISPOSITIVOS", (
-                ("topology", "\U0001f5fa", "Topologia / Devices", C.NEON_AMBER),
-                ("config",   "\U0001f4cb", "Config Atual", C.NEON_CYAN),
-                ("route",    "\U0001f310", "Roteamento", C.NEON_CYAN),
-                ("arp",      "\U0001f4e1", "Tabela ARP", C.NEON_CYAN),
-                ("info",     "\U0001f4bb", "Info do Sistema", C.NEON_MAG),
-            )),
-            ("FERRAMENTAS", (
-                ("cmd",      "\u2328",     "Editor de Comandos", C.NEON_MAG),
-                ("backup",   "\U0001f4be", "Backup", C.NEON_PURP),
-                ("services", "\u26a1",     "Servicos", C.NEON_AMBER),
-            )),
-            ("ADMINISTRACAO", (
-                ("manutencao", "\U0001f6e0", "Manutencao", C.NEON_MAG),
-            )),
-        )
+        # Sidebar gerada do registry (Fase 0): grupos e itens vêm de self._tabs
+        # na ordem declarada em tabs/_TAB_META — fonte única.
+        groups: dict[str, list[TabDef]] = {}
+        for td in self._tabs:
+            groups.setdefault(td.group, []).append(td)
 
-        for cat_label, items in groups:
+        for cat_label, items in groups.items():
             cat_w = QWidget(sb)
             cat_w.setStyleSheet(f"background: {C.BG_SIDEBAR};")
             cat_layout = QVBoxLayout(cat_w)
@@ -626,11 +619,11 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
                               f"font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY};")
             cat_layout.addWidget(lbl)
 
-            for key, icon_char, label, color in items:
-                btn = neon_button(cat_w, label,
-                                  lambda _chk, k=key: self._show_page(k),
-                                  color=color, icon=icon_char)
-                self._nav_buttons[key] = btn
+            for td in items:
+                btn = neon_button(cat_w, td.label,
+                                  lambda _chk, k=td.key: self._show_page(k),
+                                  color=td.color, icon=td.icon)
+                self._nav_buttons[td.key] = btn
                 cat_layout.addWidget(btn)
             sb_layout.addWidget(cat_w)
 
@@ -692,6 +685,21 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self.pages[key] = p
         return p
 
+    def _build_tab(self, key: str) -> None:
+        """Constrói a aba pelo registry (Fase 0).
+
+        Módulos legados registram a página sozinhos (``build`` → ``None``);
+        módulos reais (Fase 1+) devolvem a QWidget e o registro é aqui.
+        """
+        td = tab_by_key(self._tabs, key)
+        if td is None:
+            return
+        page = td.module.build(self._tab_context)
+        if page is not None:
+            self.pages[key] = page
+            if self._page_container is not None:
+                self._page_container.addWidget(page)
+
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
         if self._active_btn:
@@ -710,6 +718,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._current_page = key
 
     def _rebuild_page(self, key: str) -> None:
+        td = tab_by_key(self._tabs, key)
+        if td is not None:
+            td.module.dispose()
         if key in self.pages:
             old = self.pages.pop(key)
             if self._page_container is not None:
@@ -801,13 +812,34 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         if self._command_palette is None:
             from huawei_manager.widgets.command_palette import (
                 CommandPalette,
+                CommandRegistry,
                 create_default_commands,
             )
-            self._command_palette = CommandPalette(self, create_default_commands(self))
+            # Mesma lista viva: o registry muta in-place e a paleta vê as
+            # mudanças no próximo filtro (abas registrando ações — Fase 0).
+            cmds = create_default_commands(self)
+            self._command_registry = CommandRegistry(cmds)
+            self._command_palette = CommandPalette(self, cmds)
         if self._command_palette.isVisible():
             self._command_palette.hide()
         else:
             self._command_palette.show()
+
+    def register_command(self, cmd: Command) -> None:
+        """Registra um comando na palette — API para abas (Fase 0)."""
+        if getattr(self, "_command_registry", None) is None:
+            self._toggle_command_palette()
+        registry = cast(
+            "CommandRegistry | None", getattr(self, "_command_registry", None))
+        if registry is not None:
+            registry.register(cmd)
+
+    def unregister_command(self, cmd_id: str) -> None:
+        """Remove comando da palette pelo id — cleanup no dispose da aba."""
+        registry = cast(
+            "CommandRegistry | None", getattr(self, "_command_registry", None))
+        if registry is not None:
+            registry.unregister(cmd_id)
 
     def _rebuild_ui(self) -> None:
         # 1. Parar todos os timers antes de destruir widgets
