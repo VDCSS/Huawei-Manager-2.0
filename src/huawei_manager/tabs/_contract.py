@@ -17,8 +17,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from PySide6.QtWidgets import QWidget
 
+    from huawei_manager.agents import AgentResult
+    from huawei_manager.agents.watcher import Watcher
     from huawei_manager.audit_log import AuditLogger
     from huawei_manager.device_models import Device
     from huawei_manager.sdn_controller.bus import IEventBus
@@ -42,6 +46,16 @@ class TabContext:
     role: Callable[[], str]         # papel atual sob demanda ("user"/"tecnico"/"admin")
     device: Callable[[], Device | None]  # device selecionado sob demanda
     dispatch: Callable[..., None]   # agendamento na thread GUI (App._dispatch)
+    # Fase 1 (piloto Manutenção) — serviços que a aba real consome:
+    require_access: Callable[[str], bool]   # RBAC de ação (App._require_access)
+    spawn_io: Callable[..., None]           # thread de IO (App._spawn_io)
+    spawn_cpu: Callable[..., None]          # thread de CPU (App._spawn_cpu)
+    watcher: Watcher                        # watcher global (is_active/start/stop)
+    is_mock: Callable[[], bool]             # modo probe global (App._mock_mode)
+    toggle_mock: Callable[[], bool]         # alterna e devolve o novo modo
+    show_auth_dialog: Callable[[], None]    # diálogo de login (App._show_auth_dialog)
+    watcher_results: Callable[[], Sequence[AgentResult] | None]  # snapshot global
+    set_watcher_results: Callable[[Sequence[AgentResult]], None]  # grava snapshot
 
 
 @runtime_checkable

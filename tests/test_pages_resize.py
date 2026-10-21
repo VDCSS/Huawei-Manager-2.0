@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 )
 
 from huawei_manager.pages.builder import PageBuilder
+from huawei_manager.tabs._contract import TabContext
+from huawei_manager.tabs.manutencao.page import ManutencaoTab
 from huawei_manager.widgets.neon_button import ActionButton
 
 
@@ -101,29 +103,36 @@ class TestServicesPageResize:
 
 
 class TestManutencaoPageGrid:
-    def _make_manut_builder(self) -> PageBuilder:
-        builder = _make_builder()
-        builder._access_level = "tecnico"
-        builder._mock_mode = True
-        builder._watcher_results = []
-        builder._watcher = MagicMock()
-        builder._watcher.is_active = False
-        builder._loading = MagicMock()
-        builder._display_watcher_results = MagicMock()
-        builder._run_dev_cmd = MagicMock()
-        builder._run_agents = MagicMock()
-        builder._toggle_watcher = MagicMock()
-        builder._toggle_probe_mode = MagicMock()
-        builder._run_setup = MagicMock()
-        builder._cancel_and_clear = MagicMock()
-        return builder
+    def _build_manut(self) -> QWidget:
+        """Aba real (módulo TabModule) — ctx fake, sem App."""
+        ctx = TabContext(
+            sb=MagicMock(),
+            audit=None,
+            event_bus=MagicMock(),
+            role=lambda: "tecnico",
+            device=lambda: None,
+            dispatch=lambda fn: fn() if callable(fn) else None,
+            require_access=lambda level: True,
+            spawn_io=lambda fn, *args: fn(*args),
+            spawn_cpu=lambda fn, *args: fn(*args),
+            watcher=MagicMock(is_active=False),
+            is_mock=lambda: True,
+            toggle_mock=lambda: False,
+            show_auth_dialog=lambda: None,
+            watcher_results=lambda: [],
+            set_watcher_results=MagicMock(),
+        )
+        return ManutencaoTab().build(ctx)
+
+    def _show(self, page: QWidget) -> None:
+        # Paridade com o efeito final do _show_page legado: 800×600.
+        page.resize(800, 600)
+        page.show()
+        QApplication.processEvents()
 
     def test_install_reset_buttons_visible_at_1220px(self):
-        builder = self._make_manut_builder()
-        builder._build_manutencao_page()
-        page = builder._page_container.widget(0)
-        builder._page_container.resize(1220, 700)
-        _show_page(builder)
+        page = self._build_manut()
+        self._show(page)
 
         buttons = [
             b for b in page.findChildren(ActionButton)
@@ -136,11 +145,8 @@ class TestManutencaoPageGrid:
             assert btn.geometry().width() > 0
 
     def test_no_button_exceeds_page_viewport(self):
-        builder = self._make_manut_builder()
-        builder._build_manutencao_page()
-        page = builder._page_container.widget(0)
-        builder._page_container.resize(1220, 700)
-        _show_page(builder)
+        page = self._build_manut()
+        self._show(page)
 
         for btn in page.findChildren(ActionButton):
             assert btn.isVisible()

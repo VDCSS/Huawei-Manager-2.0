@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QComboBox, QListWidget, QListWidgetItem, QRadioButton
+    from PySide6.QtWidgets import QComboBox, QListWidget, QListWidgetItem
 
     from huawei_manager._protocols import AppCoreProtocol
     from huawei_manager.agents import AgentResult
@@ -97,9 +97,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         _svc_cat_var: str
         _tpl_cmd_map: dict[str, str]
         _tpl_listbox: QListWidget
-        _manut_rb_group: list[QRadioButton]
-        _mode_btn: ActionButton
-        _watcher_btn: ActionButton
         _svc_device_lbl: QLabel | None
         _svc_type_lbl: QLabel | None
         _svc_status_lbl: QLabel | None
@@ -115,8 +112,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         _dash_device_unknown: QLabel | None
         _dash_audit_text: QTextEdit | None
         _dash_shortcut_btns: dict[str, str]
-        _manut_summary: QTextEdit | None
-        _manut_output: QTextEdit | None
         _cmd_editor: QTextEdit | None
         _backup_entry: QLineEdit | None
 
@@ -229,28 +224,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _build_cmd_page(self: AppCoreProtocol) -> None: ...
         def _build_backup_page(self: AppCoreProtocol) -> None: ...
         def _build_topology_page(self: AppCoreProtocol) -> None: ...
-        def _build_manutencao_page(self: AppCoreProtocol) -> None: ...
-        def _run_agents(self: AppCoreProtocol) -> None: ...
-        def _toggle_watcher(self: AppCoreProtocol) -> None: ...
-        def _toggle_probe_mode(self: AppCoreProtocol) -> None: ...
-        def _cancel_and_clear(self: AppCoreProtocol) -> None: ...
-        def _run_setup(self: AppCoreProtocol, mode: str) -> None: ...
-        def _run_dev_cmd(self: AppCoreProtocol, target: str) -> None: ...
-        def _spawn_stream(
-            self: AppCoreProtocol,
-            cmd_list: list[str],
-            *,
-            timeout_s: int,
-            done_label: str,
-            cwd: str,
-        ) -> None: ...
-        def _display_watcher_results(
-            self: AppCoreProtocol, results: Sequence[AgentResult]
-        ) -> None: ...
-        def _apply_manut_filter(self: AppCoreProtocol) -> None: ...
-        def _on_manut_filter_toggled(
-            self: AppCoreProtocol, checked: bool, value: str
-        ) -> None: ...
         def _on_tpl_select(self: AppCoreProtocol, row: int) -> None: ...
         def _on_tpl_activate(
             self: AppCoreProtocol, item: QListWidgetItem
@@ -416,15 +389,12 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._device_info_lbl: QLabel | None = None
         self._device_status_lbl: QLabel | None = None
         self._auth_overlay: QWidget | None = None
-        self._last_manut_results: Sequence[AgentResult] = []
-        self._manut_filter: str = "all"
         self._devices_lock = threading.Lock()
         self._devices_gen: int = 0
         self._devices: list[Device] = []
         self._mock_mode: bool = False
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
-        self._cancel_event: threading.Event | None = None
         self.backup_path: str = ""
         self._svc_mode_var: str = os.environ.get("HW_SVC_MODE", "mock")
         if self._svc_mode_var not in ("mock", "cli"):
@@ -495,6 +465,15 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             role=lambda: self._access_level,
             device=self._get_selected_device,
             dispatch=self._dispatch,
+            require_access=self._require_access,
+            spawn_io=self._spawn_io,
+            spawn_cpu=self._spawn_cpu,
+            watcher=self._watcher,
+            is_mock=lambda: self._mock_mode,
+            toggle_mock=self._toggle_mock_mode,
+            show_auth_dialog=self._show_auth_dialog,
+            watcher_results=lambda: self._watcher_results,
+            set_watcher_results=self._set_watcher_results,
         )
 
         self._build_sidebar()
@@ -700,6 +679,15 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             if self._page_container is not None:
                 self._page_container.addWidget(page)
 
+    def _toggle_mock_mode(self) -> bool:
+        """Alterna o modo probe global (Real/Mock) — injetado no TabContext."""
+        self._mock_mode = not self._mock_mode
+        return self._mock_mode
+
+    def _set_watcher_results(self, results: Sequence[AgentResult]) -> None:
+        """Snapshot imutável (R18) dos resultados dos agentes."""
+        self._watcher_results = tuple(results)
+
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
         if self._active_btn:
@@ -879,8 +867,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._dash_device_unknown = None
         self._dash_audit_text = None
         self._dash_shortcut_btns = {}
-        self._manut_summary = None
-        self._manut_output = None
         self._cmd_editor = None
         self._backup_entry = None
         self._auth_overlay = None

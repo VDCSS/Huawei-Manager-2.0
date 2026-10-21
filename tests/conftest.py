@@ -16,12 +16,13 @@ if not HAS_PYSIDE6:
         "test_cmd_page.py", "test_commands_mixin.py",
         "test_concurrency_patterns.py", "test_dashboard_mixin.py",
         "test_device_dialog.py", "test_fetch_mixin.py", "test_gui_helper.py",
-        "test_manutencao_page.py", "test_page_builder.py",
+        "test_page_builder.py",
         "test_rbac_matrix.py", "test_services_mixin.py",
         "test_services_page.py", "test_services_validation.py",
-        "test_ssh_mixin.py", "test_topology.py",
+        "test_ssh_mixin.py", "test_tabs_registry.py", "test_topology.py",
         "test_topology_context_menu.py", "test_vnfs_mixin.py",
         "test_watcher.py", "test_widgets.py",
+        "tabs/manutencao/test_handlers.py", "tabs/manutencao/test_page.py",
     ]
 else:
     collect_ignore = []

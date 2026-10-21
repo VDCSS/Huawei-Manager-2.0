@@ -10,6 +10,7 @@ Ordem da lista = ordem da sidebar. Grupos na ordem de exibição.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -33,8 +34,15 @@ class _TabMeta:
     group: str
     description: str
     shortcut: str | None
-    method: str                    # nome do builder legado no App
+    method: str                    # nome do builder legado no App ("" = módulo real)
     min_role: str = "user"         # hoje tudo visível; RBAC de visibilidade via registry
+    module_factory: Callable[[], TabModule] | None = None  # módulo real (F1+)
+
+
+def _manutencao_module() -> TabModule:
+    """Módulo real da Manutenção (Fase 1) — import lazy evita ciclo."""
+    from huawei_manager.tabs.manutencao import ManutencaoTab
+    return ManutencaoTab()
 
 
 _TAB_META: tuple[_TabMeta, ...] = (
@@ -57,7 +65,8 @@ _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("services", "Servicos", "⚡", C.NEON_AMBER, "FERRAMENTAS",
              "Gerenciar serviços do roteador", "Ctrl+9", "_build_services_page"),
     _TabMeta("manutencao", "Manutencao", "\U0001f6e0", C.NEON_MAG, "ADMINISTRACAO",
-             "Ferramentas de manutenção", "Ctrl+0", "_build_manutencao_page"),
+             "Ferramentas de manutenção", "Ctrl+0", "",
+             module_factory=_manutencao_module),
 )
 
 
@@ -73,7 +82,6 @@ class _HostProtocol(Protocol):
     def _build_cmd_page(self) -> None: ...
     def _build_backup_page(self) -> None: ...
     def _build_services_page(self) -> None: ...
-    def _build_manutencao_page(self) -> None: ...
 
 
 def build_registry(host: _HostProtocol) -> list[TabDef]:
@@ -88,10 +96,13 @@ def build_registry(host: _HostProtocol) -> list[TabDef]:
     """
     tabs: list[TabDef] = []
     for meta in _TAB_META:
-        builder = getattr(host, meta.method, None)
-        if builder is None:
-            raise RuntimeError(f"host sem builder legado: {meta.method}")
-        module: TabModule = LegacyTabAdapter(builder)
+        if meta.module_factory is not None:
+            module: TabModule = meta.module_factory()
+        else:
+            builder = getattr(host, meta.method, None)
+            if builder is None:
+                raise RuntimeError(f"host sem builder legado: {meta.method}")
+            module = LegacyTabAdapter(builder)
         tabs.append(TabDef(
             key=meta.key, label=meta.label, icon=meta.icon, color=meta.color,
             group=meta.group, min_role=meta.min_role,

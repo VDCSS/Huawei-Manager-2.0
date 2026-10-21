@@ -5,7 +5,6 @@ from huawei_manager.handlers.commands import CommandsMixin
 from huawei_manager.handlers.dashboard import DashboardMixin
 from huawei_manager.handlers.devices import DevicesMixin
 from huawei_manager.handlers.fetch import FetchMixin
-from huawei_manager.handlers.maintenance import MaintenanceMixin
 from huawei_manager.handlers.services import ServicesMixin
 from huawei_manager.handlers.ssh import SshMixin
 
@@ -17,7 +16,6 @@ class EventHandlers(
     CommandsMixin,
     ServicesMixin,
     DevicesMixin,
-    MaintenanceMixin,
     DashboardMixin,
 ):
     ADMIN_MAX_ATTEMPTS = 3
