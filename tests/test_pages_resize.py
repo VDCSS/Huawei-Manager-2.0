@@ -50,8 +50,8 @@ def _show_page(builder: PageBuilder, index: int = 0) -> None:
     QApplication.processEvents()
 
 
-def _cmd_ctx():
-    """TabContext fake completo p/ construir a aba CmdTab."""
+def _fake_ctx():
+    """TabContext fake completo (23 campos) p/ construir abas nos testes."""
     from huawei_manager.tabs._contract import TabContext
 
     return TabContext(
@@ -73,7 +73,7 @@ def _build_cmd_page(builder: PageBuilder):
     """Constrói a aba Editor de Comandos via módulo (F2-cmd) no container."""
     from huawei_manager.tabs.cmd import CmdTab
 
-    page = CmdTab().build(_cmd_ctx())
+    page = CmdTab().build(_fake_ctx())
     builder._page_container.addWidget(page)
     return page
 
@@ -233,19 +233,16 @@ class TestTopologyBarResize:
 
 
 class TestBackupEntryResize:
-    def _make_backup_builder(self) -> PageBuilder:
-        builder = _make_builder()
-        builder._choose_backup_dir = MagicMock()
-        builder._do_backup = MagicMock()
-        return builder
-
     def test_entry_width_and_expanding_policy(self):
-        builder = self._make_backup_builder()
-        builder._build_backup_page()
-        page = builder._page_container.widget(0)
+        from huawei_manager.tabs.backup import BackupTab
+
+        builder = _make_builder()
+        tab = BackupTab()
+        page = tab.build(_fake_ctx())
+        builder._page_container.addWidget(page)
         _show_page(builder)
 
-        entry = builder._backup_entry
+        entry = tab.state.backup_entry
         assert entry.minimumWidth() == 24 * 8
         assert entry.maximumWidth() == 24 * 14
         policy = entry.sizePolicy()

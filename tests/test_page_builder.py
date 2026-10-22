@@ -1,6 +1,6 @@
 """Testes de caracterização — PageBuilder (pages/builder.py).
 
-Testa _css_label (puro) e _choose_backup_dir (com mock de QFileDialog).
+Testa _css_label (puro).
 """
 from __future__ import annotations
 

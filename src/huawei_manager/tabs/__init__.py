@@ -45,6 +45,12 @@ def _cmd_module() -> TabModule:
     return CmdTab()
 
 
+def _backup_module() -> TabModule:
+    from huawei_manager.tabs.backup import BackupTab
+
+    return BackupTab()
+
+
 def _manutencao_module() -> TabModule:
     """Módulo real da Manutenção (Fase 1) — import lazy evita ciclo."""
     from huawei_manager.tabs.manutencao import ManutencaoTab
@@ -67,7 +73,7 @@ _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("cmd", "Editor de Comandos", "⌨", C.NEON_MAG, "FERRAMENTAS",
              "Executar comandos personalizados", "Ctrl+7", "", module_factory=_cmd_module),
     _TabMeta("backup", "Backup", "\U0001f4be", C.NEON_PURP, "FERRAMENTAS",
-             "Gerenciar backups de configuração", "Ctrl+8", "_build_backup_page"),
+             "Gerenciar backups de configuração", "Ctrl+8", "", module_factory=_backup_module),
     _TabMeta("services", "Servicos", "⚡", C.NEON_AMBER, "FERRAMENTAS",
              "Gerenciar serviços do roteador", "Ctrl+9", "_build_services_page"),
     _TabMeta("manutencao", "Manutencao", "\U0001f6e0", C.NEON_MAG, "ADMINISTRACAO",
@@ -85,7 +91,6 @@ class _HostProtocol(Protocol):
     def _build_route_page(self) -> None: ...
     def _build_arp_page(self) -> None: ...
     def _build_info_page(self) -> None: ...
-    def _build_backup_page(self) -> None: ...
     def _build_services_page(self) -> None: ...
 
 

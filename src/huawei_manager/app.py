@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
     from huawei_manager.services import ServiceDef
     from huawei_manager.tabs._contract import TabDef
+    from huawei_manager.tabs.backup import BackupTab
     from huawei_manager.tabs.cmd import CmdTab
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.command_palette import Command, CommandRegistry
@@ -93,7 +94,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         route_filter_var: str
         _route_filter_cb: QComboBox
         _admin_btn: ActionButton
-        _backup_fmt_lbl: QLabel
         _svc_cat_var: str
         _svc_device_lbl: QLabel | None
         _svc_type_lbl: QLabel | None
@@ -110,7 +110,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         _dash_device_unknown: QLabel | None
         _dash_audit_text: QTextEdit | None
         _dash_shortcut_btns: dict[str, str]
-        _backup_entry: QLineEdit | None
 
         # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
         def _on_sdn_event(self: AppCoreProtocol, ev: Event | None) -> None: ...
@@ -173,8 +172,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _delete_device(self: AppCoreProtocol, device: Device) -> None: ...
         def _on_device_selected(self: AppCoreProtocol, device: Device) -> None: ...
         def _clear_device_target(self: AppCoreProtocol) -> None: ...
-        def _do_backup(self: AppCoreProtocol, fmt: str = "") -> None: ...
-        def _choose_backup_dir(self: AppCoreProtocol) -> None: ...
         def _run_service(
             self: AppCoreProtocol, svc: ServiceDef,
             final_svc: ServiceDef | None = None,
@@ -364,7 +361,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self.out_route: QTextEdit | None = None
         self.out_arp: QTextEdit | None = None
         self.out_info: QTextEdit | None = None
-        self.out_backup: QTextEdit | None = None
         self._svc_output: QTextEdit | None = None
         self._page_container: QStackedWidget | None = None
         self._device_info_lbl: QLabel | None = None
@@ -376,7 +372,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._mock_mode: bool = False
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
-        self.backup_path: str = ""
         self._svc_mode_var: str = os.environ.get("HW_SVC_MODE", "mock")
         if self._svc_mode_var not in ("mock", "cli"):
             log.warning("HW_SVC_MODE invalido (%r) — usando mock", self._svc_mode_var)
@@ -718,6 +713,28 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         tab = self._cmd_tab()
         return None if tab is None else tab.out_widget()
 
+    # ── Fachadas da aba Backup (F2-backup) ──────────────────────────
+    def _backup_tab(self) -> BackupTab | None:
+        """Módulo real da aba backup (instância única do registry) + contexto."""
+        from huawei_manager.tabs.backup import BackupTab
+
+        td = tab_by_key(self._tabs, "backup")
+        if td is None or not isinstance(td.module, BackupTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _do_backup(self, fmt: str = "") -> None:
+        tab = self._backup_tab()
+        if tab is not None:
+            tab.run_backup(fmt)
+
+    def _backup_out(self) -> QTextEdit | None:
+        """Widget de saída da aba backup (Ctrl+L limpa a saída)."""
+        tab = self._backup_tab()
+        return None if tab is None else tab.out_widget()
+
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
         if self._active_btn:
@@ -897,7 +914,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._dash_device_unknown = None
         self._dash_audit_text = None
         self._dash_shortcut_btns = {}
-        self._backup_entry = None
         self._auth_overlay = None
         self._device_info_lbl = None
         self._device_status_lbl = None

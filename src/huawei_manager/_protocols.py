@@ -90,7 +90,6 @@ class AppCoreProtocol(Protocol):
     _shutdown: bool
     ADMIN_MAX_ATTEMPTS: int
     ADMIN_LOCKOUT_SECS: int
-    backup_path: str
 
     content: QWidget | None
 
@@ -113,8 +112,6 @@ class AppCoreProtocol(Protocol):
     route_filter_var: str
     _route_filter_cb: QComboBox
     _admin_btn: ActionButton
-    _backup_entry: QLineEdit | None
-    _backup_fmt_lbl: QLabel
     _device_target_lbl: QLabel
 
     # ── Páginas: saídas de texto ────────────────────────────────────
@@ -122,7 +119,6 @@ class AppCoreProtocol(Protocol):
     out_route: QTextEdit | None
     out_arp: QTextEdit | None
     out_info: QTextEdit | None
-    out_backup: QTextEdit | None
 
     # ── Dashboard ───────────────────────────────────────────────────
     _dash_conn_status: QLabel | None
@@ -240,7 +236,7 @@ class AppCoreProtocol(Protocol):
     def _rollback_last_config(self) -> None: ...
     def _cmd_out(self) -> QTextEdit | None: ...
     def _do_backup(self, fmt: str = "") -> None: ...
-    def _choose_backup_dir(self) -> None: ...
+    def _backup_out(self) -> QTextEdit | None: ...
 
     # ── Serviços ────────────────────────────────────────────────────
     def _run_service(

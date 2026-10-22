@@ -3,11 +3,8 @@
 
 from __future__ import annotations
 
-import os
-
 from PySide6.QtWidgets import (
     QComboBox,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -25,7 +22,7 @@ from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
 from huawei_manager.widgets.elide_label import ElideLabel
 from huawei_manager.widgets.neon_button import action_button
-from huawei_manager.widgets.neon_entry import neon_entry, output_text
+from huawei_manager.widgets.neon_entry import output_text
 
 
 class PageBuilder(PageBuilderServicesMixin):
@@ -149,63 +146,6 @@ class PageBuilder(PageBuilderServicesMixin):
         self._page_layout(p).addSpacing(10)
         btn = action_button(p, "\u21bb  get system info",
                             lambda: self._run(self._fetch_info), C.NEON_MAG)
-        self._page_layout(p).addWidget(btn)
-
-    # ── Backup ────────────────────────────────────────────────────────
-    def _build_backup_page(self: AppCoreProtocol) -> None:
-        p = self._make_page("backup")
-        self._page_title(p, "Backup de Configuracao", C.NEON_PURP,
-                         "display current-configuration \u2192 arquivo")
-
-        ctrl = QWidget(p)
-        ctrl.setStyleSheet(f"background: {C.BG_CARD};")
-        ctrl.setMaximumHeight(40)
-        ctrl_layout = QHBoxLayout(ctrl)
-        ctrl_layout.setContentsMargins(0, 0, 0, 0)
-        self._page_layout(p).addWidget(ctrl)
-        self._page_layout(p).addSpacing(12)
-
-        dest_lbl = QLabel("Destino:", ctrl)
-        dest_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
-        ctrl_layout.addWidget(dest_lbl)
-        ctrl_layout.addSpacing(8)
-
-        self._backup_entry = neon_entry(ctrl, width=24)
-        self._backup_entry.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.backup_path = os.path.expanduser("~")
-        self._backup_entry.setText(self.backup_path)
-        self._backup_entry.textChanged.connect(lambda t: setattr(self, 'backup_path', t))
-        ctrl_layout.addWidget(self._backup_entry)
-
-        btn_dir = action_button(ctrl, "\U0001f4c1 Escolha",
-                                self._choose_backup_dir, C.NEON_PURP)
-        ctrl_layout.addWidget(btn_dir)
-        ctrl_layout.addSpacing(8)
-
-        fmt_frame = QWidget(p)
-        fmt_frame.setStyleSheet(f"background: {C.BG_CARD};")
-        fmt_frame.setMaximumHeight(40)
-        fmt_layout = QHBoxLayout(fmt_frame)
-        fmt_layout.setContentsMargins(0, 0, 0, 0)
-        self._page_layout(p).addWidget(fmt_frame)
-        self._page_layout(p).addSpacing(8)
-
-        fmt_lbl = QLabel("Formato:", fmt_frame)
-        fmt_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
-        fmt_layout.addWidget(fmt_lbl)
-        fmt_layout.addSpacing(8)
-
-        self._backup_fmt_lbl = QLabel(f"Formato: {C.BACKUP_FMT_TEXT}", fmt_frame)
-        self._backup_fmt_lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
-        fmt_layout.addWidget(self._backup_fmt_lbl)
-        fmt_layout.addStretch()
-
-        self.out_backup = output_text(p)
-        self._page_layout(p).addWidget(self.out_backup, stretch=1)
-        self._page_layout(p).addSpacing(10)
-        btn = action_button(p, "\U0001f4be  Fazer Backup",
-                            lambda: self._run(
-                                lambda: self._do_backup(C.BACKUP_FMT_TEXT)), C.NEON_PURP)
         self._page_layout(p).addWidget(btn)
 
     # ── Topology ──────────────────────────────────────────────────────
@@ -372,12 +312,3 @@ class PageBuilder(PageBuilderServicesMixin):
             bar_layout.addWidget(btn)
             bar_layout.addSpacing(6)
         bar_layout.addStretch()
-
-    # ── Backup helper ─────────────────────────────────────────────────
-    def _choose_backup_dir(self: AppCoreProtocol) -> None:
-        d = QFileDialog.getExistingDirectory(
-            None, "Escolha o diretorio", self.backup_path)
-        if d:
-            self.backup_path = d
-            if self._backup_entry is not None:
-                self._backup_entry.setText(d)
