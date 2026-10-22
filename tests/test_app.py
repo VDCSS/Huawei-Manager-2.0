@@ -22,7 +22,7 @@ def _make_app() -> MagicMock:
     app._nav_buttons = {"home": MagicMock()}
     app.theme_btn = MagicMock()
     # _rebuild_page consulta o registry (Fase 0) — spec do MagicMock não o expõe.
-    app._tabs = build_registry(MagicMock())
+    app._tabs = build_registry()
     return app
 
 
@@ -40,11 +40,6 @@ class TestAppCoreComposition:
         from huawei_manager.app import AppCore
         from huawei_manager.app_threading import ThreadingMixin
         assert issubclass(AppCore, ThreadingMixin)
-
-    def test_huawei_router_app_inherits_page_builder(self):
-        from huawei_manager.app import HuaweiRouterApp
-        from huawei_manager.pages import PageBuilder
-        assert issubclass(HuaweiRouterApp, PageBuilder)
 
     def test_huawei_router_app_inherits_event_handlers(self):
         from huawei_manager.app import HuaweiRouterApp

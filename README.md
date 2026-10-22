@@ -68,8 +68,12 @@ src/huawei_manager/
 ├── constants.py        # Cores, famílias de fonte, filtros CLI
 ├── exceptions.py       # Custom exceptions
 │
-├── pages/              # PageBuilder — 10 abas da interface
-├── handlers/           # EventHandlers — SSH, auth, VNFs, serviços
+├── tabs/               # Registry único + módulos TabModule (10 abas)
+│   ├── __init__.py     # _TabMeta/TabDef — sidebar, grupos, RBAC
+│   ├── _contract.py    # TabDef, TabModule (Protocol), TabContext (34 campos)
+│   ├── _ui.py          # helpers de UI puros (page_frame/css_label/...)
+│   └── <aba>/          # page.py + state.py por aba (cmd, services, ...)
+├── handlers/           # EventHandlers — SSH, auth, devices (transversais)
 │
 ├── session.py          # NetmikoSession — connect, run_cli_rpc, edit_config
 ├── vault.py            # SecretsBackend + 5 backends + rotate_ssh_key()
@@ -258,6 +262,18 @@ make clean-all       # DESTRUTIVO: clean + .venv + logs
 | 💾 **Backup** | Backup da running-config para arquivo |
 | ⚡ **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
 | 🔧 **Manutenção** | Dev tools, scans de agentes, setup |
+
+### Como adicionar uma aba
+
+1. Criar `src/huawei_manager/tabs/<aba>/` com `__init__.py` (exporta a classe),
+   `page.py` (classe com `attach(ctx)`, `build(ctx)` e `dispose()`) e `state.py`
+   (dataclass mutável com o estado privado da aba).
+2. A aba enxerga **só o `TabContext`** (34 campos) — nunca atributos do App.
+   Cross-tab = event bus + fachadas read-only.
+3. Registrar em `tabs/__init__.py`: factory `_x_module()` (import lazy) + entrada
+   `_TabMeta(..., module_factory=_x_module)` — a ordem da lista é a ordem da sidebar.
+4. Testes em `tests/tabs/<aba>/test_page.py` com fake completo do `TabContext`.
+5. `make ci` verde + boot offscreen (`timeout 12` → exit 124).
 
 ---
 

@@ -64,7 +64,6 @@ from huawei_manager.device_models import Device
 from huawei_manager.device_repository import DeviceRepository
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.migration import migrate_json_inventory
-from huawei_manager.pages import PageBuilder
 from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.sdn_controller.core import ControllerCore
 from huawei_manager.sdn_controller.drivers.factory import driver_for
@@ -91,21 +90,12 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     if TYPE_CHECKING:
         # ── Membros do AppCoreProtocol que vivem em mixins/builder ──────
         # (declarações estáticas; as implementações reais ficam em
-        # AppStateMixin / ShortcutsMixin / EventHandlers / PageBuilder e
+        # AppStateMixin / ShortcutsMixin / EventHandlers e
         # só existem na composição final HuaweiRouterApp.)
         ADMIN_MAX_ATTEMPTS: int
         ADMIN_LOCKOUT_SECS: int
         # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
         def _on_sdn_event(self: AppCoreProtocol, ev: Event | None) -> None: ...
-        def _page_layout(self: AppCoreProtocol, p: QWidget) -> QVBoxLayout: ...
-        def _page_title(
-            self: AppCoreProtocol, parent: QWidget, title: str, color: str,
-            subtitle: str = "",
-        ) -> None: ...
-        def _css_label(
-            self: AppCoreProtocol, color: str, bg: str = "",
-            font_size: int = 12, bold: bool = False,
-        ) -> str: ...
         def _set_status(self: AppCoreProtocol, text: str, color: str) -> None: ...
         def _set_conn_btn(
             self: AppCoreProtocol, text: str = "", disabled: bool = False
@@ -151,8 +141,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _delete_device(self: AppCoreProtocol, device: Device) -> None: ...
         def _on_device_selected(self: AppCoreProtocol, device: Device) -> None: ...
         def _clear_device_target(self: AppCoreProtocol) -> None: ...
-        def _build_route_page(self: AppCoreProtocol) -> None: ...
-        def _build_backup_page(self: AppCoreProtocol) -> None: ...
 
     def __init__(self) -> None:
         super().__init__()
@@ -367,10 +355,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             f"background: {C.BG_CARD}; border-radius: 4px;")
         self.content_layout.addWidget(self._page_container, stretch=1)
 
-        # Registry único de abas (Fase 0 — plano plano-abas-independentes):
-        # sidebar, builders e RBAC derivam de tabs/_TAB_META; builders legados
-        # embrulhados por LegacyTabAdapter até cada aba migrar (Fase 2).
-        self._tabs: list[TabDef] = build_registry(self)
+        # Registry único de abas (plano plano-abas-independentes): sidebar e
+        # RBAC derivam de tabs/_TAB_META; as 10 abas são módulos reais.
+        self._tabs: list[TabDef] = build_registry()
         self._tab_context = TabContext(
             sb=self._sb,
             audit=self.audit_logger,
@@ -591,18 +578,8 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         parent_layout.addWidget(foot)
 
-    # ── Helpers de pagina ─────────────────────────────────────────────
-    def _make_page(self, key: str) -> QWidget:
-        p = cast("AppCoreProtocol", super())._make_page(key)
-        self.pages[key] = p
-        return p
-
     def _build_tab(self, key: str) -> None:
-        """Constrói a aba pelo registry (Fase 0).
-
-        Módulos legados registram a página sozinhos (``build`` → ``None``);
-        módulos reais (Fase 1+) devolvem a QWidget e o registro é aqui.
-        """
+        """Constrói a aba pelo registry e registra a QWidget no shell."""
         td = tab_by_key(self._tabs, key)
         if td is None:
             return
@@ -1023,5 +1000,5 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         if watcher_was_active:
             self._watcher.start()
 
-class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, AppCore, PageBuilder, EventHandlers):
-    """Classe final que combina os mixins AppCore, PageBuilder e EventHandlers."""
+class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, AppCore, EventHandlers):
+    """Classe final que combina os mixins AppCore e EventHandlers."""

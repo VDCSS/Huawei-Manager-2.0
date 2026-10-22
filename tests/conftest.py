@@ -15,7 +15,6 @@ if not HAS_PYSIDE6:
         "test_app.py", "test_app_threading.py", "test_auth_mixin.py",
         "test_concurrency_patterns.py",
         "test_device_dialog.py", "test_gui_helper.py",
-        "test_page_builder.py",
         "test_rbac_matrix.py",
         "test_ssh_mixin.py", "test_tabs_registry.py", "test_topology.py",
         "test_topology_context_menu.py", "test_vnfs_mixin.py",

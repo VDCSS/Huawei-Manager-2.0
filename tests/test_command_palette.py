@@ -147,7 +147,7 @@ class TestCreateDefaultCommands:
         mock_app = MagicMock()
         mock_app._show_page = MagicMock()
         mock_app._secrets = {"host": "192.168.1.1"}
-        mock_app._tabs = build_registry(mock_app)
+        mock_app._tabs = build_registry()
         cmds = create_default_commands(mock_app)
         nav_cmds = [c for c in cmds if c.category == "Navegação"]
         assert len(nav_cmds) == 10
@@ -158,7 +158,7 @@ class TestCreateDefaultCommands:
         mock_app = MagicMock()
         mock_app._show_page = MagicMock()
         mock_app._secrets = {"host": "192.168.1.1"}
-        mock_app._tabs = build_registry(mock_app)
+        mock_app._tabs = build_registry()
         mock_app._toggle_theme = MagicMock()
         cmds = create_default_commands(mock_app)
         theme_cmd = next(c for c in cmds if c.id == "toggle_theme")
@@ -170,7 +170,7 @@ class TestCreateDefaultCommands:
         mock_app = MagicMock()
         mock_app._show_page = MagicMock()
         mock_app._secrets = {"host": "192.168.1.1"}
-        mock_app._tabs = build_registry(mock_app)
+        mock_app._tabs = build_registry()
         mock_app._toggle_theme = MagicMock()
         cmds = create_default_commands(mock_app)
         copy_cmd = next(c for c in cmds if c.id == "copy_ip")
@@ -189,7 +189,7 @@ class TestCreateDefaultCommands:
         mock_app = MagicMock()
         mock_app._show_page = MagicMock()
         mock_app._secrets = {"host": "192.168.1.1"}
-        mock_app._tabs = build_registry(mock_app)
+        mock_app._tabs = build_registry()
         cmds = create_default_commands(mock_app)
         undo_cmd = next(c for c in cmds if c.id == "undo_config")
         # Sempre habilitado: a ação própria decide (mensagem "Nada a

@@ -1,10 +1,8 @@
-"""Registry único de abas — fonte da sidebar, dos builders e do RBAC.
+"""Registry único de abas — fonte da sidebar e do RBAC.
 
-Fase 0 (fundação): as 10 abas são definidas por :class:`TabDef` com metadados
-declarativos (label, ícone, cor, grupo, min_role, descrição, atalho). Os
-builders ainda são os métodos legados do App, embrulhados por
-:class:`LegacyTabAdapter` — cada Fase 2 troca a entrada pelo módulo real
-``tabs/<aba>/`` sem tocar neste contrato.
+As 10 abas são módulos reais ``tabs/<aba>/`` construídos pelo
+``module_factory`` de cada :class:`_TabMeta` (Fase 2 completa). Adicionar
+aba = criar o pacote + uma entrada aqui (ver README).
 
 Ordem da lista = ordem da sidebar. Grupos na ordem de exibição.
 """
@@ -12,11 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
 
 import huawei_manager.constants as C
 from huawei_manager.sdn_controller.authz import role_meets
-from huawei_manager.tabs._contract import LegacyTabAdapter, TabDef, TabModule
+from huawei_manager.tabs._contract import TabDef, TabModule
 
 __all__ = ["TabDef", "TabModule", "build_registry", "tab_by_key", "visible_tabs"]
 
@@ -34,9 +31,8 @@ class _TabMeta:
     group: str
     description: str
     shortcut: str | None
-    method: str                    # nome do builder legado no App ("" = módulo real)
+    module_factory: Callable[[], TabModule]  # módulo real — obrigatório (F2 completa)
     min_role: str = "user"         # hoje tudo visível; RBAC de visibilidade via registry
-    module_factory: Callable[[], TabModule] | None = None  # módulo real (F1+)
 
 
 def _cmd_module() -> TabModule:
@@ -101,52 +97,38 @@ def _topology_module() -> TabModule:
 
 _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("home", "Dashboard", "\U0001f3e0", C.NEON_CYAN, "DASHBOARD",
-             "Visão geral do sistema", "Ctrl+1", "", module_factory=_home_module),
+             "Visão geral do sistema", "Ctrl+1", module_factory=_home_module),
     _TabMeta("topology", "Topologia / Devices", "\U0001f5fa", C.NEON_AMBER, "DISPOSITIVOS",
-             "Visualizar e gerenciar dispositivos", "Ctrl+2", "", module_factory=_topology_module),
+             "Visualizar e gerenciar dispositivos", "Ctrl+2", module_factory=_topology_module),
     _TabMeta("config", "Config Atual", "\U0001f4cb", C.NEON_CYAN, "DISPOSITIVOS",
-             "Exibir configuração atual do roteador", "Ctrl+3", "", module_factory=_config_module),
+             "Exibir configuração atual do roteador", "Ctrl+3", module_factory=_config_module),
     _TabMeta("route", "Roteamento", "\U0001f310", C.NEON_CYAN, "DISPOSITIVOS",
-             "Tabela de roteamento", "Ctrl+4", "", module_factory=_route_module),
+             "Tabela de roteamento", "Ctrl+4", module_factory=_route_module),
     _TabMeta("arp", "Tabela ARP", "\U0001f4e1", C.NEON_CYAN, "DISPOSITIVOS",
-             "Tabela ARP", "Ctrl+5", "", module_factory=_arp_module),
+             "Tabela ARP", "Ctrl+5", module_factory=_arp_module),
     _TabMeta("info", "Info do Sistema", "\U0001f4bb", C.NEON_MAG, "DISPOSITIVOS",
-             "Informações do sistema", "Ctrl+6", "", module_factory=_info_module),
+             "Informações do sistema", "Ctrl+6", module_factory=_info_module),
     _TabMeta("cmd", "Editor de Comandos", "⌨", C.NEON_MAG, "FERRAMENTAS",
-             "Executar comandos personalizados", "Ctrl+7", "", module_factory=_cmd_module),
+             "Executar comandos personalizados", "Ctrl+7", module_factory=_cmd_module),
     _TabMeta("backup", "Backup", "\U0001f4be", C.NEON_PURP, "FERRAMENTAS",
-             "Gerenciar backups de configuração", "Ctrl+8", "", module_factory=_backup_module),
+             "Gerenciar backups de configuração", "Ctrl+8", module_factory=_backup_module),
     _TabMeta("services", "Servicos", "⚡", C.NEON_AMBER, "FERRAMENTAS",
-             "Gerenciar serviços do roteador", "Ctrl+9", "", module_factory=_services_module),
+             "Gerenciar serviços do roteador", "Ctrl+9", module_factory=_services_module),
     _TabMeta("manutencao", "Manutencao", "\U0001f6e0", C.NEON_MAG, "ADMINISTRACAO",
-             "Ferramentas de manutenção", "Ctrl+0", "",
+             "Ferramentas de manutenção", "Ctrl+0",
              module_factory=_manutencao_module),
 )
 
 
-class _HostProtocol(Protocol):
-    """Superfície do App exigida pelo registry (abas ainda sem módulo)."""
-
-
-def build_registry(host: _HostProtocol) -> list[TabDef]:
-    """Constrói o registry de abas a partir dos builders legados do host.
-
-    Args:
-        host: Instância com os métodos ``_build_<aba>_page`` (o App).
+def build_registry() -> list[TabDef]:
+    """Constrói o registry de abas — todas as abas têm módulo real.
 
     Returns:
-        Lista ordenada como a sidebar. Aba sem builder correspondente é
-        ignorada com KeyError propagado (fail-fast no boot).
+        Lista de :class:`TabDef` ordenada como a sidebar.
     """
     tabs: list[TabDef] = []
     for meta in _TAB_META:
-        if meta.module_factory is not None:
-            module: TabModule = meta.module_factory()
-        else:
-            builder = getattr(host, meta.method, None)
-            if builder is None:
-                raise RuntimeError(f"host sem builder legado: {meta.method}")
-            module = LegacyTabAdapter(builder)
+        module: TabModule = meta.module_factory()
         tabs.append(TabDef(
             key=meta.key, label=meta.label, icon=meta.icon, color=meta.color,
             group=meta.group, min_role=meta.min_role,

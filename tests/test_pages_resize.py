@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from huawei_manager.pages.builder import PageBuilder
 from huawei_manager.tabs._contract import TabContext
 from huawei_manager.tabs.manutencao.page import ManutencaoTab
 from huawei_manager.widgets.neon_button import ActionButton
@@ -32,19 +31,18 @@ def _app():
     yield app
 
 
-def _make_builder() -> PageBuilder:
-    builder = PageBuilder()
-    builder._page_container = QStackedWidget()
-    builder._access_level = "user"
-    builder._target_device = None
-    builder._run = MagicMock()
-    builder._get_editor_cmd = MagicMock(return_value="display version")
-    builder._exec_cmd = MagicMock()
-    builder._exec_config = MagicMock()
-    return builder
+class _ContainerHost:
+    """Harness mínimo: só o QStackedWidget que os testes manipulam."""
+
+    def __init__(self) -> None:
+        self._page_container = QStackedWidget()
 
 
-def _show_page(builder: PageBuilder, index: int = 0) -> None:
+def _make_builder() -> _ContainerHost:
+    return _ContainerHost()
+
+
+def _show_page(builder: _ContainerHost, index: int = 0) -> None:
     builder._page_container.resize(800, 600)
     builder._page_container.setCurrentIndex(index)
     builder._page_container.show()
@@ -81,7 +79,7 @@ def _fake_ctx():
     )
 
 
-def _build_cmd_page(builder: PageBuilder):
+def _build_cmd_page(builder: _ContainerHost):
     """Constrói a aba Editor de Comandos via módulo (F2-cmd) no container."""
     from huawei_manager.tabs.cmd import CmdTab
 
@@ -118,7 +116,7 @@ class TestCmdPageResize:
         assert left.maximumWidth() == 320
 
 
-def _build_services_page(builder: PageBuilder):
+def _build_services_page(builder: _ContainerHost):
     """Constrói a aba Serviços via módulo (F2-services) no container."""
     from huawei_manager.tabs.services import ServicesTab
 
@@ -221,7 +219,7 @@ class TestManutencaoPageGrid:
 
 
 class TestTopologyBarResize:
-    def _build_topo(self, builder: PageBuilder):
+    def _build_topo(self, builder: _ContainerHost):
         """Constrói a aba Topologia via módulo (F2-topology) no container."""
         from huawei_manager.tabs.topology import TopologyTab
 

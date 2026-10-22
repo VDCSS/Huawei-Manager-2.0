@@ -6,8 +6,6 @@ privados), recebendo **serviços centrais** via :class:`TabContext` e nunca
 vendo o ``App``. Comunicação entre abas: event bus + facade read-only.
 
 Este módulo define só o contrato — o registry fica em ``tabs/__init__``.
-Não importa ``app.py`` nem ``pages/`` (evita ciclo): o :class:`LegacyTabAdapter`
-recebe os builders legados já vinculados, construídos pelo App.
 """
 
 from __future__ import annotations
@@ -34,7 +32,7 @@ if TYPE_CHECKING:
     from huawei_manager.services.ui_bridge import UiBridge
     from huawei_manager.session import NetmikoSession
 
-__all__ = ["LegacyTabAdapter", "TabContext", "TabDef", "TabModule"]
+__all__ = ["TabContext", "TabDef", "TabModule"]
 
 
 @dataclass(frozen=True)
@@ -117,21 +115,3 @@ class TabDef:
     description: str               # descrição na command palette
     shortcut: str | None           # atalho de navegação na palette (Ctrl+N)
     module: TabModule
-
-
-class LegacyTabAdapter:
-    """Embrulha um builder legado (``self._build_<aba>_page``) como :class:`TabModule`.
-
-    O builder legado registra a página sozinho (``App._make_page``), por isso
-    ``build`` retorna ``None`` — o App só registra quando há widget retornado.
-    """
-
-    def __init__(self, builder: Callable[[], None]) -> None:
-        self._builder = builder
-
-    def build(self, ctx: TabContext) -> None:  # noqa: ARG002 — ctx reservado p/ migração
-        self._builder()
-        return None
-
-    def dispose(self) -> None:
-        return None
