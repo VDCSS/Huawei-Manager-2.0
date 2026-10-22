@@ -263,19 +263,6 @@ make clean-all       # DESTRUTIVO: clean + .venv + logs
 | ⚡ **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
 | 🔧 **Manutenção** | Dev tools, scans de agentes, setup |
 
-### Como adicionar uma aba
-
-1. Criar `src/huawei_manager/tabs/<aba>/` com `__init__.py` (exporta a classe),
-   `page.py` (classe com `attach(ctx)`, `build(ctx)` e `dispose()`) e `state.py`
-   (dataclass mutável com o estado privado da aba).
-2. A aba enxerga **só o `TabContext`** (34 campos) — nunca atributos do App.
-   Cross-tab = event bus + fachadas read-only.
-3. Registrar em `tabs/__init__.py`: factory `_x_module()` (import lazy) + entrada
-   `_TabMeta(..., module_factory=_x_module)` — a ordem da lista é a ordem da sidebar.
-4. Testes em `tests/tabs/<aba>/test_page.py` com fake completo do `TabContext`.
-5. `make ci` verde + boot offscreen (`timeout 12` → exit 124).
-
----
 
 ## Modos de Operação
 
