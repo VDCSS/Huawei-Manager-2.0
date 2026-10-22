@@ -93,11 +93,17 @@ def _manutencao_module() -> TabModule:
     return ManutencaoTab()
 
 
+def _topology_module() -> TabModule:
+    """Módulo real da Topologia (F2-topology) — import lazy evita ciclo."""
+    from huawei_manager.tabs.topology import TopologyTab
+    return TopologyTab()
+
+
 _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("home", "Dashboard", "\U0001f3e0", C.NEON_CYAN, "DASHBOARD",
              "Visão geral do sistema", "Ctrl+1", "", module_factory=_home_module),
     _TabMeta("topology", "Topologia / Devices", "\U0001f5fa", C.NEON_AMBER, "DISPOSITIVOS",
-             "Visualizar e gerenciar dispositivos", "Ctrl+2", "_build_topology_page"),
+             "Visualizar e gerenciar dispositivos", "Ctrl+2", "", module_factory=_topology_module),
     _TabMeta("config", "Config Atual", "\U0001f4cb", C.NEON_CYAN, "DISPOSITIVOS",
              "Exibir configuração atual do roteador", "Ctrl+3", "", module_factory=_config_module),
     _TabMeta("route", "Roteamento", "\U0001f310", C.NEON_CYAN, "DISPOSITIVOS",
@@ -119,9 +125,7 @@ _TAB_META: tuple[_TabMeta, ...] = (
 
 
 class _HostProtocol(Protocol):
-    """Superfície do App exigida pelo registry (builders legados vinculados)."""
-
-    def _build_topology_page(self) -> None: ...
+    """Superfície do App exigida pelo registry (abas ainda sem módulo)."""
 
 
 def build_registry(host: _HostProtocol) -> list[TabDef]:

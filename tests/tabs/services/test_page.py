@@ -33,7 +33,7 @@ def _make_detail_frame():
 
 
 def _fake_ctx(**overrides) -> TabContext:
-    """TabContext fake com todos os 29 campos; overrides por teste."""
+    """TabContext fake com todos os 34 campos; overrides por teste."""
     drv = overrides.pop("drv", MagicMock())
     fields: dict = dict(
         sb=MagicMock(),
@@ -65,6 +65,11 @@ def _fake_ctx(**overrides) -> TabContext:
         svc_mode=lambda: "mock",
         ui_bridge=lambda: None,
         ensure_device_ready=MagicMock(return_value=None),
+        refresh_devices=MagicMock(),
+        show_device_dialog=MagicMock(),
+        delete_device=MagicMock(),
+        on_device_selected=MagicMock(),
+        clear_device_target=MagicMock(),
     )
     fields.update(overrides)
     return TabContext(**fields)

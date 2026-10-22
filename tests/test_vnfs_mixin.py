@@ -34,15 +34,15 @@ def _make_mixin(**attrs) -> DevicesMixin:
     mixin = DevicesMixin()
     defaults = dict(
         _target_device=None,
-        _device_info_lbl=None,
+        _device_info_widget=lambda: None,
         _device_target_lbl=MagicMock(),
-        _device_status_lbl=None,
+        _device_status_widget=lambda: None,
         _devices=[],
         _devices_lock=MagicMock(),
         _devices_gen=0,
         _mock_mode=True,
         _access_level="admin",
-        _topo_canvas=None,
+        _topo_canvas_widget=lambda: None,
         _event_queue=MagicMock(),
         _sb=MagicMock(),
         session=MagicMock(),
@@ -89,7 +89,7 @@ class TestOnDeviceSelected:
 
     def test_updates_device_info_lbl_when_exists(self):
         info_lbl = MagicMock()
-        mixin = _make_mixin(_device_info_lbl=info_lbl)
+        mixin = _make_mixin(_device_info_widget=lambda: info_lbl)
         device = _make_device(name="gw-01", host="10.0.0.1", port=22, username="admin")
         mixin._on_device_selected(device)
         info_lbl.setText.assert_called_once()
@@ -111,13 +111,13 @@ class TestOnDeviceSelected:
         mixin._refresh_service_list.assert_called_once()
 
     def test_skips_device_info_lbl_when_none(self):
-        mixin = _make_mixin(_device_info_lbl=None)
+        mixin = _make_mixin(_device_info_widget=lambda: None)
         mixin._on_device_selected(_make_device())
         # Should not crash — no attribute access on None
 
     def test_limits_info_for_user_access(self):
         info_lbl = MagicMock()
-        mixin = _make_mixin(_device_info_lbl=info_lbl, _access_level="user")
+        mixin = _make_mixin(_device_info_widget=lambda: info_lbl, _access_level="user")
         device = _make_device(name="gw-01", host="10.0.0.1", port=22, username="admin")
         mixin._on_device_selected(device)
         info_lbl.setText.assert_called_once()
@@ -152,12 +152,12 @@ class TestClearDeviceTarget:
 
     def test_deselects_topo_canvas_when_exists(self):
         canvas = MagicMock()
-        mixin = _make_mixin(_target_device=_make_device(), _topo_canvas=canvas)
+        mixin = _make_mixin(_target_device=_make_device(), _topo_canvas_widget=lambda: canvas)
         mixin._clear_device_target()
         canvas.deselect.assert_called_once()
 
     def test_skips_topo_canvas_when_none(self):
-        mixin = _make_mixin(_target_device=_make_device(), _topo_canvas=None)
+        mixin = _make_mixin(_target_device=_make_device(), _topo_canvas_widget=lambda: None)
         mixin._clear_device_target()
         # Should not crash
 
@@ -209,7 +209,7 @@ class TestClearDeviceTarget:
 
     def test_clears_device_info_lbl_when_exists(self):
         info_lbl = MagicMock()
-        mixin = _make_mixin(_target_device=_make_device(), _device_info_lbl=info_lbl)
+        mixin = _make_mixin(_target_device=_make_device(), _device_info_widget=lambda: info_lbl)
         mixin._clear_device_target()
         info_lbl.setText.assert_called_once()
         assert "Nenhum device" in info_lbl.setText.call_args[0][0]
@@ -393,19 +393,19 @@ class TestUpdateDevicesUi:
 
     def test_calls_topo_canvas_update_devices(self):
         canvas = MagicMock()
-        mixin = _make_mixin(_topo_canvas=canvas, _access_level="admin")
+        mixin = _make_mixin(_topo_canvas_widget=lambda: canvas, _access_level="admin")
         devices = [_make_device()]
         mixin._update_devices_ui(devices)
         canvas.update_devices.assert_called_once_with(devices)
 
     def test_calls_set_access_on_canvas(self):
         canvas = MagicMock()
-        mixin = _make_mixin(_topo_canvas=canvas, _access_level="tecnico")
+        mixin = _make_mixin(_topo_canvas_widget=lambda: canvas, _access_level="tecnico")
         mixin._update_devices_ui([_make_device()])
         canvas.set_access.assert_called_once_with("tecnico")
 
     def test_skips_topo_canvas_when_none(self):
-        mixin = _make_mixin(_topo_canvas=None)
+        mixin = _make_mixin(_topo_canvas_widget=lambda: None)
         mixin._update_devices_ui([_make_device()])
         # Should not crash — no canvas calls
 

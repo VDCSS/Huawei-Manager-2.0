@@ -43,11 +43,13 @@ class DevicesMixin:
     def _update_devices_ui(self: AppCoreProtocol, devices: list[Device]) -> None:
         self._devices = devices
         self._controller.sync_from_devices(devices, publish_events=False)
-        if self._topo_canvas is not None:
-            self._topo_canvas.set_access(self._access_level)
-            self._topo_canvas.update_devices(devices)
-        if self._device_status_lbl is not None:
-            self._device_status_lbl.setText(f"Invent\u00e1rio: {len(devices)} devices")
+        canvas = self._topo_canvas_widget()
+        if canvas is not None:
+            canvas.set_access(self._access_level)
+            canvas.update_devices(devices)
+        status_lbl = self._device_status_widget()
+        if status_lbl is not None:
+            status_lbl.setText(f"Invent\u00e1rio: {len(devices)} devices")
 
     def _show_device_dialog(self: AppCoreProtocol, device: Device | None = None) -> None:
         if not self._require_access("tecnico"):
@@ -105,8 +107,9 @@ class DevicesMixin:
             info += f":{device.port}"
         if role_meets(self._access_level, "tecnico") and device.username:
             info += f"  user:{device.username}"
-        if self._device_info_lbl is not None:
-            self._device_info_lbl.setText(f"  Selecionado: {info}")
+        info_lbl = self._device_info_widget()
+        if info_lbl is not None:
+            info_lbl.setText(f"  Selecionado: {info}")
         if self._device_target_lbl is not None:
             self._device_target_lbl.setText(info)
         self._refresh_service_list()
@@ -160,11 +163,13 @@ class DevicesMixin:
         self.session.override_username = None
         self.session.override_password = None
         self.session.override_ssh_key = None
-        if self._topo_canvas is not None:
-            self._topo_canvas.deselect()
+        canvas = self._topo_canvas_widget()
+        if canvas is not None:
+            canvas.deselect()
         self._device_target_lbl.setText("(nenhum device)")
-        if self._device_info_lbl is not None:
-            self._device_info_lbl.setText("  Nenhum device selecionado")
+        info_lbl = self._device_info_widget()
+        if info_lbl is not None:
+            info_lbl.setText("  Nenhum device selecionado")
         if self._sb.is_alive():
             self._sb.disconnect()
             self._set_status("Desconectado", C.NEON_RED)

@@ -83,6 +83,11 @@ class TabContext:
     svc_mode: Callable[[], str]              # modo mock/cli sob demanda (App._svc_mode_var)
     ui_bridge: Callable[[], UiBridge | None]  # ponte p/ confirmação NAPALM (App._ui_bridge)
     ensure_device_ready: Callable[[str], Device | None]  # device pronto ou None (App._ensure_device_ready)
+    refresh_devices: Callable[[], None]            # recarrega inventário (App._refresh_devices)
+    show_device_dialog: Callable[..., None]        # diálogo de device (App._show_device_dialog)
+    on_device_selected: Callable[[Device], None]   # seleção no canvas (App._on_device_selected)
+    delete_device: Callable[[Device], None]        # remoção via canvas (App._delete_device)
+    clear_device_target: Callable[[], None]        # limpa alvo SSH (App._clear_device_target)
 
 
 @runtime_checkable

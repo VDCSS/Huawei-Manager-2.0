@@ -26,8 +26,9 @@ class SshMixin:
     """Mixin com metodos de conexao SSH."""
 
     def _get_selected_device(self: AppCoreProtocol) -> Device | None:
-        return (self._topo_canvas.get_selected()
-                if self._topo_canvas else None) or self._target_device
+        canvas = self._topo_canvas_widget()
+        return (canvas.get_selected()
+                if canvas else None) or self._target_device
 
     def _toggle_connect(self: AppCoreProtocol) -> None:
         if self._sb.is_alive():

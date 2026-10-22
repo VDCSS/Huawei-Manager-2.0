@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from huawei_manager.tabs.info import InfoTab
     from huawei_manager.tabs.route import RouteTab
     from huawei_manager.tabs.services import ServicesTab
+    from huawei_manager.tabs.topology import TopologyTab
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
@@ -94,7 +95,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # só existem na composição final HuaweiRouterApp.)
         ADMIN_MAX_ATTEMPTS: int
         ADMIN_LOCKOUT_SECS: int
-        _admin_btn: ActionButton
         # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
         def _on_sdn_event(self: AppCoreProtocol, ev: Event | None) -> None: ...
         def _page_layout(self: AppCoreProtocol, p: QWidget) -> QVBoxLayout: ...
@@ -153,7 +153,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _clear_device_target(self: AppCoreProtocol) -> None: ...
         def _build_route_page(self: AppCoreProtocol) -> None: ...
         def _build_backup_page(self: AppCoreProtocol) -> None: ...
-        def _build_topology_page(self: AppCoreProtocol) -> None: ...
 
     def __init__(self) -> None:
         super().__init__()
@@ -258,7 +257,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         self._target_device: Device | None = None
         self._devices: list[Device] = []
-        self._topo_canvas: TopologyCanvas | None = None
         io_w = int(os.environ.get("HW_IO_WORKERS", "6"))
         cpu_w = int(os.environ.get("HW_CPU_WORKERS", "2"))
         self._io_executor = ThreadPoolExecutor(max_workers=io_w, thread_name_prefix="hw-io")
@@ -305,8 +303,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._logo_pixmap: QPixmap | None = None
         self.theme_btn: ActionButton | None = None
         self._page_container: QStackedWidget | None = None
-        self._device_info_lbl: QLabel | None = None
-        self._device_status_lbl: QLabel | None = None
         self._auth_overlay: QWidget | None = None
         self._devices_lock = threading.Lock()
         self._devices_gen: int = 0
@@ -406,6 +402,11 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             svc_mode=lambda: self._svc_mode_var,
             ui_bridge=lambda: self._ui_bridge,
             ensure_device_ready=self._ensure_device_ready,
+            refresh_devices=self._refresh_devices,
+            show_device_dialog=self._show_device_dialog,
+            delete_device=self._delete_device,
+            on_device_selected=self._on_device_selected,
+            clear_device_target=self._clear_device_target,
         )
 
         self._build_sidebar()
@@ -809,6 +810,30 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         tab = self._services_tab()
         return None if tab is None else tab.out_widget()
 
+    # ── Fachadas da aba Topologia (F2-topology) ───────────────────────
+    def _topology_tab(self) -> TopologyTab | None:
+        """Módulo real da aba topology (instância única do registry) + contexto."""
+        from huawei_manager.tabs.topology import TopologyTab
+
+        td = tab_by_key(self._tabs, "topology")
+        if td is None or not isinstance(td.module, TopologyTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _topo_canvas_widget(self) -> TopologyCanvas | None:
+        tab = self._topology_tab()
+        return None if tab is None else tab.state.topo_canvas
+
+    def _device_info_widget(self) -> QLabel | None:
+        tab = self._topology_tab()
+        return None if tab is None else tab.state.device_info_lbl
+
+    def _device_status_widget(self) -> QLabel | None:
+        tab = self._topology_tab()
+        return None if tab is None else tab.state.device_status_lbl
+
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
         if self._active_btn:
@@ -967,13 +992,10 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # 2. Salvar estado
         current_page = self._current_page
         self._active_btn = None
-        self._topo_canvas = None
         self.pages.clear()
         # Widgets recriados em _build_layout/_rebuild_page: zerar refs para
         # nao apontar para objetos C++ deletados (RuntimeError/AttributeError).
         self._auth_overlay = None
-        self._device_info_lbl = None
-        self._device_status_lbl = None
         self._ui_queue.clear()
 
         # 3. Destruir UI antiga

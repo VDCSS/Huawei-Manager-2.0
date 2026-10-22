@@ -55,13 +55,16 @@ class TestBuildRegistry:
             assert td.label, f"{td.key} sem label"
             assert td.description, f"{td.key} sem description na palette"
 
-    def test_missing_builder_fails_fast(self) -> None:
-        # topology é a única aba ainda sem module_factory — sem o builder
-        # legado no host, o registry falha fechado (F2-services completou
-        # a migração de services).
-        host = MagicMock(spec=[])  # nenhum builder
+    def test_missing_builder_fails_fast(self, monkeypatch) -> None:
+        # F2-topology completou 10/10 com module_factory — o else-path
+        # (aba ainda sem módulo) só dispara com meta sintético factoryless.
+        import huawei_manager.tabs as tabs_mod
+        from huawei_manager.tabs import _TabMeta
+
+        meta = _TabMeta("x", "X", "", "#fff", "G", "d", "", "_build_x")
+        monkeypatch.setattr(tabs_mod, "_TAB_META", (meta,))
         with pytest.raises(RuntimeError, match="builder legado"):
-            build_registry(host)
+            build_registry(MagicMock(spec=[]))
 
 
 class TestTabByKey:

@@ -32,6 +32,7 @@ if not HAS_PYSIDE6:
         "tabs/services/test_handlers.py",
         "tabs/services/test_napalm.py",
         "tabs/services/test_page.py",
+        "tabs/topology/test_page.py",
         "tabs/manutencao/test_handlers.py", "tabs/manutencao/test_page.py",
     ]
 else:

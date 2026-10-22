@@ -6,6 +6,7 @@ painéis laterais usam min/max width em vez de largura fixa.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import MagicMock
 
 import pytest
@@ -51,7 +52,7 @@ def _show_page(builder: PageBuilder, index: int = 0) -> None:
 
 
 def _fake_ctx():
-    """TabContext fake completo (29 campos) p/ construir abas nos testes."""
+    """TabContext fake completo (34 campos) p/ construir abas nos testes."""
     from huawei_manager.tabs._contract import TabContext
 
     return TabContext(
@@ -72,6 +73,11 @@ def _fake_ctx():
         svc_mode=lambda: "mock",
         ui_bridge=lambda: None,
         ensure_device_ready=MagicMock(return_value=None),
+        refresh_devices=MagicMock(),
+        show_device_dialog=MagicMock(),
+        delete_device=MagicMock(),
+        on_device_selected=MagicMock(),
+        clear_device_target=MagicMock(),
     )
 
 
@@ -176,6 +182,11 @@ class TestManutencaoPageGrid:
             svc_mode=lambda: "mock",
             ui_bridge=lambda: None,
             ensure_device_ready=MagicMock(return_value=None),
+            refresh_devices=MagicMock(),
+            show_device_dialog=MagicMock(),
+            delete_device=MagicMock(),
+            on_device_selected=MagicMock(),
+            clear_device_target=MagicMock(),
         )
         return ManutencaoTab().build(ctx)
 
@@ -210,22 +221,19 @@ class TestManutencaoPageGrid:
 
 
 class TestTopologyBarResize:
-    def _make_topo_builder(self) -> PageBuilder:
-        builder = _make_builder()
-        builder._access_level = "tecnico"
-        builder._show_auth_dialog = MagicMock()
-        builder._show_device_dialog = MagicMock()
-        builder._spawn_io = MagicMock()
-        builder._refresh_devices = MagicMock()
-        builder._clear_device_target = MagicMock()
-        builder._on_device_selected = MagicMock()
-        builder._delete_device = MagicMock()
-        return builder
+    def _build_topo(self, builder: PageBuilder):
+        """Constrói a aba Topologia via módulo (F2-topology) no container."""
+        from huawei_manager.tabs.topology import TopologyTab
+
+        tab = TopologyTab()
+        # role=tecnico p/ label "Sair (Tecnico)" + botão Cadastrar
+        page = tab.build(replace(_fake_ctx(), role=lambda: "tecnico"))
+        builder._page_container.addWidget(page)
+        return tab, page
 
     def test_control_buttons_visible_at_800px(self):
-        builder = self._make_topo_builder()
-        builder._build_topology_page()
-        page = builder._page_container.widget(0)
+        builder = _make_builder()
+        _tab, page = self._build_topo(builder)
         builder._page_container.resize(800, 600)
         _show_page(builder)
 
@@ -241,16 +249,17 @@ class TestTopologyBarResize:
             assert btn.geometry().width() > 0
 
     def test_device_info_label_min_width_and_not_collapsed(self):
-        builder = self._make_topo_builder()
-        builder._build_topology_page()
-        page = builder._page_container.widget(0)
+        builder = _make_builder()
+        tab, page = self._build_topo(builder)
         builder._page_container.resize(800, 600)
         _show_page(builder)
 
-        assert builder._device_info_lbl.minimumWidth() == 220
-        assert builder._device_info_lbl.isVisible()
-        assert builder._device_info_lbl.geometry().width() > 0
-        assert builder._device_info_lbl.geometry().right() <= page.width() + 1
+        lbl = tab.state.device_info_lbl
+        assert lbl is not None
+        assert lbl.minimumWidth() == 220
+        assert lbl.isVisible()
+        assert lbl.geometry().width() > 0
+        assert lbl.geometry().right() <= page.width() + 1
 
 
 class TestBackupEntryResize:

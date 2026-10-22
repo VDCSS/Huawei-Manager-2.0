@@ -120,6 +120,11 @@ def _make(**overrides) -> tuple[ServicesHandlers, ServicesState, TabContext]:
         svc_mode=lambda: "cli",
         ui_bridge=lambda: None,
         ensure_device_ready=MagicMock(return_value=device),
+        refresh_devices=MagicMock(),
+        show_device_dialog=MagicMock(),
+        delete_device=MagicMock(),
+        on_device_selected=MagicMock(),
+        clear_device_target=MagicMock(),
     )
     fields.update(overrides)
     ctx = TabContext(**fields)

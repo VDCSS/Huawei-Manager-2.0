@@ -25,7 +25,7 @@ def _app():
 
 
 def _fake_ctx() -> TabContext:
-    """TabContext fake com todos os 29 campos (F2-services)."""
+    """TabContext fake com todos os 34 campos (F2-services)."""
     return TabContext(
         sb=MagicMock(), audit=None, event_bus=MagicMock(),
         role=lambda: "admin", device=lambda: None,
@@ -44,6 +44,11 @@ def _fake_ctx() -> TabContext:
         svc_mode=lambda: "mock",
         ui_bridge=lambda: None,
         ensure_device_ready=MagicMock(return_value=None),
+        refresh_devices=MagicMock(),
+        show_device_dialog=MagicMock(),
+        delete_device=MagicMock(),
+        on_device_selected=MagicMock(),
+        clear_device_target=MagicMock(),
     )
 
 

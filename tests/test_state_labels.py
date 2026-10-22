@@ -75,6 +75,11 @@ def _make_manut_tab(watcher_active: bool = False) -> ManutencaoTab:
         svc_mode=lambda: "mock",
         ui_bridge=lambda: None,
         ensure_device_ready=MagicMock(return_value=None),
+        refresh_devices=MagicMock(),
+        show_device_dialog=MagicMock(),
+        delete_device=MagicMock(),
+        on_device_selected=MagicMock(),
+        clear_device_target=MagicMock(),
     )
     tab = ManutencaoTab()
     tab._page = tab.build(ctx)  # mantém o QWidget vivo (sem pai Qt)
@@ -111,9 +116,14 @@ class _FakeDevicesApp(DevicesMixin):
         self._devices = []
         self._controller = MagicMock()
         self._controller.sync_from_devices = MagicMock()
-        self._topo_canvas = None
         self._access_level = "user"
         self._device_status_lbl = QLabel()
+
+    def _topo_canvas_widget(self):
+        return None
+
+    def _device_status_widget(self):
+        return self._device_status_lbl
 
 
 class TestInventoryStateLabel:

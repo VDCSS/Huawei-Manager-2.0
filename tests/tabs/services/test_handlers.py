@@ -23,7 +23,7 @@ from huawei_manager.tabs.services.state import ServicesState
 
 
 def _make(**overrides) -> tuple[ServicesHandlers, ServicesState, TabContext]:
-    """(handlers, state, ctx) — 29 campos; overrides por chave."""
+    """(handlers, state, ctx) — 34 campos; overrides por chave."""
     drv = overrides.pop("drv", MagicMock())
     fields: dict = dict(
         sb=MagicMock(),
@@ -55,6 +55,11 @@ def _make(**overrides) -> tuple[ServicesHandlers, ServicesState, TabContext]:
         svc_mode=lambda: "mock",
         ui_bridge=lambda: None,
         ensure_device_ready=MagicMock(return_value=None),
+        refresh_devices=MagicMock(),
+        show_device_dialog=MagicMock(),
+        delete_device=MagicMock(),
+        on_device_selected=MagicMock(),
+        clear_device_target=MagicMock(),
     )
     fields.update(overrides)
     ctx = TabContext(**fields)

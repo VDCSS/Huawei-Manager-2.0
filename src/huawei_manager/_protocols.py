@@ -69,7 +69,6 @@ class AppCoreProtocol(Protocol):
 
     _devices: list[Device]
     _devices_lock: threading.Lock
-    _topo_canvas: TopologyCanvas | None
     _watcher: Watcher
     _device_service: DeviceService
 
@@ -105,14 +104,9 @@ class AppCoreProtocol(Protocol):
     _PAGE_KEYS: list[str]
     _logo_pixmap: QPixmap | None
 
-    _admin_btn: ActionButton
     _device_target_lbl: QLabel
 
     # ── Páginas: saídas de texto ────────────────────────────────────
-
-    # ── Topologia / devices ─────────────────────────────────────────
-    _device_info_lbl: QLabel | None
-    _device_status_lbl: QLabel | None
 
     # ── Serviços ────────────────────────────────────────────────────
     _svc_mode_var: str
@@ -216,10 +210,14 @@ class AppCoreProtocol(Protocol):
     def _refresh_service_list(self) -> None: ...
     def _svc_out(self) -> QTextEdit | None: ...
 
+    # ── Fachadas da aba Topologia (F2-topology) ────────────────────
+    def _topo_canvas_widget(self) -> TopologyCanvas | None: ...
+    def _device_info_widget(self) -> QLabel | None: ...
+    def _device_status_widget(self) -> QLabel | None: ...
+
     # ── Builders de página ──────────────────────────────────────────
     def _build_route_page(self) -> None: ...
     def _build_backup_page(self) -> None: ...
-    def _build_topology_page(self) -> None: ...
     # ── Qt (usados via self de protocolo nos mixins) ────────────────
     def close(self) -> bool: ...
     def focusWidget(self) -> QWidget | None: ...
