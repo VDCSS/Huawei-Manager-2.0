@@ -16,8 +16,7 @@ if not HAS_PYSIDE6:
         "test_concurrency_patterns.py",
         "test_device_dialog.py", "test_gui_helper.py",
         "test_page_builder.py",
-        "test_rbac_matrix.py", "test_services_mixin.py",
-        "test_services_page.py", "test_services_validation.py",
+        "test_rbac_matrix.py",
         "test_ssh_mixin.py", "test_tabs_registry.py", "test_topology.py",
         "test_topology_context_menu.py", "test_vnfs_mixin.py",
         "test_watcher.py", "test_widgets.py",
@@ -30,6 +29,9 @@ if not HAS_PYSIDE6:
         "tabs/home/test_page.py",
         "tabs/info/test_handlers.py",
         "tabs/route/test_handlers.py",
+        "tabs/services/test_handlers.py",
+        "tabs/services/test_napalm.py",
+        "tabs/services/test_page.py",
         "tabs/manutencao/test_handlers.py", "tabs/manutencao/test_page.py",
     ]
 else:

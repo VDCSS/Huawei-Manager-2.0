@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QStackedWidget,
     QTextEdit,
@@ -30,14 +29,12 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QComboBox, QListWidget
 
     from huawei_manager._protocols import AppCoreProtocol
     from huawei_manager.agents import AgentResult
     from huawei_manager.sdn_controller.bus import IEventBus
     from huawei_manager.sdn_controller.event_queue import Event
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
-    from huawei_manager.services import ServiceDef
     from huawei_manager.tabs._contract import TabDef
     from huawei_manager.tabs.arp import ArpTab
     from huawei_manager.tabs.backup import BackupTab
@@ -46,6 +43,7 @@ if TYPE_CHECKING:
     from huawei_manager.tabs.home import HomeTab
     from huawei_manager.tabs.info import InfoTab
     from huawei_manager.tabs.route import RouteTab
+    from huawei_manager.tabs.services import ServicesTab
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
@@ -97,15 +95,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         ADMIN_MAX_ATTEMPTS: int
         ADMIN_LOCKOUT_SECS: int
         _admin_btn: ActionButton
-        _svc_cat_var: str
-        _svc_device_lbl: QLabel | None
-        _svc_type_lbl: QLabel | None
-        _svc_status_lbl: QLabel | None
-        _svc_cat_cb: QComboBox | None
-        _svc_listbox: QListWidget | None
-        _svc_detail_frame: QWidget | None
-        _svc_services: list[ServiceDef]
-        _svc_current_svc: ServiceDef | None
         # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
         def _on_sdn_event(self: AppCoreProtocol, ev: Event | None) -> None: ...
         def _page_layout(self: AppCoreProtocol, p: QWidget) -> QVBoxLayout: ...
@@ -162,34 +151,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _delete_device(self: AppCoreProtocol, device: Device) -> None: ...
         def _on_device_selected(self: AppCoreProtocol, device: Device) -> None: ...
         def _clear_device_target(self: AppCoreProtocol) -> None: ...
-        def _run_service(
-            self: AppCoreProtocol, svc: ServiceDef,
-            final_svc: ServiceDef | None = None,
-        ) -> None: ...
-        def _run_service_napalm(
-            self: AppCoreProtocol, svc: ServiceDef, final_svc: ServiceDef
-        ) -> bool: ...
-        def _validate_service(
-            self: AppCoreProtocol, svc: ServiceDef, final_cmds: list[str]
-        ) -> list[tuple[str, str]]: ...
-        def _refresh_service_list(self: AppCoreProtocol) -> None: ...
-        def _show_service_detail(self: AppCoreProtocol, svc: ServiceDef) -> None: ...
-        def _on_svc_cat_changed(self: AppCoreProtocol, text: str) -> None: ...
-        def _on_service_select(self: AppCoreProtocol, row: int) -> None: ...
-        def _clear_detail_panel(self: AppCoreProtocol) -> None: ...
-        def _build_services_info_row(
-            self: AppCoreProtocol, parent: QWidget
-        ) -> None: ...
-        def _build_services_filter_row(
-            self: AppCoreProtocol, parent: QWidget
-        ) -> None: ...
-        def _build_services_split(
-            self: AppCoreProtocol, parent: QWidget
-        ) -> None: ...
-        def _build_param_fields(
-            self: AppCoreProtocol, parent: QWidget, svc: ServiceDef
-        ) -> None: ...
-        def _build_services_page(self: AppCoreProtocol) -> None: ...
         def _build_route_page(self: AppCoreProtocol) -> None: ...
         def _build_backup_page(self: AppCoreProtocol) -> None: ...
         def _build_topology_page(self: AppCoreProtocol) -> None: ...
@@ -343,7 +304,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         """Garante que todos os atributos dos mixins existem antes do uso."""
         self._logo_pixmap: QPixmap | None = None
         self.theme_btn: ActionButton | None = None
-        self._svc_output: QTextEdit | None = None
         self._page_container: QStackedWidget | None = None
         self._device_info_lbl: QLabel | None = None
         self._device_status_lbl: QLabel | None = None
@@ -358,7 +318,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         if self._svc_mode_var not in ("mock", "cli"):
             log.warning("HW_SVC_MODE invalido (%r) — usando mock", self._svc_mode_var)
             self._svc_mode_var = "mock"
-        self._svc_param_entries: dict[str, QLineEdit] = {}
         self._shutdown: bool = False
         self._event_drop_count: int = 0
         # Logger de auditoria do app (era inacessível aos mixins; o caminho
@@ -444,6 +403,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             drv=lambda: self._drv,
             devices=lambda: self._devices,
             show_page=self._show_page,
+            svc_mode=lambda: self._svc_mode_var,
+            ui_bridge=lambda: self._ui_bridge,
+            ensure_device_ready=self._ensure_device_ready,
         )
 
         self._build_sidebar()
@@ -825,6 +787,28 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         if tab is not None:
             tab.refresh()
 
+    # ── Fachadas da aba Serviços (F2-services) ───────────────────────
+    def _services_tab(self) -> ServicesTab | None:
+        """Módulo real da aba services (instância única do registry) + contexto."""
+        from huawei_manager.tabs.services import ServicesTab
+
+        td = tab_by_key(self._tabs, "services")
+        if td is None or not isinstance(td.module, ServicesTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _refresh_service_list(self) -> None:
+        tab = self._services_tab()
+        if tab is not None:
+            tab.refresh_service_list()
+
+    def _svc_out(self) -> QTextEdit | None:
+        """Widget de saída da aba services (Ctrl+L limpa a saída)."""
+        tab = self._services_tab()
+        return None if tab is None else tab.out_widget()
+
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
         if self._active_btn:
@@ -987,16 +971,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self.pages.clear()
         # Widgets recriados em _build_layout/_rebuild_page: zerar refs para
         # nao apontar para objetos C++ deletados (RuntimeError/AttributeError).
-        self._svc_output = None
-        self._svc_device_lbl = None
-        self._svc_type_lbl = None
-        self._svc_status_lbl = None
-        self._svc_cat_cb = None
-        self._svc_listbox = None
-        self._svc_detail_frame = None
-        self._svc_param_entries = {}
-        self._svc_services = []
-        self._svc_current_svc = None
         self._auth_overlay = None
         self._device_info_lbl = None
         self._device_status_lbl = None

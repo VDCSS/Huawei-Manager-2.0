@@ -26,10 +26,7 @@ from huawei_manager.services.device_service import DeviceService
 if TYPE_CHECKING:
     from PySide6.QtGui import QPixmap
     from PySide6.QtWidgets import (
-        QComboBox,
         QLabel,
-        QLineEdit,
-        QListWidget,
         QStackedWidget,
         QTextEdit,
         QVBoxLayout,
@@ -43,7 +40,6 @@ if TYPE_CHECKING:
     from huawei_manager.sdn_controller.drivers.base import BaseDriver
     from huawei_manager.sdn_controller.event_queue import Event
     from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
-    from huawei_manager.services import ServiceDef
     from huawei_manager.services.ui_bridge import UiBridge
     from huawei_manager.session import NetmikoSession
     from huawei_manager.tabs._contract import TabContext, TabDef
@@ -119,18 +115,7 @@ class AppCoreProtocol(Protocol):
     _device_status_lbl: QLabel | None
 
     # ── Serviços ────────────────────────────────────────────────────
-    _svc_output: QTextEdit | None
-    _svc_cat_cb: QComboBox | None
-    _svc_cat_var: str
     _svc_mode_var: str
-    _svc_listbox: QListWidget | None
-    _svc_detail_frame: QWidget | None
-    _svc_device_lbl: QLabel | None
-    _svc_type_lbl: QLabel | None
-    _svc_status_lbl: QLabel | None
-    _svc_param_entries: dict[str, QLineEdit]
-    _svc_services: list[ServiceDef]
-    _svc_current_svc: ServiceDef | None
     # Ponte I/O→GUI para confirmações (UiBridge); None = app sem GUI.
     _ui_bridge: UiBridge | None
 
@@ -228,25 +213,8 @@ class AppCoreProtocol(Protocol):
     def _backup_out(self) -> QTextEdit | None: ...
 
     # ── Serviços ────────────────────────────────────────────────────
-    def _run_service(
-        self, svc: ServiceDef, final_svc: ServiceDef | None = None
-    ) -> None: ...
-    def _run_service_napalm(
-        self, svc: ServiceDef, final_svc: ServiceDef
-    ) -> bool: ...
-    def _validate_service(
-        self, svc: ServiceDef, final_cmds: list[str]
-    ) -> list[tuple[str, str]]: ...
     def _refresh_service_list(self) -> None: ...
-    def _show_service_detail(self, svc: ServiceDef) -> None: ...
-    def _on_svc_cat_changed(self, text: str) -> None: ...
-    def _on_service_select(self, row: int) -> None: ...
-    def _clear_detail_panel(self) -> None: ...
-    def _build_services_info_row(self, parent: QWidget) -> None: ...
-    def _build_services_filter_row(self, parent: QWidget) -> None: ...
-    def _build_services_split(self, parent: QWidget) -> None: ...
-    def _build_param_fields(self, parent: QWidget, svc: ServiceDef) -> None: ...
-    def _build_services_page(self) -> None: ...
+    def _svc_out(self) -> QTextEdit | None: ...
 
     # ── Builders de página ──────────────────────────────────────────
     def _build_route_page(self) -> None: ...

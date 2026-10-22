@@ -101,8 +101,10 @@ class ShortcutsMixin:
             out = self._backup_out()
             if out is not None:
                 self._write(out, "")
-        elif page == "services" and self._svc_output is not None:
-            self._write(self._svc_output, "")
+        elif page == "services":
+            out = self._svc_out()
+            if out is not None:
+                self._write(out, "")
 
     def _on_ctrl_q(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)

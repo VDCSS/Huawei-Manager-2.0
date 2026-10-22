@@ -12,14 +12,13 @@ from PySide6.QtWidgets import (
 
 import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
-from huawei_manager.pages.services import PageBuilderServicesMixin
 from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
 from huawei_manager.widgets.elide_label import ElideLabel
 from huawei_manager.widgets.neon_button import action_button
 
 
-class PageBuilder(PageBuilderServicesMixin):
+class PageBuilder:
     """Mixin com métodos de construção das páginas da interface PySide6."""
 
     # ── Helpers ────────────────────────────────────────────────────────

@@ -51,7 +51,7 @@ def _show_page(builder: PageBuilder, index: int = 0) -> None:
 
 
 def _fake_ctx():
-    """TabContext fake completo (26 campos) p/ construir abas nos testes."""
+    """TabContext fake completo (29 campos) p/ construir abas nos testes."""
     from huawei_manager.tabs._contract import TabContext
 
     return TabContext(
@@ -69,6 +69,9 @@ def _fake_ctx():
         drv=lambda: MagicMock(),
         devices=lambda: [],
         show_page=MagicMock(),
+        svc_mode=lambda: "mock",
+        ui_bridge=lambda: None,
+        ensure_device_ready=MagicMock(return_value=None),
     )
 
 
@@ -109,24 +112,33 @@ class TestCmdPageResize:
         assert left.maximumWidth() == 320
 
 
+def _build_services_page(builder: PageBuilder):
+    """Constrói a aba Serviços via módulo (F2-services) no container."""
+    from huawei_manager.tabs.services import ServicesTab
+
+    tab = ServicesTab()
+    page = tab.build(_fake_ctx())
+    builder._page_container.addWidget(page)
+    return tab, page
+
+
 class TestServicesPageResize:
     def test_detail_panel_visible_at_800px(self):
         builder = _make_builder()
-        builder._build_services_page()
-        page = builder._page_container.widget(0)
+        tab, page = _build_services_page(builder)
         _show_page(builder)
 
-        detail = builder._svc_detail_frame
+        detail = tab.state.detail_frame
         assert detail.isVisible()
         assert detail.geometry().right() <= page.width()
         assert detail.geometry().width() > 0
 
     def test_left_panel_flexible_bounds(self):
         builder = _make_builder()
-        builder._build_services_page()
+        tab, page = _build_services_page(builder)
         _show_page(builder)
 
-        left = builder._svc_listbox.parentWidget()
+        left = tab.state.listbox.parentWidget()
         assert left.minimumWidth() == 240
         assert left.maximumWidth() == 340
 
@@ -161,6 +173,9 @@ class TestManutencaoPageGrid:
             drv=lambda: MagicMock(),
             devices=lambda: [],
             show_page=MagicMock(),
+            svc_mode=lambda: "mock",
+            ui_bridge=lambda: None,
+            ensure_device_ready=MagicMock(return_value=None),
         )
         return ManutencaoTab().build(ctx)
 

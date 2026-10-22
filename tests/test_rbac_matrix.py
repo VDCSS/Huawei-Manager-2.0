@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import pytest
 
+from unittest.mock import MagicMock
+
 from huawei_manager.handlers.auth import AuthMixin
-from huawei_manager.handlers.services import ServicesMixin
 from huawei_manager.services import ServiceDef
+from huawei_manager.tabs.services.handlers import ServicesHandlers
 
 ROLES = ("user", "tecnico", "admin")
 
@@ -50,7 +52,9 @@ def _make_svc(**overrides) -> ServiceDef:
 
 
 def _validate(svc: ServiceDef, cmds: list[str]) -> bool:
-    return not ServicesMixin()._validate_service(svc, cmds)
+    # validate_service não toca ctx/state — handler mínimo (F2-services)
+    return not ServicesHandlers(MagicMock(), MagicMock()).validate_service(
+        svc, cmds)
 
 
 MATRIX = [

@@ -1,9 +1,10 @@
-"""Testes do wiring NAPALM em ``ServicesMixin`` (handlers/services.py).
+"""Testes do wiring NAPALM em ``ServicesHandlers`` (tabs/services/handlers.py).
 
-Cobrem o fluxo preview → diff → confirmação do usuário → apply → auditoria
-com ``HW_BACKEND=napalm``, e garantem que o caminho Netmiko padrão permanece
-inalterado (nenhuma chamada NAPALM) quando o backend efetivo é o Netmiko ou o
-serviço não é de configuração.
+Migrados de tests/test_services_napalm_wiring.py (F2-services do plano
+plano-abas-independentes). Cobrem o fluxo preview → diff → confirmação do
+usuário → apply → auditoria com ``HW_BACKEND=napalm``, e garantem que o
+caminho Netmiko padrão permanece inalterado (nenhuma chamada NAPALM) quando
+o backend efetivo é o Netmiko ou o serviço não é de configuração.
 
 O módulo ``FakeBridge`` substitui o ``UiBridge`` real (um ``QObject``) nos
 testes de fluxo — ele implementa os dois caminhos de :func:`ask_from_worker`
@@ -19,15 +20,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from huawei_manager.exceptions import SdnError
-from huawei_manager.handlers.services import ServicesMixin
 from huawei_manager.sdn_controller.event_queue import EventType
 from huawei_manager.sdn_controller.napalm_backend import (
+    BACKEND_ENV,
     BACKEND_NAPALM,
     BACKEND_NETMIKO,
-    BACKEND_ENV,
     ApplyResult,
 )
 from huawei_manager.services import ServiceDef
+from huawei_manager.tabs._contract import TabContext
+from huawei_manager.tabs.services.handlers import ServicesHandlers
+from huawei_manager.tabs.services.state import ServicesState
 
 
 # ── fábricas ─────────────────────────────────────────────────────────
@@ -83,45 +86,61 @@ class FakeBridge:
         payload["event"].set()
 
 
-def _make_mixin(**attrs) -> ServicesMixin:
-    mixin = ServicesMixin()
+def _make(**overrides) -> tuple[ServicesHandlers, ServicesState, TabContext]:
+    """(handlers, state, ctx) — modo cli síncrono por padrão (paridade legado)."""
     device = MagicMock()
-    defaults = dict(
-        _svc_mode_var="cli",
-        _target_device=None,
-        _svc_device_lbl=MagicMock(),
-        _svc_output=MagicMock(),
-        _svc_param_entries={},
-        _sb=MagicMock(),
+    drv = overrides.pop("drv", MagicMock())
+    fields: dict = dict(
+        sb=MagicMock(),
+        audit=None,
+        event_bus=MagicMock(),
+        role=lambda: "admin",
+        device=lambda: None,
+        dispatch=lambda fn: fn() if callable(fn) else None,
+        require_access=lambda level: True,
+        spawn_io=lambda fn, *a: fn(*a),
+        spawn_cpu=lambda fn, *a: fn(*a),
+        watcher=MagicMock(),
+        is_mock=lambda: False,
+        toggle_mock=lambda: False,
+        show_auth_dialog=lambda: None,
+        watcher_results=lambda: None,
+        set_watcher_results=MagicMock(),
         session=None,
-        audit_logger=None,
-        _ui_bridge=None,
-        _write=MagicMock(),
-        _loading=MagicMock(),
-        _event_queue=MagicMock(),
-        _devices=[device],
-        _device_service=MagicMock(),
-        _access_level="user",
-        _get_selected_device=MagicMock(return_value=device),
-        _set_status=MagicMock(),
-        _ensure_device_ready=MagicMock(return_value=device),
+        run=MagicMock(),
+        set_status=MagicMock(),
+        touch_session=MagicMock(),
+        cmd_validator=None,
+        dry_run=None,
+        get_last_config_command=MagicMock(return_value=None),
+        set_last_config_command=MagicMock(),
+        drv=lambda: drv,
+        devices=lambda: [],
+        show_page=MagicMock(),
+        svc_mode=lambda: "cli",
+        ui_bridge=lambda: None,
+        ensure_device_ready=MagicMock(return_value=device),
     )
-    for k, v in defaults.items():
-        setattr(mixin, k, v)
-    for k, v in attrs.items():
-        setattr(mixin, k, v)
-    return mixin
+    fields.update(overrides)
+    ctx = TabContext(**fields)
+    state = ServicesState()
+    state.output = MagicMock()
+    state.device_lbl = MagicMock()
+    return ServicesHandlers(ctx, state), state, ctx
 
 
-def _run(mixin: ServicesMixin, svc: ServiceDef) -> None:
-    """Roda ``_run_service`` de forma síncrona (executa ``_do`` na hora)."""
-    mixin._spawn_io = lambda fn: fn()
-    mixin._run_service(svc)
+def _run(h: ServicesHandlers, svc: ServiceDef) -> None:
+    """Roda ``run_service`` de forma síncrona (spawn executa ``_do`` na hora)."""
+    h.run_service(svc)
 
 
-def _writes(mixin: ServicesMixin) -> list[str]:
-    return [c.args[1] for c in mixin._write.call_args_list
-            if len(c.args) >= 2]
+def _writes(st: ServicesState) -> list[str]:
+    """Textos escritos no output (setPlainText + append via _ui.write/_loading)."""
+    out = st.output
+    parts = [str(c.args[0]) for c in out.setPlainText.call_args_list
+             if c.args]
+    parts += [str(c.args[0]) for c in out.append.call_args_list if c.args]
+    return parts
 
 
 def _fake_executor(monkeypatch, *, diff: str = "- old\n+ new"):
@@ -131,7 +150,7 @@ def _fake_executor(monkeypatch, *, diff: str = "- old\n+ new"):
     executor.apply.return_value = ApplyResult(
         snapshot="snap pré", output="cfg ok", duration_ms=5.0)
     cls = MagicMock(return_value=executor)
-    monkeypatch.setattr("huawei_manager.handlers.services.NapalmVRPBackend",
+    monkeypatch.setattr("huawei_manager.tabs.services.handlers.NapalmVRPBackend",
                         cls)
     return executor, cls
 
@@ -139,7 +158,7 @@ def _fake_executor(monkeypatch, *, diff: str = "- old\n+ new"):
 def _backend(monkeypatch, backend: str = BACKEND_NAPALM,
              warning: str = "") -> None:
     monkeypatch.setattr(
-        "huawei_manager.handlers.services.resolve_backend",
+        "huawei_manager.tabs.services.handlers.resolve_backend",
         lambda: (backend, warning),
     )
 
@@ -151,17 +170,17 @@ def test_netmiko_padrao_nao_toca_napalm(monkeypatch) -> None:
     monkeypatch.delenv(BACKEND_ENV, raising=False)
     _backend(monkeypatch, BACKEND_NETMIKO)
     napalm_cls = MagicMock()
-    monkeypatch.setattr("huawei_manager.handlers.services.NapalmVRPBackend",
+    monkeypatch.setattr("huawei_manager.tabs.services.handlers.NapalmVRPBackend",
                         napalm_cls)
-    mixin = _make_mixin()
+    h, st, ctx = _make()
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
-    mixin._sb.send_service_commands.assert_called_once_with(
+    ctx.sb.send_service_commands.assert_called_once_with(
         svc.cli_commands, config_mode=True, requires_privilege=False)
     napalm_cls.assert_not_called()          # nenhuma chamada NAPALM
-    ev = mixin._event_queue.put.call_args[0][0]
+    ev = ctx.event_bus.put.call_args[0][0]
     assert ev.type is EventType.COMMAND_EXECUTED
     assert ev.payload.data == {"mode": "cli"}  # payload original, sem backend
 
@@ -172,33 +191,33 @@ def test_netmiko_padrao_nao_toca_napalm(monkeypatch) -> None:
 def test_netmiko_config_takes_snapshot_before_apply(monkeypatch) -> None:
     monkeypatch.delenv(BACKEND_ENV, raising=False)
     _backend(monkeypatch, BACKEND_NETMIKO)
-    mixin = _make_mixin()
-    mixin._sb.send_command.return_value = "baseline cfg"
+    h, st, ctx = _make()
+    ctx.sb.send_command.return_value = "baseline cfg"
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
-    mixin._sb.send_command.assert_called_once_with(
+    ctx.sb.send_command.assert_called_once_with(
         "display current-configuration")
-    mixin._sb.send_service_commands.assert_called_once_with(
+    ctx.sb.send_service_commands.assert_called_once_with(
         svc.cli_commands, config_mode=True, requires_privilege=False)
-    command = mixin._last_config_command
+    command = ctx.set_last_config_command.call_args[0][0]
     assert command.snapshot == "baseline cfg"  # rollback disponível
 
 
 def test_netmiko_config_snapshot_failure_is_fail_closed(monkeypatch) -> None:
     monkeypatch.delenv(BACKEND_ENV, raising=False)
     _backend(monkeypatch, BACKEND_NETMIKO)
-    mixin = _make_mixin()
-    mixin._sb.send_command.side_effect = SdnError("conexão caiu")
+    h, st, ctx = _make()
+    ctx.sb.send_command.side_effect = SdnError("conexão caiu")
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
     # fail-closed: sem snapshot nada foi aplicado e não há o que desfazer
-    mixin._sb.send_service_commands.assert_not_called()
-    assert any("nada foi aplicado" in t for t in _writes(mixin))
-    assert not hasattr(mixin, "_last_config_command")
+    ctx.sb.send_service_commands.assert_not_called()
+    assert any("nada foi aplicado" in t for t in _writes(st))
+    ctx.set_last_config_command.assert_not_called()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -208,10 +227,10 @@ def test_napalm_diff_confirmado_aplica_comandos(monkeypatch) -> None:
     _backend(monkeypatch)
     executor, cls = _fake_executor(monkeypatch, diff="- old\n+ new")
     bridge = FakeBridge(answer=True)
-    mixin = _make_mixin(_ui_bridge=bridge)
+    h, st, ctx = _make(ui_bridge=lambda: bridge)
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
     cls.assert_called_once()
     executor.preview.assert_called_once_with(svc.cli_commands)
@@ -220,10 +239,10 @@ def test_napalm_diff_confirmado_aplica_comandos(monkeypatch) -> None:
     assert len(bridge.payloads) == 1
     assert bridge.payloads[0]["message"] == "- old\n+ new"
     # o caminho Netmiko NÃO foi usado
-    mixin._sb.send_service_commands.assert_not_called()
+    ctx.sb.send_service_commands.assert_not_called()
     # output do apply visível + evento COMMAND_EXECUTED com backend napalm
-    assert any("cfg ok" in t for t in _writes(mixin))
-    ev = mixin._event_queue.put.call_args[0][0]
+    assert any("cfg ok" in t for t in _writes(st))
+    ev = ctx.event_bus.put.call_args[0][0]
     assert ev.type is EventType.COMMAND_EXECUTED
     assert ev.payload.data == {"mode": "cli", "backend": BACKEND_NAPALM}
 
@@ -236,14 +255,14 @@ def test_napalm_usuario_recusa_nao_aplica(monkeypatch) -> None:
     executor, _cls = _fake_executor(monkeypatch)
     audit = FakeAudit()
     bridge = FakeBridge(answer=False)
-    mixin = _make_mixin(_ui_bridge=bridge, audit_logger=audit)
+    h, st, ctx = _make(ui_bridge=lambda: bridge, audit=audit)
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
     executor.apply.assert_not_called()
-    mixin._sb.send_service_commands.assert_not_called()
-    assert any("Cancelado" in t for t in _writes(mixin))
+    ctx.sb.send_service_commands.assert_not_called()
+    assert any("Cancelado" in t for t in _writes(st))
     assert any(e["status"] == "blocked" for e in audit.entries)
 
 
@@ -255,15 +274,15 @@ def test_napalm_preview_falha_fail_closed(monkeypatch) -> None:
     executor, _cls = _fake_executor(monkeypatch)
     executor.preview.side_effect = RuntimeError("driver boom")
     audit = FakeAudit()
-    mixin = _make_mixin(audit_logger=audit)
+    h, st, ctx = _make(audit=audit)
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
     executor.apply.assert_not_called()
     # recusa explícita: NUNCA fallback silencioso para Netmiko
-    mixin._sb.send_service_commands.assert_not_called()
-    assert any("preview" in t.lower() and "\u2718" in t for t in _writes(mixin))
+    ctx.sb.send_service_commands.assert_not_called()
+    assert any("preview" in t.lower() and "\u2718" in t for t in _writes(st))
     blocked = [e for e in audit.entries if e["status"] == "blocked"]
     assert len(blocked) == 1
     assert "preview falhou" in blocked[0]["reason"]
@@ -276,15 +295,15 @@ def test_napalm_diff_vazio_sem_apply(monkeypatch) -> None:
     _backend(monkeypatch)
     executor, _cls = _fake_executor(monkeypatch, diff="")
     bridge = FakeBridge(answer=True)
-    mixin = _make_mixin(_ui_bridge=bridge)
+    h, st, ctx = _make(ui_bridge=lambda: bridge)
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
     executor.apply.assert_not_called()
-    mixin._sb.send_service_commands.assert_not_called()
+    ctx.sb.send_service_commands.assert_not_called()
     assert bridge.payloads == []            # nenhum diálogo para diff vazio
-    assert any("Sem mudancas a aplicar" in t for t in _writes(mixin))
+    assert any("Sem mudancas a aplicar" in t for t in _writes(st))
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -293,15 +312,15 @@ def test_napalm_diff_vazio_sem_apply(monkeypatch) -> None:
 def test_napalm_sem_bridge_aplica_sem_confirmacao(monkeypatch) -> None:
     _backend(monkeypatch)
     executor, _cls = _fake_executor(monkeypatch)
-    mixin = _make_mixin(_ui_bridge=None)   # app sem GUI / testes headless
+    h, st, ctx = _make(ui_bridge=lambda: None)   # app sem GUI / headless
     svc = _make_svc()
 
-    _run(mixin, svc)
+    _run(h, svc)
 
     executor.preview.assert_called_once()
     executor.apply.assert_called_once_with(svc.cli_commands)
-    mixin._sb.send_service_commands.assert_not_called()
-    assert any("cfg ok" in t for t in _writes(mixin))
+    ctx.sb.send_service_commands.assert_not_called()
+    assert any("cfg ok" in t for t in _writes(st))
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -310,15 +329,15 @@ def test_napalm_sem_bridge_aplica_sem_confirmacao(monkeypatch) -> None:
 def test_servico_leitura_ignora_napalm(monkeypatch) -> None:
     _backend(monkeypatch, BACKEND_NAPALM)
     napalm_cls = MagicMock()
-    monkeypatch.setattr("huawei_manager.handlers.services.NapalmVRPBackend",
+    monkeypatch.setattr("huawei_manager.tabs.services.handlers.NapalmVRPBackend",
                         napalm_cls)
-    mixin = _make_mixin()
+    h, st, ctx = _make()
     svc = _make_svc(config_mode=False)
 
-    _run(mixin, svc)
+    _run(h, svc)
 
     napalm_cls.assert_not_called()
-    mixin._sb.send_service_commands.assert_called_once_with(
+    ctx.sb.send_service_commands.assert_called_once_with(
         svc.cli_commands, config_mode=False, requires_privilege=False)
 
 

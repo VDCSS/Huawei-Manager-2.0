@@ -1,11 +1,17 @@
-"""Services mixin — service execution handler."""
+"""Execução de serviços — handlers da aba Serviços (F2-services).
 
+Extraído de ``handlers/services.py`` (``ServicesMixin``, a última mixin
+grande) do plano ``plano-abas-independentes.md``: a classe injetada
+:class:`ServicesHandlers` ``(ctx, state)`` lê só o :class:`TabContext`
+e escreve via ``_ui.write``/``_ui.loading`` (agendamento na thread GUI
+vem do ``dispatch`` do TabContext).
+"""
 from __future__ import annotations
 
 import logging
 import re
+from typing import TYPE_CHECKING
 
-from huawei_manager._protocols import AppCoreProtocol
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.command import ConfigCommand, audit_config_op
 from huawei_manager.exceptions import SdnError, SnapshotError
@@ -19,7 +25,12 @@ from huawei_manager.sdn_controller.napalm_backend import (
 from huawei_manager.sdn_controller.validator import _DEFAULT_DENY_PATTERNS
 from huawei_manager.services import ServiceDef, execute_service
 from huawei_manager.services.ui_bridge import ask_from_worker
+from huawei_manager.tabs import _ui
 from huawei_manager.utils import sanitize_command
+
+if TYPE_CHECKING:
+    from huawei_manager.tabs._contract import TabContext
+    from huawei_manager.tabs.services.state import ServicesState
 
 log = logging.getLogger(__name__)
 
@@ -88,14 +99,15 @@ def _audit_napalm_blocked(audit: AuditLogger | None, *, user: str,
         log.exception("audit de bloqueio NAPALM falhou")
 
 
-class ServicesMixin:
-    """Mixin com metodos de execucao de servicos."""
+class ServicesHandlers:
+    """Execução de serviços (mock/cli/NAPALM) — só TabContext + ServicesState."""
 
-    # ══════════════════════════════════════════════════════════════════
-    #  SERVICOS
-    # ══════════════════════════════════════════════════════════════════
-    def _run_service(self: AppCoreProtocol, svc: ServiceDef,
-                     final_svc: ServiceDef | None = None) -> None:
+    def __init__(self, ctx: TabContext, state: ServicesState) -> None:
+        self._ctx = ctx
+        self._state = state
+
+    def run_service(self, svc: ServiceDef,
+                    final_svc: ServiceDef | None = None) -> None:
         """Executa um servico no modo mock ou cli, com substituicao de parametros e sanitizacao."""
         _DENY_COMPILED = [re.compile(p, re.IGNORECASE)
                           for p in _DEFAULT_DENY_PATTERNS]
@@ -114,40 +126,46 @@ class ServicesMixin:
                 "Continuar?",
             )
             if reply != QMessageBox.StandardButton.Yes:
-                self._write(self._svc_output, "Operação cancelada pelo usuário.")
+                _ui.write(self._state.output, "Operação cancelada pelo usuário.",
+                          self._ctx.dispatch)
                 return
 
-        mode = self._svc_mode_var
-        device = self._target_device
+        mode = self._ctx.svc_mode()
+        device = self._ctx.device()
         label = f"Servico: {svc.name}  |  Modo: {mode}"
         if device:
             label += f"  |  Alvo: {device.name} ({device.host})"
-        if self._svc_device_lbl is not None:
-            self._svc_device_lbl.setText(label)
+        device_lbl = self._state.device_lbl
+        if device_lbl is not None:
+            device_lbl.setText(label)
 
         _REJECT_PARAM = re.compile(r"[;&|`$(){}]")
 
         final_svc = svc
-        if svc.config_mode and self._svc_param_entries:
+        if svc.config_mode and self._state.param_entries:
             cmd = svc.description
             # Substituição posicional: usa o texto REAL do placeholder (ex.:
             # `<permit|deny>`, que o label de UI exibe como `permit/deny`) e
             # substitui apenas a 1ª ocorrência de cada um, preservando
             # placeholders repetidos (ex.: dois `<ip>` em NAT server).
             placeholders = re.findall(r"<[^>]+>", cmd)
-            entries = list(self._svc_param_entries.values())
+            entries = list(self._state.param_entries.values())
             if len(placeholders) != len(entries):
-                self._write(self._svc_output,
-                    "\u2718  Servico inconsistente: "
+                _ui.write(
+                    self._state.output,
+                    "✘  Servico inconsistente: "
                     f"{len(placeholders)} placeholder(s) para {len(entries)} "
-                    "campo(s). Nada foi executado.")
+                    "campo(s). Nada foi executado.",
+                    self._ctx.dispatch)
                 return
             for placeholder, entry in zip(placeholders, entries):
                 val = entry.text().strip()
                 if _REJECT_PARAM.search(val):
-                    self._write(self._svc_output,
-                        f"\u2718  Parametro '{placeholder}' contem caracteres "
-                        "invalidos (& ; | ` $ ( ) { }).")
+                    _ui.write(
+                        self._state.output,
+                        f"✘  Parametro '{placeholder}' contem caracteres "
+                        "invalidos (& ; | ` $ ( ) { }).",
+                        self._ctx.dispatch)
                     return
                 cmd = cmd.replace(placeholder, val, 1)
             final_svc = ServiceDef(
@@ -157,14 +175,15 @@ class ServicesMixin:
                 config_mode=svc.config_mode,
             )
 
-        rejected = self._validate_service(svc, final_svc.cli_commands)
+        rejected = self.validate_service(svc, final_svc.cli_commands)
         if rejected:
             for cmd, reason in rejected:
-                self._write(self._svc_output,
-                            f"\u2718  Comando bloqueado ({reason}): {cmd}")
-            logger = getattr(self, "audit_logger", None)
+                _ui.write(self._state.output,
+                          f"✘  Comando bloqueado ({reason}): {cmd}",
+                          self._ctx.dispatch)
+            logger = self._ctx.audit
             if logger is not None:
-                session = getattr(self, "session", None)
+                session = self._ctx.session
                 logger.log_operation(
                     "command_denied",
                     user=getattr(session, "_user", "unknown"),
@@ -176,27 +195,31 @@ class ServicesMixin:
             return
 
         if mode == "cli":
-            if self._ensure_device_ready(f"executar o servico '{svc.name}'") is None:
+            if self._ctx.ensure_device_ready(
+                    f"executar o servico '{svc.name}'") is None:
                 return
 
         def _do():
             """Executa o servico selecionado (mock ou SSH real)."""
-            self._loading(self._svc_output, f"Executando: {svc.name} ({mode})\u2026")
+            _ui.loading(self._state.output,
+                        f"Executando: {svc.name} ({mode})…",
+                        self._ctx.dispatch)
 
             if mode == "mock":
                 result = execute_service(final_svc, session_type="mock")
-                self._write(self._svc_output, result)
-                self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                            source="service",
-                                            payload=CommandExecutedPayload(
-                                                command=svc.name,
-                                                data={"mode": "mock"},
-                                            )))
+                _ui.write(self._state.output, result, self._ctx.dispatch)
+                self._ctx.event_bus.put(Event(EventType.COMMAND_EXECUTED,
+                                              source="service",
+                                              payload=CommandExecutedPayload(
+                                                  command=svc.name,
+                                                  data={"mode": "mock"},
+                                              )))
                 return
 
-            if not self._sb.is_alive():
-                self._write(self._svc_output,
-                    "\u2718  Sem sessao SSH ativa. Conecte-se primeiro.")
+            if not self._ctx.sb.is_alive():
+                _ui.write(self._state.output,
+                          "✘  Sem sessao SSH ativa. Conecte-se primeiro.",
+                          self._ctx.dispatch)
                 return
 
             if mode == "cli":
@@ -204,39 +227,39 @@ class ServicesMixin:
                 # confirmação do usuário → apply → auditoria. Devolve True
                 # quando assumiu (sucesso OU recusa explícita, sem fallback
                 # silencioso); False → caminho Netmiko padrão.
-                if self._run_service_napalm(svc, final_svc):
+                if self.run_service_napalm(svc, final_svc):
                     return
                 if final_svc.config_mode:
                     # Serviço de configuração altera estado: Command pattern
                     # com snapshot pré-mudança (fail-closed — sem snapshot,
                     # nada é aplicado) + rollback via paleta de comandos.
-                    session = getattr(self, "session", None)
+                    session = self._ctx.session
                     user = getattr(session, "_user", "unknown")
                     host = getattr(session, "_host", "unknown")
                     session_id = getattr(session, "_session_id", None)
-                    audit: AuditLogger | None = getattr(
-                        self, "audit_logger", None)
+                    audit: AuditLogger | None = self._ctx.audit
                     service_cmd = ConfigCommand(
                         final_svc.cli_commands,
-                        read_state=lambda: self._sb.send_command(
+                        read_state=lambda: self._ctx.sb.send_command(
                             "display current-configuration"),
                         apply_fn=lambda lines: (
                             True,
-                            self._sb.send_service_commands(
+                            self._ctx.sb.send_service_commands(
                                 lines,
                                 config_mode=final_svc.config_mode,
                                 requires_privilege=(
                                     final_svc.requires_privilege),
                             ),
                         ),
-                        dry_run=getattr(self, "_dry_run", None),
+                        dry_run=self._ctx.dry_run,
                     )
                     try:
                         svc_result = service_cmd.execute()
                     except SnapshotError as exc:
-                        self._sb.invalidate_connection()
-                        self._write(self._svc_output,
-                                    f"\u2718  {exc} \u2014 nada foi aplicado.")
+                        self._ctx.sb.invalidate_connection()
+                        _ui.write(self._state.output,
+                                  f"✘  {exc} — nada foi aplicado.",
+                                  self._ctx.dispatch)
                         audit_config_op(
                             audit, op="config_apply", user=user, host=host,
                             session_id=session_id, status="blocked",
@@ -247,10 +270,11 @@ class ServicesMixin:
                     except SdnError as exc:
                         # Conexão pode ter caído no meio da mutação:
                         # invalida e mantém o snapshot p/ rollback posterior.
-                        self._sb.invalidate_connection()
-                        self._last_config_command = service_cmd
-                        self._write(self._svc_output,
-                                    f"\u2718  Falha SSH: {exc}")
+                        self._ctx.sb.invalidate_connection()
+                        self._ctx.set_last_config_command(service_cmd)
+                        _ui.write(self._state.output,
+                                  f"✘  Falha SSH: {exc}",
+                                  self._ctx.dispatch)
                         audit_config_op(
                             audit, op="config_apply", user=user, host=host,
                             session_id=session_id, status="error",
@@ -258,45 +282,47 @@ class ServicesMixin:
                             backend="netmiko",
                         )
                         return
-                    self._last_config_command = service_cmd
-                    self._write(self._svc_output, svc_result.message)
+                    self._ctx.set_last_config_command(service_cmd)
+                    _ui.write(self._state.output, svc_result.message,
+                              self._ctx.dispatch)
                     audit_config_op(
                         audit, op="config_apply", user=user, host=host,
                         session_id=session_id, status=svc_result.status,
                         duration_ms=svc_result.duration_ms,
                         service=svc.name, backend="netmiko",
                     )
-                    self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                                source="service",
-                                                payload=CommandExecutedPayload(
-                                                    command=svc.name,
-                                                    data={"mode": "cli"},
-                                                )))
+                    self._ctx.event_bus.put(Event(EventType.COMMAND_EXECUTED,
+                                                  source="service",
+                                                  payload=CommandExecutedPayload(
+                                                      command=svc.name,
+                                                      data={"mode": "cli"},
+                                                  )))
                     return
-                result = self._sb.send_service_commands(
+                result = self._ctx.sb.send_service_commands(
                     final_svc.cli_commands,
                     config_mode=final_svc.config_mode,
                     requires_privilege=final_svc.requires_privilege,
                 )
-                self._write(self._svc_output, result)
-                self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                            source="service",
-                                            payload=CommandExecutedPayload(
-                                                command=svc.name,
-                                                data={"mode": "cli"},
-                                            )))
+                _ui.write(self._state.output, result, self._ctx.dispatch)
+                self._ctx.event_bus.put(Event(EventType.COMMAND_EXECUTED,
+                                              source="service",
+                                              payload=CommandExecutedPayload(
+                                                  command=svc.name,
+                                                  data={"mode": "cli"},
+                                              )))
                 return
 
-            self._write(self._svc_output, f"Modo desconhecido: {mode}")
+            _ui.write(self._state.output, f"Modo desconhecido: {mode}",
+                      self._ctx.dispatch)
 
-        self._spawn_io(_do)
+        self._ctx.spawn_io(_do)
 
-    def _run_service_napalm(self: AppCoreProtocol, svc: ServiceDef,
-                            final_svc: ServiceDef) -> bool:
+    def run_service_napalm(self, svc: ServiceDef,
+                           final_svc: ServiceDef) -> bool:
         """Caminho NAPALM do servico (modo cli): preview → diff → confirmação
         do usuário → apply → auditoria.
 
-        Chamado apenas da branch ``mode == "cli"`` de ``_run_service``. O modo
+        Chamado apenas da branch ``mode == "cli"`` de ``run_service``. O modo
         mock e os serviços de leitura (``config_mode=False``) nunca passam por
         aqui — o caminho Netmiko padrão permanece bit a bit igual ao de hoje.
 
@@ -314,18 +340,19 @@ class ServicesMixin:
         if backend != BACKEND_NAPALM or not final_svc.config_mode:
             return False
 
-        session = getattr(self, "session", None)
+        session = self._ctx.session
         user = getattr(session, "_user", "unknown")
         host = getattr(session, "_host", "unknown")
         session_id = getattr(session, "_session_id", None)
-        audit: AuditLogger | None = getattr(self, "audit_logger", None)
-        conn = self._sb.connection
+        audit: AuditLogger | None = self._ctx.audit
+        conn = self._ctx.sb.connection
         if conn is None:
             # Sem handle Netmiko bruto não há como fazer preview/apply via
             # NAPALM: recusa auditada, nunca fallback silencioso para o Netmiko
             # (o usuário optou pela flag — falhar fechado).
-            self._write(self._svc_output,
-                        "\u2718  NAPALM: sem sessao Netmiko ativa \u2014 nada foi aplicado.")
+            _ui.write(self._state.output,
+                      "✘  NAPALM: sem sessao Netmiko ativa — nada foi aplicado.",
+                      self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
                                   reason="sem conexao Netmiko exposta")
@@ -345,9 +372,10 @@ class ServicesMixin:
             # de terceiros — qualquer erro vira recusa auditada e parada;
             # nunca exceção silenciosa nem fallback para Netmiko.
             err = sanitize_command(str(exc))
-            self._write(self._svc_output,
-                        f"\u2718  NAPALM: preview (dry-run) falhou — nada foi "
-                        f"aplicado.\n{err}")
+            _ui.write(self._state.output,
+                      f"✘  NAPALM: preview (dry-run) falhou — nada foi "
+                      f"aplicado.\n{err}",
+                      self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
                                   reason=f"preview falhou: {err}")
@@ -355,13 +383,14 @@ class ServicesMixin:
 
         # 2) diff vazio: nada mudaria — encerra sem apply e sem diálogo.
         if not diff.strip():
-            self._write(self._svc_output, "Sem mudancas a aplicar.")
+            _ui.write(self._state.output, "Sem mudancas a aplicar.",
+                      self._ctx.dispatch)
             return True
 
         # 3) confirmação do usuário com o diff na tela (thread-safe via
         #    UiBridge). Sem bridge (app sem GUI / testes headless) aplica sem
         #    confirmação: comportamento nunca pior que hoje (hoje não há diff).
-        bridge = getattr(self, "_ui_bridge", None)
+        bridge = self._ctx.ui_bridge()
         if bridge is None:
             log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmacao",
                         svc.name)
@@ -371,8 +400,9 @@ class ServicesMixin:
                                        title=f"Aplicar '{svc.name}'?",
                                        message=diff)
         if not approved:
-            self._write(self._svc_output,
-                        "Cancelado pelo usuario — nada foi aplicado.")
+            _ui.write(self._state.output,
+                      "Cancelado pelo usuario — nada foi aplicado.",
+                      self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
                                   reason="cancelado pelo usuario")
@@ -383,40 +413,43 @@ class ServicesMixin:
             result = executor.apply(final_svc.cli_commands)
         except SdnError as exc:
             # o backend já auditou (status blocked/error) — só reporta aqui.
-            self._write(self._svc_output,
-                        f"\u2718  NAPALM: aplicacao recusada pelo dispositivo — "
-                        f"alteracoes descartadas.\n{sanitize_command(str(exc))}")
+            _ui.write(self._state.output,
+                      f"✘  NAPALM: aplicacao recusada pelo dispositivo — "
+                      f"alteracoes descartadas.\n{sanitize_command(str(exc))}",
+                      self._ctx.dispatch)
             return True
         except Exception as exc:
             # justificativa (exceção genérica): o snapshot é capturado fora do
             # try interno do backend e o driver de terceiros pode levantar erro
             # cru — vira recusa auditada, nunca fallback Netmiko.
             err = sanitize_command(str(exc))
-            self._write(self._svc_output,
-                        f"\u2718  NAPALM: falha ao aplicar — nada foi "
-                        f"confirmado.\n{err}")
+            _ui.write(self._state.output,
+                      f"✘  NAPALM: falha ao aplicar — nada foi "
+                      f"confirmado.\n{err}",
+                      self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
                                   reason=f"apply falhou: {err}")
             return True
 
-        self._write(self._svc_output,
-                    f">  NAPALM: {len(final_svc.cli_commands)} comando(s) "
-                    f"aplicado(s) em {result.duration_ms:.0f} ms  |  "
-                    f"snapshot pre-mudanca: "
-                    f"{len(result.snapshot.splitlines())} linha(s)\n"
-                    f"{'─' * 40}\n{result.output}")
-        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                    source="service",
-                                    payload=CommandExecutedPayload(
-                                        command=svc.name,
-                                        data={"mode": "cli",
-                                              "backend": BACKEND_NAPALM},
-                                    )))
+        _ui.write(self._state.output,
+                  f">  NAPALM: {len(final_svc.cli_commands)} comando(s) "
+                  f"aplicado(s) em {result.duration_ms:.0f} ms  |  "
+                  f"snapshot pre-mudanca: "
+                  f"{len(result.snapshot.splitlines())} linha(s)\n"
+                  f"{'─' * 40}\n{result.output}",
+                  self._ctx.dispatch)
+        self._ctx.event_bus.put(Event(EventType.COMMAND_EXECUTED,
+                                      source="service",
+                                      payload=CommandExecutedPayload(
+                                          command=svc.name,
+                                          data={"mode": "cli",
+                                                "backend": BACKEND_NAPALM},
+                                      )))
         return True
 
-    def _validate_service(self: AppCoreProtocol, svc: ServiceDef,
-                          final_cmds: list[str]) -> list[tuple[str, str]]:
+    def validate_service(self, svc: ServiceDef,
+                         final_cmds: list[str]) -> list[tuple[str, str]]:
         """Valida comandos finais do serviço contra allowlist e deny-list.
 
         Args:

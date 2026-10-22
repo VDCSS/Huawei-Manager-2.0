@@ -43,6 +43,9 @@ def _make(**overrides) -> tuple[HomeHandlers, HomeState, TabContext]:
         drv=lambda: MagicMock(),
         devices=lambda: devs,
         show_page=MagicMock(),
+        svc_mode=lambda: "mock",
+        ui_bridge=lambda: None,
+        ensure_device_ready=MagicMock(return_value=None),
     )
     fields.update(overrides)
     ctx = TabContext(**fields)

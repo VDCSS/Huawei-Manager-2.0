@@ -8,13 +8,20 @@ substituição por label em vez do texto real do placeholder.
 from __future__ import annotations
 
 import re
+from unittest.mock import MagicMock
 
-from huawei_manager.handlers.services import (
-    ServicesMixin,
+from huawei_manager.tabs.services.handlers import (
+    ServicesHandlers,
     _build_service_allow_patterns,
 )
 from huawei_manager.services import get_service_by_id, parse_params
 from huawei_manager.services_data import SERVICE_REGISTRY, ServiceDef
+
+
+def _validate(svc: ServiceDef, cmds: list[str]) -> list[tuple[str, str]]:
+    """validate_service não toca ctx/state — handler mínimo."""
+    return ServicesHandlers(MagicMock(), MagicMock()).validate_service(
+        svc, cmds)
 
 
 def _params(sid: str) -> list[tuple[str, str]]:
@@ -83,7 +90,7 @@ class TestAllowlistCoversOwnCommands:
             id="t-pipe", name="Pipe", description=cmd,
             category="system", device_types=["ROUTER"], cli_commands=[cmd],
         )
-        assert ServicesMixin()._validate_service(svc, [cmd]) == []
+        assert _validate(svc, [cmd]) == []
 
     def test_alternation_still_supported(self) -> None:
         svc = ServiceDef(
@@ -91,12 +98,12 @@ class TestAllowlistCoversOwnCommands:
             category="config-interface", device_types=["ROUTER"],
             cli_commands=["shutdown", "undo shutdown"],
         )
-        assert ServicesMixin()._validate_service(svc, ["shutdown"]) == []
-        assert ServicesMixin()._validate_service(svc, ["undo shutdown"]) == []
+        assert _validate(svc, ["shutdown"]) == []
+        assert _validate(svc, ["undo shutdown"]) == []
 
 
 def _apply_placeholders(svc: ServiceDef, values: list[str]) -> str:
-    """Reproduz a substituição posicional feita por _run_service."""
+    """Reproduz a substituição posicional feita por run_service."""
     cmd = svc.description
     for placeholder, value in zip(re.findall(r"<[^>]+>", cmd), values):
         cmd = cmd.replace(placeholder, value, 1)
@@ -110,7 +117,7 @@ class TestParamSubstitution:
         assert svc is not None
         cmd = _apply_placeholders(svc, ["10", "deny", "192.168.0.0", "0.0.255.255"])
         assert cmd == "rule 10 deny ip source 192.168.0.0 0.0.255.255"
-        assert ServicesMixin()._validate_service(svc, [cmd]) == []
+        assert _validate(svc, [cmd]) == []
 
     def test_repeated_placeholder_gets_distinct_values(self) -> None:
         svc = get_service_by_id("router-config-nat-server")
@@ -121,11 +128,11 @@ class TestParamSubstitution:
             "nat server protocol tcp global 203.0.113.9 8080 "
             "inside 192.168.1.10 443"
         )
-        assert ServicesMixin()._validate_service(svc, [cmd]) == []
+        assert _validate(svc, [cmd]) == []
 
     def test_vlan_port_type_placeholder_substituted(self) -> None:
         svc = get_service_by_id("router-config-vlan-port-type")
         assert svc is not None
         cmd = _apply_placeholders(svc, ["access"])
         assert cmd == "port link-type access"
-        assert ServicesMixin()._validate_service(svc, [cmd]) == []
+        assert _validate(svc, [cmd]) == []

@@ -131,6 +131,9 @@ class TestDisconnectColor:
             set_last_config_command=MagicMock(),
             drv=lambda: MagicMock(), devices=lambda: [],
             show_page=MagicMock(),
+            svc_mode=lambda: "mock",
+            ui_bridge=lambda: None,
+            ensure_device_ready=MagicMock(return_value=None),
         )
         tab = HomeTab()
         page = tab.build(ctx)  # ref local: QWidget sem pai

@@ -17,7 +17,7 @@ from huawei_manager.tabs.cmd.state import CmdState
 
 
 def _make_ctx(**overrides) -> TabContext:
-    """TabContext fake com todos os 26 campos; overrides por teste."""
+    """TabContext fake com todos os 29 campos; overrides por teste."""
     fields = dict(
         sb=MagicMock(),
         audit=None,
@@ -45,6 +45,9 @@ def _make_ctx(**overrides) -> TabContext:
         drv=lambda: MagicMock(),
         devices=lambda: [],
         show_page=MagicMock(),
+        svc_mode=lambda: "mock",
+        ui_bridge=lambda: None,
+        ensure_device_ready=MagicMock(return_value=None),
     )
     fields.update(overrides)
     ctx = TabContext(**fields)

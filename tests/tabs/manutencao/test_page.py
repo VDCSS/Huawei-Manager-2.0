@@ -43,6 +43,9 @@ def _make_ctx(**overrides: Any) -> TabContext:
         drv=lambda: MagicMock(),
         devices=lambda: [],
         show_page=MagicMock(),
+        svc_mode=lambda: "mock",
+        ui_bridge=lambda: None,
+        ensure_device_ready=MagicMock(return_value=None),
     )
     fields.update(overrides)
     return TabContext(**fields)

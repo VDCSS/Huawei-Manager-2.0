@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from huawei_manager.sdn_controller.dryrun import DryRunEngine
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
     from huawei_manager.sdn_controller.validator import CommandValidator
+    from huawei_manager.services.ui_bridge import UiBridge
     from huawei_manager.session import NetmikoSession
 
 __all__ = ["LegacyTabAdapter", "TabContext", "TabDef", "TabModule"]
@@ -78,6 +79,10 @@ class TabContext:
     # Fase 2 (aba Dashboard — F2-home) — inventário e navegação:
     devices: Callable[[], Sequence[Device]]  # inventário sob demanda (App._devices)
     show_page: Callable[[str], None]         # navegação de página (App._show_page)
+    # Fase 2 (aba Serviços — F2-services) — modo, ponte I/O→GUI e device-ready:
+    svc_mode: Callable[[], str]              # modo mock/cli sob demanda (App._svc_mode_var)
+    ui_bridge: Callable[[], UiBridge | None]  # ponte p/ confirmação NAPALM (App._ui_bridge)
+    ensure_device_ready: Callable[[str], Device | None]  # device pronto ou None (App._ensure_device_ready)
 
 
 @runtime_checkable

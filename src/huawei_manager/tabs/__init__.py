@@ -81,6 +81,12 @@ def _home_module() -> TabModule:
     return HomeTab()
 
 
+def _services_module() -> TabModule:
+    from huawei_manager.tabs.services import ServicesTab
+
+    return ServicesTab()
+
+
 def _manutencao_module() -> TabModule:
     """Módulo real da Manutenção (Fase 1) — import lazy evita ciclo."""
     from huawei_manager.tabs.manutencao import ManutencaoTab
@@ -105,7 +111,7 @@ _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("backup", "Backup", "\U0001f4be", C.NEON_PURP, "FERRAMENTAS",
              "Gerenciar backups de configuração", "Ctrl+8", "", module_factory=_backup_module),
     _TabMeta("services", "Servicos", "⚡", C.NEON_AMBER, "FERRAMENTAS",
-             "Gerenciar serviços do roteador", "Ctrl+9", "_build_services_page"),
+             "Gerenciar serviços do roteador", "Ctrl+9", "", module_factory=_services_module),
     _TabMeta("manutencao", "Manutencao", "\U0001f6e0", C.NEON_MAG, "ADMINISTRACAO",
              "Ferramentas de manutenção", "Ctrl+0", "",
              module_factory=_manutencao_module),
@@ -116,7 +122,6 @@ class _HostProtocol(Protocol):
     """Superfície do App exigida pelo registry (builders legados vinculados)."""
 
     def _build_topology_page(self) -> None: ...
-    def _build_services_page(self) -> None: ...
 
 
 def build_registry(host: _HostProtocol) -> list[TabDef]:

@@ -128,9 +128,10 @@ class TestFocusRules:
         assert "border-color: #0098a0" in QSS_LIGHT
 
     def test_services_qss_listwidget_focus_paired(self):
-        import huawei_manager.pages.services as svc
         import inspect
-        source = inspect.getsource(svc.PageBuilderServicesMixin._build_services_split)
+
+        from huawei_manager.tabs.services.page import ServicesTab
+        source = inspect.getsource(ServicesTab._build_split)
         assert "QListWidget:focus" in source
         assert "border:" in source and "NEON_CYAN" in source
 
@@ -158,6 +159,9 @@ class TestTemplatesAccessible:
             drv=lambda: MagicMock(),
             devices=lambda: [],
             show_page=MagicMock(),
+            svc_mode=lambda: "mock",
+            ui_bridge=lambda: None,
+            ensure_device_ready=MagicMock(return_value=None),
         )
         page = CmdTab().build(ctx)
         tpl_list = page.findChild(QListWidget)

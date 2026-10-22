@@ -56,7 +56,10 @@ class TestBuildRegistry:
             assert td.description, f"{td.key} sem description na palette"
 
     def test_missing_builder_fails_fast(self) -> None:
-        host = MagicMock(spec=["_build_topology_page"])  # só um builder
+        # topology é a única aba ainda sem module_factory — sem o builder
+        # legado no host, o registry falha fechado (F2-services completou
+        # a migração de services).
+        host = MagicMock(spec=[])  # nenhum builder
         with pytest.raises(RuntimeError, match="builder legado"):
             build_registry(host)
 

@@ -12,7 +12,7 @@ from huawei_manager.tabs.home import HomeTab
 
 
 def _fake_ctx(**overrides) -> TabContext:
-    """TabContext fake completo (26 campos); overrides por teste."""
+    """TabContext fake completo (29 campos); overrides por teste."""
     fields: dict = dict(
         sb=MagicMock(),
         audit=None,
@@ -40,6 +40,9 @@ def _fake_ctx(**overrides) -> TabContext:
         drv=lambda: MagicMock(),
         devices=lambda: [],
         show_page=MagicMock(),
+        svc_mode=lambda: "mock",
+        ui_bridge=lambda: None,
+        ensure_device_ready=MagicMock(return_value=None),
     )
     fields.update(overrides)
     return TabContext(**fields)
