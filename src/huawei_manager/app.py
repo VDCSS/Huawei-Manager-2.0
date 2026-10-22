@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from huawei_manager.tabs.backup import BackupTab
     from huawei_manager.tabs.cmd import CmdTab
     from huawei_manager.tabs.config import ConfigTab
+    from huawei_manager.tabs.route import RouteTab
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
@@ -92,8 +93,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # só existem na composição final HuaweiRouterApp.)
         ADMIN_MAX_ATTEMPTS: int
         ADMIN_LOCKOUT_SECS: int
-        route_filter_var: str
-        _route_filter_cb: QComboBox
         _admin_btn: ActionButton
         _svc_cat_var: str
         _svc_device_lbl: QLabel | None
@@ -159,7 +158,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, on_success_fmt: str, on_error_msg: str
         ) -> None: ...
         def _connect_with_device(self: AppCoreProtocol, device: Device) -> None: ...
-        def _fetch_route(self: AppCoreProtocol, fkey: str = "") -> None: ...
         def _fetch_arp(self: AppCoreProtocol) -> None: ...
         def _fetch_info(self: AppCoreProtocol) -> None: ...
         def _refresh_devices(self: AppCoreProtocol) -> None: ...
@@ -356,7 +354,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         """Garante que todos os atributos dos mixins existem antes do uso."""
         self._logo_pixmap: QPixmap | None = None
         self.theme_btn: ActionButton | None = None
-        self.out_route: QTextEdit | None = None
         self.out_arp: QTextEdit | None = None
         self.out_info: QTextEdit | None = None
         self._svc_output: QTextEdit | None = None
@@ -457,6 +454,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             get_last_config_command=lambda: self._last_config_command,
             set_last_config_command=lambda cmd: setattr(
                 self, "_last_config_command", cmd),
+            drv=lambda: self._drv,
         )
 
         self._build_sidebar()
@@ -753,6 +751,28 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     def _config_out(self) -> QTextEdit | None:
         """Widget de saída da aba config (Ctrl+L limpa a saída)."""
         tab = self._config_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Roteamento (F2-route) ───────────────────────
+    def _route_tab(self) -> RouteTab | None:
+        """Módulo real da aba route (instância única do registry) + contexto."""
+        from huawei_manager.tabs.route import RouteTab
+
+        td = tab_by_key(self._tabs, "route")
+        if td is None or not isinstance(td.module, RouteTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_route(self) -> None:
+        tab = self._route_tab()
+        if tab is not None:
+            tab.fetch_route()
+
+    def _route_out(self) -> QTextEdit | None:
+        """Widget de saída da aba route (Ctrl+L limpa a saída)."""
+        tab = self._route_tab()
         return None if tab is None else tab.out_widget()
 
     # ── Navegacao ────────────────────────────────────────────────────

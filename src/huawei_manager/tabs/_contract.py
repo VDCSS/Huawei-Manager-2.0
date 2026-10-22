@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from huawei_manager.command import ConfigCommand
     from huawei_manager.device_models import Device
     from huawei_manager.sdn_controller.bus import IEventBus
+    from huawei_manager.sdn_controller.drivers.base import BaseDriver
     from huawei_manager.sdn_controller.dryrun import DryRunEngine
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
     from huawei_manager.sdn_controller.validator import CommandValidator
@@ -70,6 +71,10 @@ class TabContext:
     # Snapshot de rollback compartilhado com Serviços (attribute do App):
     get_last_config_command: Callable[[], ConfigCommand | None]
     set_last_config_command: Callable[[ConfigCommand | None], None]
+    # Fase 2 (aba Roteamento — F2-route) — driver sob demanda: o App RE-CRIA
+    # o driver em handlers/devices.py ao trocar de device, então o contexto
+    # expõe um getter (NUNCA bind direto — capturaria cópia velha).
+    drv: Callable[[], BaseDriver]  # driver atual sob demanda (App._drv)
 
 
 @runtime_checkable

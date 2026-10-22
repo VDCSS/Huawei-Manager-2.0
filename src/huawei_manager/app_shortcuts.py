@@ -45,9 +45,7 @@ class ShortcutsMixin:
         if page == "config":
             self._fetch_config()
         elif page == "route":
-            label_to_key = {v: k for k, v in C.ROUTE_FILTER_LABELS.items()}
-            fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
-            self._run(lambda: self._fetch_route(fkey))
+            self._fetch_route()
         elif page == "arp":
             self._run(self._fetch_arp)
         elif page == "info":
@@ -83,8 +81,10 @@ class ShortcutsMixin:
             out = self._config_out()
             if out is not None:
                 self._write(out, "")
-        elif page == "route" and self.out_route is not None:
-            self._write(self.out_route, "")
+        elif page == "route":
+            out = self._route_out()
+            if out is not None:
+                self._write(out, "")
         elif page == "arp" and self.out_arp is not None:
             self._write(self.out_arp, "")
         elif page == "info" and self.out_info is not None:

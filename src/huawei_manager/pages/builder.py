@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -16,7 +15,6 @@ from PySide6.QtWidgets import (
 
 import huawei_manager.constants as C
 from huawei_manager._protocols import AppCoreProtocol
-from huawei_manager.constants import ROUTE_FILTER_LABELS
 from huawei_manager.pages.services import PageBuilderServicesMixin
 from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
@@ -67,52 +65,6 @@ class PageBuilder(PageBuilderServicesMixin):
         weight = "bold" if bold else "normal"
         bg_css = f"background: {bg};" if bg else ""
         return f"color: {color}; {bg_css} font: {weight} {font_size}px {C.FONT_UI_FAMILY};"
-
-    # ── Route ─────────────────────────────────────────────────────────
-    def _build_route_page(self: AppCoreProtocol) -> None:
-        p = self._make_page("route")
-        self._page_title(p, "Tabelas e Status do Roteador", C.NEON_CYAN,
-                         "Visualizacao de tabelas, vizinhos e metricas do dispositivo")
-        row = QWidget(p)
-        row.setStyleSheet(f"background: {C.BG_CARD};")
-        row.setMaximumHeight(40)
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        self._page_layout(p).addWidget(row)
-        self._page_layout(p).addSpacing(8)
-
-        lbl = QLabel("Filtro:", row)
-        lbl.setStyleSheet(self._css_label(C.FG_DIM, C.BG_CARD, 11))
-        row_layout.addWidget(lbl)
-        row_layout.addSpacing(8)
-
-        self.route_filter_var = "Tabela de Rotas do Roteador"
-        self._route_filter_cb = QComboBox(row)
-        self._route_filter_cb.setEditable(False)
-        self._route_filter_cb.addItems(list(ROUTE_FILTER_LABELS.values()))
-        self._route_filter_cb.setCurrentText(self.route_filter_var)
-        self._route_filter_cb.setMinimumWidth(300)
-        self._route_filter_cb.setStyleSheet(f"""
-            QComboBox {{ background: {C.BG_INPUT}; color: {C.NEON_CYAN};
-                         border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                         padding: 4px 8px; font: 11px {C.FONT_UI_FAMILY}; }}
-            QComboBox::drop-down {{ border: none; }}
-            QComboBox QAbstractItemView {{ background: {C.BG_INPUT};
-                                           color: {C.NEON_CYAN};
-                                           selection-background-color: {C.NEON_PURP}; }}
-        """)
-        row_layout.addWidget(self._route_filter_cb)
-
-        self.out_route = output_text(p)
-        self._page_layout(p).addWidget(self.out_route, stretch=1)
-        self._page_layout(p).addSpacing(10)
-        btn = action_button(p, "\u21bb  Carregar",
-                            lambda: self._run(
-                                lambda fkey=(
-                                    {v: k for k, v in ROUTE_FILTER_LABELS.items()}
-                                    .get(self._route_filter_cb.currentText(), "routing")
-                                ): self._fetch_route(fkey)), C.NEON_CYAN)
-        self._page_layout(p).addWidget(btn)
 
     # ── ARP ───────────────────────────────────────────────────────────
     def _build_arp_page(self: AppCoreProtocol) -> None:

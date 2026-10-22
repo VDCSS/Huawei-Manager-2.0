@@ -109,13 +109,10 @@ class AppCoreProtocol(Protocol):
     _PAGE_KEYS: list[str]
     _logo_pixmap: QPixmap | None
 
-    route_filter_var: str
-    _route_filter_cb: QComboBox
     _admin_btn: ActionButton
     _device_target_lbl: QLabel
 
     # ── Páginas: saídas de texto ────────────────────────────────────
-    out_route: QTextEdit | None
     out_arp: QTextEdit | None
     out_info: QTextEdit | None
 
@@ -217,7 +214,8 @@ class AppCoreProtocol(Protocol):
     # ── Fetch ───────────────────────────────────────────────────────
     def _fetch_config(self) -> None: ...
     def _config_out(self) -> QTextEdit | None: ...
-    def _fetch_route(self, fkey: str = "") -> None: ...
+    def _fetch_route(self) -> None: ...
+    def _route_out(self) -> QTextEdit | None: ...
     def _fetch_arp(self) -> None: ...
     def _fetch_info(self) -> None: ...
 

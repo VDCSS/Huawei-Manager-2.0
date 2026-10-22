@@ -155,6 +155,7 @@ class TestTemplatesAccessible:
             set_status=MagicMock(), touch_session=MagicMock(), cmd_validator=None,
             dry_run=None, get_last_config_command=lambda: None,
             set_last_config_command=MagicMock(),
+            drv=lambda: MagicMock(),
         )
         page = CmdTab().build(ctx)
         tpl_list = page.findChild(QListWidget)

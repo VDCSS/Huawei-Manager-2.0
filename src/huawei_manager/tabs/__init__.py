@@ -57,6 +57,12 @@ def _config_module() -> TabModule:
     return ConfigTab()
 
 
+def _route_module() -> TabModule:
+    from huawei_manager.tabs.route import RouteTab
+
+    return RouteTab()
+
+
 def _manutencao_module() -> TabModule:
     """Módulo real da Manutenção (Fase 1) — import lazy evita ciclo."""
     from huawei_manager.tabs.manutencao import ManutencaoTab
@@ -71,7 +77,7 @@ _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("config", "Config Atual", "\U0001f4cb", C.NEON_CYAN, "DISPOSITIVOS",
              "Exibir configuração atual do roteador", "Ctrl+3", "", module_factory=_config_module),
     _TabMeta("route", "Roteamento", "\U0001f310", C.NEON_CYAN, "DISPOSITIVOS",
-             "Tabela de roteamento", "Ctrl+4", "_build_route_page"),
+             "Tabela de roteamento", "Ctrl+4", "", module_factory=_route_module),
     _TabMeta("arp", "Tabela ARP", "\U0001f4e1", C.NEON_CYAN, "DISPOSITIVOS",
              "Tabela ARP", "Ctrl+5", "_build_arp_page"),
     _TabMeta("info", "Info do Sistema", "\U0001f4bb", C.NEON_MAG, "DISPOSITIVOS",
@@ -93,7 +99,6 @@ class _HostProtocol(Protocol):
 
     def _build_home_page(self) -> None: ...
     def _build_topology_page(self) -> None: ...
-    def _build_route_page(self) -> None: ...
     def _build_arp_page(self) -> None: ...
     def _build_info_page(self) -> None: ...
     def _build_services_page(self) -> None: ...

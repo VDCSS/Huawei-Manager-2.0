@@ -1,11 +1,12 @@
 """Testes de caracterização — FetchMixin (handlers/fetch.py).
 
-Testa caminhos de _fetch_route, _fetch_arp, _fetch_info.
+Testa caminhos de _fetch_arp e _fetch_info.
 _fetch_config migrou para tabs/config/ (F2-config — tests/tabs/config/).
+_fetch_route migrou para tabs/route/ (F2-route — tests/tabs/route/).
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from huawei_manager.exceptions import SdnError
 from huawei_manager.handlers.fetch import FetchMixin
@@ -20,7 +21,6 @@ def _make_mixin(**attrs) -> FetchMixin:
         _write=MagicMock(),
         _loading=MagicMock(),
         _event_queue=MagicMock(),
-        out_route=MagicMock(),
         out_arp=MagicMock(),
         out_info=MagicMock(),
     )
@@ -29,36 +29,6 @@ def _make_mixin(**attrs) -> FetchMixin:
     for k, v in attrs.items():
         setattr(mixin, k, v)
     return mixin
-
-
-class TestFetchRoute:
-    def test_routing_uses_driver(self):
-        mixin = _make_mixin()
-        entry = MagicMock()
-        entry.destination = "0.0.0.0"
-        entry.mask = "0"
-        entry.protocol = "static"
-        entry.preference = 60
-        entry.cost = 0
-        entry.next_hop = "10.0.0.1"
-        entry.interface = "GE0/0/1"
-        mixin._drv.get_routing_table.return_value = [entry]
-        mixin._fetch_route(fkey="routing")
-        mixin._drv.get_routing_table.assert_called_once()
-        mixin._write.assert_called_once()
-
-    def test_other_filter_uses_send_command(self):
-        mixin = _make_mixin()
-        mixin._sb.send_command.return_value = "route data"
-        mixin._fetch_route(fkey="bgp")
-        mixin._sb.send_command.assert_called_once()
-        mixin._write.assert_called_once()
-
-    def test_routing_runtime_error_invalidates(self):
-        mixin = _make_mixin()
-        mixin._drv.get_routing_table.side_effect = SdnError("fail")
-        mixin._fetch_route(fkey="routing")
-        mixin._sb.invalidate_connection.assert_called_once()
 
 
 class TestFetchArp:

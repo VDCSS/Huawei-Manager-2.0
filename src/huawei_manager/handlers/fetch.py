@@ -1,6 +1,7 @@
-"""Fetch mixin — command output retrieval (route, arp, info).
+"""Fetch mixin — command output retrieval (arp, info).
 
 ``_fetch_config`` migrou para ``tabs/config/`` (F2-config).
+``_fetch_route`` migrou para ``tabs/route/`` (F2-route).
 """
 
 from __future__ import annotations
@@ -9,7 +10,6 @@ import io
 import logging
 
 from huawei_manager._protocols import AppCoreProtocol
-from huawei_manager.constants import CLI_FILTERS
 from huawei_manager.exceptions import SdnError
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import CommandExecutedPayload
@@ -23,47 +23,6 @@ class FetchMixin:
     # ══════════════════════════════════════════════════════════════════
     #  FETCH METHODS
     # ══════════════════════════════════════════════════════════════════
-    def _fetch_route(self: AppCoreProtocol, fkey: str = "") -> None:
-        """Busca a tabela de roteamento com o filtro selecionado.
-
-        fkey deve ser extraido da UI (self._route_filter_cb) ANTES de
-        chamar este metodo, pois ele roda na IO thread.
-        """
-        self._session_tracker.touch()
-        if not fkey:
-            raise RuntimeError("_fetch_route: fkey must be extracted in UI thread before calling")
-        if fkey == "routing":
-            try:
-                entries = self._drv.get_routing_table()
-            except SdnError as exc:
-                self._sb.invalidate_connection()
-                self._write(self.out_route, f"\u2718 Falha SSH: {exc}")
-                return
-            buf = io.StringIO()
-            buf.write(f"{'Destino/Mask':<22} {'Proto':<10} {'Pre':>4} {'Custo':>6}  {'NextHop':<16} {'Interface'}\n")
-            buf.write(f"{'-' * 72}\n")
-            for e in entries:
-                route = f"{e.destination}/{e.mask}"
-                buf.write(f"{route:<22} {e.protocol:<10} {e.preference:>4} {e.cost:>6}"
-                          f"  {e.next_hop:<16} {e.interface}\n")
-            self._write(self.out_route, buf.getvalue())
-            self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                        source="fetch",
-                                        payload=CommandExecutedPayload(command="display ip routing-table")))
-        else:
-            cmd = CLI_FILTERS.get(fkey, "display ip routing-table")
-            self._loading(self.out_route, f"Executando: {cmd}\u2026")
-            try:
-                route_out = self._sb.send_command(cmd or "")
-            except SdnError as exc:
-                self._sb.invalidate_connection()
-                self._write(self.out_route, f"\u2718 Falha SSH: {exc}")
-                return
-            self._write(self.out_route, route_out)
-            self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                        source="fetch",
-                                        payload=CommandExecutedPayload(command=cmd or "")))
-
     def _fetch_arp(self: AppCoreProtocol) -> None:
         """Busca a tabela ARP do roteador."""
         self._session_tracker.touch()

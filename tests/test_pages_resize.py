@@ -66,6 +66,7 @@ def _fake_ctx():
         set_status=MagicMock(), touch_session=MagicMock(), cmd_validator=None,
         dry_run=None, get_last_config_command=lambda: None,
         set_last_config_command=MagicMock(),
+        drv=lambda: MagicMock(),
     )
 
 
@@ -155,6 +156,7 @@ class TestManutencaoPageGrid:
             dry_run=None,
             get_last_config_command=lambda: None,
             set_last_config_command=MagicMock(),
+            drv=lambda: MagicMock(),
         )
         return ManutencaoTab().build(ctx)
 
