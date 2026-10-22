@@ -69,6 +69,12 @@ def _arp_module() -> TabModule:
     return ArpTab()
 
 
+def _info_module() -> TabModule:
+    from huawei_manager.tabs.info import InfoTab
+
+    return InfoTab()
+
+
 def _manutencao_module() -> TabModule:
     """Módulo real da Manutenção (Fase 1) — import lazy evita ciclo."""
     from huawei_manager.tabs.manutencao import ManutencaoTab
@@ -87,7 +93,7 @@ _TAB_META: tuple[_TabMeta, ...] = (
     _TabMeta("arp", "Tabela ARP", "\U0001f4e1", C.NEON_CYAN, "DISPOSITIVOS",
              "Tabela ARP", "Ctrl+5", "", module_factory=_arp_module),
     _TabMeta("info", "Info do Sistema", "\U0001f4bb", C.NEON_MAG, "DISPOSITIVOS",
-             "Informações do sistema", "Ctrl+6", "_build_info_page"),
+             "Informações do sistema", "Ctrl+6", "", module_factory=_info_module),
     _TabMeta("cmd", "Editor de Comandos", "⌨", C.NEON_MAG, "FERRAMENTAS",
              "Executar comandos personalizados", "Ctrl+7", "", module_factory=_cmd_module),
     _TabMeta("backup", "Backup", "\U0001f4be", C.NEON_PURP, "FERRAMENTAS",
@@ -105,7 +111,6 @@ class _HostProtocol(Protocol):
 
     def _build_home_page(self) -> None: ...
     def _build_topology_page(self) -> None: ...
-    def _build_info_page(self) -> None: ...
     def _build_services_page(self) -> None: ...
 
 

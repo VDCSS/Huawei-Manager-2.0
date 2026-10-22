@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from huawei_manager.tabs.backup import BackupTab
     from huawei_manager.tabs.cmd import CmdTab
     from huawei_manager.tabs.config import ConfigTab
+    from huawei_manager.tabs.info import InfoTab
     from huawei_manager.tabs.route import RouteTab
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.command_palette import Command, CommandRegistry
@@ -159,7 +160,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, on_success_fmt: str, on_error_msg: str
         ) -> None: ...
         def _connect_with_device(self: AppCoreProtocol, device: Device) -> None: ...
-        def _fetch_info(self: AppCoreProtocol) -> None: ...
         def _refresh_devices(self: AppCoreProtocol) -> None: ...
         def _update_devices_ui(
             self: AppCoreProtocol, devices: list[Device]
@@ -200,7 +200,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _build_services_page(self: AppCoreProtocol) -> None: ...
         def _build_home_page(self: AppCoreProtocol) -> None: ...
         def _build_route_page(self: AppCoreProtocol) -> None: ...
-        def _build_info_page(self: AppCoreProtocol) -> None: ...
         def _build_backup_page(self: AppCoreProtocol) -> None: ...
         def _build_topology_page(self: AppCoreProtocol) -> None: ...
 
@@ -353,7 +352,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         """Garante que todos os atributos dos mixins existem antes do uso."""
         self._logo_pixmap: QPixmap | None = None
         self.theme_btn: ActionButton | None = None
-        self.out_info: QTextEdit | None = None
         self._svc_output: QTextEdit | None = None
         self._page_container: QStackedWidget | None = None
         self._device_info_lbl: QLabel | None = None
@@ -793,6 +791,28 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     def _arp_out(self) -> QTextEdit | None:
         """Widget de saída da aba arp (Ctrl+L limpa a saída)."""
         tab = self._arp_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Info do Sistema (F2-info) ───────────────────
+    def _info_tab(self) -> InfoTab | None:
+        """Módulo real da aba info (instância única do registry) + contexto."""
+        from huawei_manager.tabs.info import InfoTab
+
+        td = tab_by_key(self._tabs, "info")
+        if td is None or not isinstance(td.module, InfoTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_info(self) -> None:
+        tab = self._info_tab()
+        if tab is not None:
+            tab.fetch_info()
+
+    def _info_out(self) -> QTextEdit | None:
+        """Widget de saída da aba info (Ctrl+L limpa a saída)."""
+        tab = self._info_tab()
         return None if tab is None else tab.out_widget()
 
     # ── Navegacao ────────────────────────────────────────────────────

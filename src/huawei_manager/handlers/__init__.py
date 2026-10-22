@@ -1,9 +1,8 @@
-"""Event handlers — mixin composite from 6 domain modules."""
+"""Event handlers — mixin composite from 5 domain modules."""
 
 from huawei_manager.handlers.auth import AuthMixin
 from huawei_manager.handlers.dashboard import DashboardMixin
 from huawei_manager.handlers.devices import DevicesMixin
-from huawei_manager.handlers.fetch import FetchMixin
 from huawei_manager.handlers.services import ServicesMixin
 from huawei_manager.handlers.ssh import SshMixin
 
@@ -11,7 +10,6 @@ from huawei_manager.handlers.ssh import SshMixin
 class EventHandlers(
     AuthMixin,
     SshMixin,
-    FetchMixin,
     ServicesMixin,
     DevicesMixin,
     DashboardMixin,

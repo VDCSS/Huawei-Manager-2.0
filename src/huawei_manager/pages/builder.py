@@ -20,7 +20,6 @@ from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.topology import TopologyCanvas
 from huawei_manager.widgets.elide_label import ElideLabel
 from huawei_manager.widgets.neon_button import action_button
-from huawei_manager.widgets.neon_entry import output_text
 
 
 class PageBuilder(PageBuilderServicesMixin):
@@ -65,18 +64,6 @@ class PageBuilder(PageBuilderServicesMixin):
         weight = "bold" if bold else "normal"
         bg_css = f"background: {bg};" if bg else ""
         return f"color: {color}; {bg_css} font: {weight} {font_size}px {C.FONT_UI_FAMILY};"
-
-    # ── Info ──────────────────────────────────────────────────────────
-    def _build_info_page(self: AppCoreProtocol) -> None:
-        p = self._make_page("info")
-        self._page_title(p, "Informacoes do Sistema", C.NEON_MAG,
-                         "CLI: display version / cpu-usage / memory-usage")
-        self.out_info = output_text(p)
-        self._page_layout(p).addWidget(self.out_info, stretch=1)
-        self._page_layout(p).addSpacing(10)
-        btn = action_button(p, "\u21bb  get system info",
-                            lambda: self._run(self._fetch_info), C.NEON_MAG)
-        self._page_layout(p).addWidget(btn)
 
     # ── Topology ──────────────────────────────────────────────────────
     def _build_topology_page(self: AppCoreProtocol) -> None:

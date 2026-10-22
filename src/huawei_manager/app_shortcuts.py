@@ -49,7 +49,7 @@ class ShortcutsMixin:
         elif page == "arp":
             self._fetch_arp()
         elif page == "info":
-            self._run(self._fetch_info)
+            self._fetch_info()
         elif page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
@@ -89,8 +89,10 @@ class ShortcutsMixin:
             out = self._arp_out()
             if out is not None:
                 self._write(out, "")
-        elif page == "info" and self.out_info is not None:
-            self._write(self.out_info, "")
+        elif page == "info":
+            out = self._info_out()
+            if out is not None:
+                self._write(out, "")
         elif page == "cmd":
             out = self._cmd_out()
             if out is not None:
