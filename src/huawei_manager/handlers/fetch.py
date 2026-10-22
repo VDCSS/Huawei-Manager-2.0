@@ -1,7 +1,8 @@
-"""Fetch mixin — command output retrieval (arp, info).
+"""Fetch mixin — command output retrieval (info).
 
 ``_fetch_config`` migrou para ``tabs/config/`` (F2-config).
 ``_fetch_route`` migrou para ``tabs/route/`` (F2-route).
+``_fetch_arp`` migrou para ``tabs/arp/`` (F2-arp).
 """
 
 from __future__ import annotations
@@ -23,25 +24,6 @@ class FetchMixin:
     # ══════════════════════════════════════════════════════════════════
     #  FETCH METHODS
     # ══════════════════════════════════════════════════════════════════
-    def _fetch_arp(self: AppCoreProtocol) -> None:
-        """Busca a tabela ARP do roteador."""
-        self._session_tracker.touch()
-        try:
-            entries = self._drv.get_arp_table()
-        except SdnError as exc:
-            self._sb.invalidate_connection()
-            self._write(self.out_arp, f"\u2718 Falha SSH: {exc}")
-            return
-        buf = io.StringIO()
-        buf.write(f"{'IP Address':<18} {'MAC Address':<20} {'Tipo':<6} {'Interface'}\n")
-        buf.write(f"{'-' * 60}\n")
-        for e in entries:
-            buf.write(f"{e.ip_address:<18} {e.mac_address:<20} {e.status:<6} {e.interface}\n")
-        self._write(self.out_arp, buf.getvalue())
-        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                    source="fetch",
-                                    payload=CommandExecutedPayload(command="display arp")))
-
     def _fetch_info(self: AppCoreProtocol) -> None:
         """Coleta multiplas informacoes do sistema (versao, CPU, memoria, interfaces, LLDP)."""
         self._session_tracker.touch()

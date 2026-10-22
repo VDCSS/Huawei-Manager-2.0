@@ -47,7 +47,7 @@ class ShortcutsMixin:
         elif page == "route":
             self._fetch_route()
         elif page == "arp":
-            self._run(self._fetch_arp)
+            self._fetch_arp()
         elif page == "info":
             self._run(self._fetch_info)
         elif page == "cmd":
@@ -85,8 +85,10 @@ class ShortcutsMixin:
             out = self._route_out()
             if out is not None:
                 self._write(out, "")
-        elif page == "arp" and self.out_arp is not None:
-            self._write(self.out_arp, "")
+        elif page == "arp":
+            out = self._arp_out()
+            if out is not None:
+                self._write(out, "")
         elif page == "info" and self.out_info is not None:
             self._write(self.out_info, "")
         elif page == "cmd":

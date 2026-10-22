@@ -21,6 +21,7 @@ if not HAS_PYSIDE6:
         "test_ssh_mixin.py", "test_tabs_registry.py", "test_topology.py",
         "test_topology_context_menu.py", "test_vnfs_mixin.py",
         "test_watcher.py", "test_widgets.py",
+        "tabs/arp/test_handlers.py",
         "tabs/backup/test_handlers.py",
         "tabs/cmd/test_cmd_page.py", "tabs/cmd/test_editor_enter.py",
         "tabs/cmd/test_handlers.py",

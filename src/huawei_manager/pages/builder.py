@@ -66,17 +66,6 @@ class PageBuilder(PageBuilderServicesMixin):
         bg_css = f"background: {bg};" if bg else ""
         return f"color: {color}; {bg_css} font: {weight} {font_size}px {C.FONT_UI_FAMILY};"
 
-    # ── ARP ───────────────────────────────────────────────────────────
-    def _build_arp_page(self: AppCoreProtocol) -> None:
-        p = self._make_page("arp")
-        self._page_title(p, "Tabela ARP", C.NEON_CYAN, "CLI: display arp")
-        self.out_arp = output_text(p)
-        self._page_layout(p).addWidget(self.out_arp, stretch=1)
-        self._page_layout(p).addSpacing(10)
-        btn = action_button(p, "\u21bb  get arp",
-                            lambda: self._run(self._fetch_arp), C.NEON_CYAN)
-        self._page_layout(p).addWidget(btn)
-
     # ── Info ──────────────────────────────────────────────────────────
     def _build_info_page(self: AppCoreProtocol) -> None:
         p = self._make_page("info")

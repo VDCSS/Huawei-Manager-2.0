@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
     from huawei_manager.services import ServiceDef
     from huawei_manager.tabs._contract import TabDef
+    from huawei_manager.tabs.arp import ArpTab
     from huawei_manager.tabs.backup import BackupTab
     from huawei_manager.tabs.cmd import CmdTab
     from huawei_manager.tabs.config import ConfigTab
@@ -158,7 +159,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, on_success_fmt: str, on_error_msg: str
         ) -> None: ...
         def _connect_with_device(self: AppCoreProtocol, device: Device) -> None: ...
-        def _fetch_arp(self: AppCoreProtocol) -> None: ...
         def _fetch_info(self: AppCoreProtocol) -> None: ...
         def _refresh_devices(self: AppCoreProtocol) -> None: ...
         def _update_devices_ui(
@@ -200,7 +200,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _build_services_page(self: AppCoreProtocol) -> None: ...
         def _build_home_page(self: AppCoreProtocol) -> None: ...
         def _build_route_page(self: AppCoreProtocol) -> None: ...
-        def _build_arp_page(self: AppCoreProtocol) -> None: ...
         def _build_info_page(self: AppCoreProtocol) -> None: ...
         def _build_backup_page(self: AppCoreProtocol) -> None: ...
         def _build_topology_page(self: AppCoreProtocol) -> None: ...
@@ -354,7 +353,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         """Garante que todos os atributos dos mixins existem antes do uso."""
         self._logo_pixmap: QPixmap | None = None
         self.theme_btn: ActionButton | None = None
-        self.out_arp: QTextEdit | None = None
         self.out_info: QTextEdit | None = None
         self._svc_output: QTextEdit | None = None
         self._page_container: QStackedWidget | None = None
@@ -773,6 +771,28 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     def _route_out(self) -> QTextEdit | None:
         """Widget de saída da aba route (Ctrl+L limpa a saída)."""
         tab = self._route_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Tabela ARP (F2-arp) ─────────────────────────
+    def _arp_tab(self) -> ArpTab | None:
+        """Módulo real da aba arp (instância única do registry) + contexto."""
+        from huawei_manager.tabs.arp import ArpTab
+
+        td = tab_by_key(self._tabs, "arp")
+        if td is None or not isinstance(td.module, ArpTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_arp(self) -> None:
+        tab = self._arp_tab()
+        if tab is not None:
+            tab.fetch_arp()
+
+    def _arp_out(self) -> QTextEdit | None:
+        """Widget de saída da aba arp (Ctrl+L limpa a saída)."""
+        tab = self._arp_tab()
         return None if tab is None else tab.out_widget()
 
     # ── Navegacao ────────────────────────────────────────────────────

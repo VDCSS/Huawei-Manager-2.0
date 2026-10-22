@@ -1,8 +1,9 @@
 """Testes de caracterização — FetchMixin (handlers/fetch.py).
 
-Testa caminhos de _fetch_arp e _fetch_info.
+Testa caminhos de _fetch_info.
 _fetch_config migrou para tabs/config/ (F2-config — tests/tabs/config/).
 _fetch_route migrou para tabs/route/ (F2-route — tests/tabs/route/).
+_fetch_arp migrou para tabs/arp/ (F2-arp — tests/tabs/arp/).
 """
 from __future__ import annotations
 
@@ -21,7 +22,6 @@ def _make_mixin(**attrs) -> FetchMixin:
         _write=MagicMock(),
         _loading=MagicMock(),
         _event_queue=MagicMock(),
-        out_arp=MagicMock(),
         out_info=MagicMock(),
     )
     for k, v in defaults.items():
@@ -29,27 +29,6 @@ def _make_mixin(**attrs) -> FetchMixin:
     for k, v in attrs.items():
         setattr(mixin, k, v)
     return mixin
-
-
-class TestFetchArp:
-    def test_writes_arp_table(self):
-        mixin = _make_mixin()
-        entry = MagicMock()
-        entry.ip_address = "10.0.0.1"
-        entry.mac_address = "aa:bb:cc:dd:ee:ff"
-        entry.status = "static"
-        entry.interface = "GE0/0/1"
-        mixin._drv.get_arp_table.return_value = [entry]
-        mixin._fetch_arp()
-        mixin._write.assert_called_once()
-        written = mixin._write.call_args[0][1]
-        assert "10.0.0.1" in written
-
-    def test_runtime_error_invalidates(self):
-        mixin = _make_mixin()
-        mixin._drv.get_arp_table.side_effect = SdnError("fail")
-        mixin._fetch_arp()
-        mixin._sb.invalidate_connection.assert_called_once()
 
 
 class TestFetchInfo:
