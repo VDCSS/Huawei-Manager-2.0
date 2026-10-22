@@ -4,11 +4,8 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
     QLabel,
-    QSizePolicy,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -123,109 +120,3 @@ class PageBuilder(PageBuilderServicesMixin):
 
         self._spawn_io(self._refresh_devices)
 
-    # ── Dashboard ─────────────────────────────────────────────────────
-    def _build_home_page(self: AppCoreProtocol) -> None:
-        p = self._make_page("home")
-        self._page_title(p, "Dashboard", C.NEON_CYAN,
-                         "Painel de controle — conectividade, Devices, operacoes recentes")
-
-        row1 = QWidget(p)
-        row1_layout = QHBoxLayout(row1)
-        row1_layout.setContentsMargins(0, 0, 0, 0)
-        self._page_layout(p).addWidget(row1, stretch=3)
-        self._page_layout(p).addSpacing(10)
-
-        def _make_card(parent: QWidget) -> tuple[QFrame, QVBoxLayout]:
-            card = QFrame(parent)
-            card.setStyleSheet(f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
-            card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(12, 10, 12, 10)
-            card_layout.setSpacing(2)
-            return card, card_layout
-
-        def _card_title(card: QFrame, card_layout: QVBoxLayout, text: str, color: str) -> QLabel:
-            lbl = QLabel(text, card)
-            lbl.setStyleSheet(self._css_label(color, C.BG_INPUT, 12, True))
-            card_layout.addWidget(lbl)
-            card_layout.addSpacing(4)
-            return lbl
-
-        # Card: Conexao
-        card1, card1_layout = _make_card(row1)
-        _card_title(card1, card1_layout, "\U0001f50c CONEXAO", C.NEON_CYAN)
-        row1_layout.addWidget(card1)
-
-        self._dash_conn_status = QLabel("Desconectado", card1)
-        self._dash_conn_status.setStyleSheet(
-            f"color: {C.NEON_RED}; font: bold 14px {C.FONT_UI_FAMILY};"
-            f" background: {C.BG_INPUT};")
-        card1_layout.addWidget(self._dash_conn_status)
-
-        self._dash_conn_host = QLabel("Host: ---", card1)
-        self._dash_conn_host.setStyleSheet(self._css_label(C.FG_DIM, C.BG_INPUT, 11))
-        card1_layout.addWidget(self._dash_conn_host)
-        card1_layout.addStretch()
-
-        # Card: Devices
-        card2, card2_layout = _make_card(row1)
-        _card_title(card2, card2_layout, "\U0001f4e1 DISPOSITIVOS", C.NEON_MAG)
-        row1_layout.addWidget(card2)
-
-        self._dash_device_online = QLabel("Online: 0", card2)
-        self._dash_device_online.setStyleSheet(self._css_label(C.NEON_CYAN, C.BG_INPUT, 11))
-        card2_layout.addWidget(self._dash_device_online)
-
-        self._dash_device_offline = QLabel("Offline: 0", card2)
-        self._dash_device_offline.setStyleSheet(self._css_label(C.NEON_RED, C.BG_INPUT, 11))
-        card2_layout.addWidget(self._dash_device_offline)
-
-        self._dash_device_unknown = QLabel("Desconhecido: 0", card2)
-        self._dash_device_unknown.setStyleSheet(self._css_label(C.NEON_AMBER, C.BG_INPUT, 11))
-        card2_layout.addWidget(self._dash_device_unknown)
-        card2_layout.addStretch()
-
-        # Card: Ultimas Operacoes
-        card3, card3_layout = _make_card(row1)
-        _card_title(card3, card3_layout, "\U0001f4cb ULTIMAS OPERACOES", C.NEON_AMBER)
-        row1_layout.addWidget(card3)
-
-        self._dash_audit_text = QTextEdit(card3)
-        self._dash_audit_text.setReadOnly(True)
-        self._dash_audit_text.setStyleSheet(f"""
-            QTextEdit {{
-                background: {C.BG_BASE}; color: {C.FG_CODE};
-                border: 1px solid {C.BORDER_NRM}; border-radius: 4px;
-                padding: 4px; font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY};
-            }}
-        """)
-        self._dash_audit_text.setMinimumHeight(60)
-        card3_layout.addWidget(self._dash_audit_text, stretch=1)
-
-        # Card: Atalhos Rapidos (full width)
-        card4 = QFrame(p)
-        card4.setStyleSheet(f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; border-radius: 4px;")
-        card4_layout = QVBoxLayout(card4)
-        card4_layout.setContentsMargins(12, 10, 12, 10)
-        self._page_layout(p).addWidget(card4, stretch=2)
-
-        _card_title(card4, card4_layout, "\u2328 ATALHOS RAPIDOS", C.NEON_PURP)
-
-        bar = QWidget(card4)
-        bar_layout = QHBoxLayout(bar)
-        bar_layout.setContentsMargins(0, 0, 0, 0)
-        card4_layout.addWidget(bar)
-
-        self._dash_shortcut_btns = {
-            "config": "  \U0001f4cb Config  ",
-            "route":  "  \U0001f310 Rotas   ",
-            "backup": "  \U0001f4be Backup  ",
-            "cmd":    "  \u2328  Editor  ",
-        }
-        for key, label in self._dash_shortcut_btns.items():
-            btn = action_button(bar, label,
-                                lambda _chk, k=key: self._show_page(k),
-                                C.FG_MAIN)
-            bar_layout.addWidget(btn)
-            bar_layout.addSpacing(6)
-        bar_layout.addStretch()

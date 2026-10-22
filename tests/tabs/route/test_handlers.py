@@ -43,6 +43,8 @@ def _make(**overrides) -> tuple[RouteHandlers, RouteState, TabContext]:
         get_last_config_command=MagicMock(return_value=None),
         set_last_config_command=MagicMock(),
         drv=lambda: drv,
+        devices=lambda: [],
+        show_page=MagicMock(),
     )
     fields.update(overrides)
     ctx = TabContext(**fields)

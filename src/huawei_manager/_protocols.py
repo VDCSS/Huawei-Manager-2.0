@@ -114,15 +114,6 @@ class AppCoreProtocol(Protocol):
 
     # ── Páginas: saídas de texto ────────────────────────────────────
 
-    # ── Dashboard ───────────────────────────────────────────────────
-    _dash_conn_status: QLabel | None
-    _dash_conn_host: QLabel | None
-    _dash_device_online: QLabel | None
-    _dash_device_offline: QLabel | None
-    _dash_device_unknown: QLabel | None
-    _dash_audit_text: QTextEdit | None
-    _dash_shortcut_btns: dict[str, str]
-
     # ── Topologia / devices ─────────────────────────────────────────
     _device_info_lbl: QLabel | None
     _device_status_lbl: QLabel | None
@@ -258,7 +249,6 @@ class AppCoreProtocol(Protocol):
     def _build_services_page(self) -> None: ...
 
     # ── Builders de página ──────────────────────────────────────────
-    def _build_home_page(self) -> None: ...
     def _build_route_page(self) -> None: ...
     def _build_backup_page(self) -> None: ...
     def _build_topology_page(self) -> None: ...

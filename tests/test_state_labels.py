@@ -70,6 +70,8 @@ def _make_manut_tab(watcher_active: bool = False) -> ManutencaoTab:
         get_last_config_command=lambda: None,
         set_last_config_command=MagicMock(),
         drv=lambda: MagicMock(),
+        devices=lambda: [],
+        show_page=MagicMock(),
     )
     tab = ManutencaoTab()
     tab._page = tab.build(ctx)  # mantém o QWidget vivo (sem pai Qt)

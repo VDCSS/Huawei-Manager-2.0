@@ -75,6 +75,9 @@ class TabContext:
     # o driver em handlers/devices.py ao trocar de device, então o contexto
     # expõe um getter (NUNCA bind direto — capturaria cópia velha).
     drv: Callable[[], BaseDriver]  # driver atual sob demanda (App._drv)
+    # Fase 2 (aba Dashboard — F2-home) — inventário e navegação:
+    devices: Callable[[], Sequence[Device]]  # inventário sob demanda (App._devices)
+    show_page: Callable[[str], None]         # navegação de página (App._show_page)
 
 
 @runtime_checkable

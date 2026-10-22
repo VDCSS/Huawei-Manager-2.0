@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from huawei_manager.tabs.backup import BackupTab
     from huawei_manager.tabs.cmd import CmdTab
     from huawei_manager.tabs.config import ConfigTab
+    from huawei_manager.tabs.home import HomeTab
     from huawei_manager.tabs.info import InfoTab
     from huawei_manager.tabs.route import RouteTab
     from huawei_manager.topology import TopologyCanvas
@@ -105,14 +106,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         _svc_detail_frame: QWidget | None
         _svc_services: list[ServiceDef]
         _svc_current_svc: ServiceDef | None
-        _dash_conn_status: QLabel | None
-        _dash_conn_host: QLabel | None
-        _dash_device_online: QLabel | None
-        _dash_device_offline: QLabel | None
-        _dash_device_unknown: QLabel | None
-        _dash_audit_text: QTextEdit | None
-        _dash_shortcut_btns: dict[str, str]
-
         # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
         def _on_sdn_event(self: AppCoreProtocol, ev: Event | None) -> None: ...
         def _page_layout(self: AppCoreProtocol, p: QWidget) -> QVBoxLayout: ...
@@ -135,7 +128,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, results: Sequence[AgentResult]
         ) -> None: ...
         def _rebuild_manutencao_if_active(self: AppCoreProtocol) -> None: ...
-        def _refresh_dashboard(self: AppCoreProtocol) -> None: ...
         def _setup_bindings(self: AppCoreProtocol) -> None: ...
         def _on_enter(self: AppCoreProtocol) -> None: ...
         def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None: ...
@@ -198,7 +190,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, parent: QWidget, svc: ServiceDef
         ) -> None: ...
         def _build_services_page(self: AppCoreProtocol) -> None: ...
-        def _build_home_page(self: AppCoreProtocol) -> None: ...
         def _build_route_page(self: AppCoreProtocol) -> None: ...
         def _build_backup_page(self: AppCoreProtocol) -> None: ...
         def _build_topology_page(self: AppCoreProtocol) -> None: ...
@@ -451,6 +442,8 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             set_last_config_command=lambda cmd: setattr(
                 self, "_last_config_command", cmd),
             drv=lambda: self._drv,
+            devices=lambda: self._devices,
+            show_page=self._show_page,
         )
 
         self._build_sidebar()
@@ -815,6 +808,23 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         tab = self._info_tab()
         return None if tab is None else tab.out_widget()
 
+    # ── Fachadas da aba Dashboard (F2-home) ──────────────────────────
+    def _home_tab(self) -> HomeTab | None:
+        """Módulo real da aba home (instância única do registry) + contexto."""
+        from huawei_manager.tabs.home import HomeTab
+
+        td = tab_by_key(self._tabs, "home")
+        if td is None or not isinstance(td.module, HomeTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _refresh_dashboard(self) -> None:
+        tab = self._home_tab()
+        if tab is not None:
+            tab.refresh()
+
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
         if self._active_btn:
@@ -987,13 +997,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._svc_param_entries = {}
         self._svc_services = []
         self._svc_current_svc = None
-        self._dash_conn_status = None
-        self._dash_conn_host = None
-        self._dash_device_online = None
-        self._dash_device_offline = None
-        self._dash_device_unknown = None
-        self._dash_audit_text = None
-        self._dash_shortcut_btns = {}
         self._auth_overlay = None
         self._device_info_lbl = None
         self._device_status_lbl = None

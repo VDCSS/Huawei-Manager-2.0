@@ -51,7 +51,7 @@ def _show_page(builder: PageBuilder, index: int = 0) -> None:
 
 
 def _fake_ctx():
-    """TabContext fake completo (23 campos) p/ construir abas nos testes."""
+    """TabContext fake completo (26 campos) p/ construir abas nos testes."""
     from huawei_manager.tabs._contract import TabContext
 
     return TabContext(
@@ -67,6 +67,8 @@ def _fake_ctx():
         dry_run=None, get_last_config_command=lambda: None,
         set_last_config_command=MagicMock(),
         drv=lambda: MagicMock(),
+        devices=lambda: [],
+        show_page=MagicMock(),
     )
 
 
@@ -157,6 +159,8 @@ class TestManutencaoPageGrid:
             get_last_config_command=lambda: None,
             set_last_config_command=MagicMock(),
             drv=lambda: MagicMock(),
+            devices=lambda: [],
+            show_page=MagicMock(),
         )
         return ManutencaoTab().build(ctx)
 
@@ -255,13 +259,6 @@ class TestBackupEntryResize:
 
 
 class TestDashboardStretch:
-    def _make_dash_builder(self) -> PageBuilder:
-        builder = _make_builder()
-        builder._spawn_io = MagicMock()
-        builder._refresh_devices = MagicMock()
-        builder._show_page = MagicMock()
-        return builder
-
     def _find_card(self, page: QWidget, title: str) -> QFrame:
         for card in page.findChildren(QFrame):
             labels = [lbl.text() for lbl in card.findChildren(QLabel)]
@@ -270,9 +267,11 @@ class TestDashboardStretch:
         raise AssertionError(f"card {title!r} not found")
 
     def test_row1_stretch_3_card4_stretch_2(self):
-        builder = self._make_dash_builder()
-        builder._build_home_page()
-        page = builder._page_container.widget(0)
+        from huawei_manager.tabs.home import HomeTab
+
+        builder = _make_builder()
+        page = HomeTab().build(_fake_ctx())
+        builder._page_container.addWidget(page)
         _show_page(builder)
 
         layout = page.layout()
@@ -284,9 +283,14 @@ class TestDashboardStretch:
         assert layout.stretch(layout.indexOf(card4)) == 2
 
     def test_audit_text_min_height_60(self):
-        builder = self._make_dash_builder()
-        builder._build_home_page()
+        from huawei_manager.tabs.home import HomeTab
+
+        builder = _make_builder()
+        tab = HomeTab()
+        page = tab.build(_fake_ctx())
+        builder._page_container.addWidget(page)
         _show_page(builder)
 
-        assert builder._dash_audit_text.minimumHeight() == 60
-        assert builder._dash_audit_text.geometry().height() > 0
+        assert tab.state.audit_text is not None
+        assert tab.state.audit_text.minimumHeight() == 60
+        assert tab.state.audit_text.geometry().height() > 0
