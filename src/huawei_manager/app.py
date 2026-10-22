@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from huawei_manager.tabs._contract import TabDef
     from huawei_manager.tabs.backup import BackupTab
     from huawei_manager.tabs.cmd import CmdTab
+    from huawei_manager.tabs.config import ConfigTab
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
@@ -158,7 +159,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, on_success_fmt: str, on_error_msg: str
         ) -> None: ...
         def _connect_with_device(self: AppCoreProtocol, device: Device) -> None: ...
-        def _fetch_config(self: AppCoreProtocol) -> None: ...
         def _fetch_route(self: AppCoreProtocol, fkey: str = "") -> None: ...
         def _fetch_arp(self: AppCoreProtocol) -> None: ...
         def _fetch_info(self: AppCoreProtocol) -> None: ...
@@ -201,7 +201,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         ) -> None: ...
         def _build_services_page(self: AppCoreProtocol) -> None: ...
         def _build_home_page(self: AppCoreProtocol) -> None: ...
-        def _build_config_page(self: AppCoreProtocol) -> None: ...
         def _build_route_page(self: AppCoreProtocol) -> None: ...
         def _build_arp_page(self: AppCoreProtocol) -> None: ...
         def _build_info_page(self: AppCoreProtocol) -> None: ...
@@ -357,7 +356,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         """Garante que todos os atributos dos mixins existem antes do uso."""
         self._logo_pixmap: QPixmap | None = None
         self.theme_btn: ActionButton | None = None
-        self.out_config: QTextEdit | None = None
         self.out_route: QTextEdit | None = None
         self.out_arp: QTextEdit | None = None
         self.out_info: QTextEdit | None = None
@@ -733,6 +731,28 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     def _backup_out(self) -> QTextEdit | None:
         """Widget de saída da aba backup (Ctrl+L limpa a saída)."""
         tab = self._backup_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Configuração Atual (F2-config) ─────────────
+    def _config_tab(self) -> ConfigTab | None:
+        """Módulo real da aba config (instância única do registry) + contexto."""
+        from huawei_manager.tabs.config import ConfigTab
+
+        td = tab_by_key(self._tabs, "config")
+        if td is None or not isinstance(td.module, ConfigTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_config(self) -> None:
+        tab = self._config_tab()
+        if tab is not None:
+            tab.fetch_config()
+
+    def _config_out(self) -> QTextEdit | None:
+        """Widget de saída da aba config (Ctrl+L limpa a saída)."""
+        tab = self._config_tab()
         return None if tab is None else tab.out_widget()
 
     # ── Navegacao ────────────────────────────────────────────────────

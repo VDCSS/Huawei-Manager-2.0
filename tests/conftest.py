@@ -24,6 +24,7 @@ if not HAS_PYSIDE6:
         "tabs/backup/test_handlers.py",
         "tabs/cmd/test_cmd_page.py", "tabs/cmd/test_editor_enter.py",
         "tabs/cmd/test_handlers.py",
+        "tabs/config/test_handlers.py",
         "tabs/manutencao/test_handlers.py", "tabs/manutencao/test_page.py",
     ]
 else:

@@ -1,4 +1,7 @@
-"""Fetch mixin — command output retrieval (config, route, arp, info)."""
+"""Fetch mixin — command output retrieval (route, arp, info).
+
+``_fetch_config`` migrou para ``tabs/config/`` (F2-config).
+"""
 
 from __future__ import annotations
 
@@ -20,21 +23,6 @@ class FetchMixin:
     # ══════════════════════════════════════════════════════════════════
     #  FETCH METHODS
     # ══════════════════════════════════════════════════════════════════
-    def _fetch_config(self: AppCoreProtocol) -> None:
-        """Busca a configuracao atual do roteador (display current-configuration)."""
-        self._session_tracker.touch()
-        self._loading(self.out_config, "Carregando configuracao atual\u2026")
-        try:
-            output = self._sb.send_command("display current-configuration")
-        except SdnError as exc:
-            self._sb.invalidate_connection()
-            self._write(self.out_config, f"\u2718 Falha SSH: {exc}")
-            return
-        self._write(self.out_config, output)
-        self._event_queue.put(Event(EventType.COMMAND_EXECUTED,
-                                    source="fetch",
-                                    payload=CommandExecutedPayload(command="display current-configuration")))
-
     def _fetch_route(self: AppCoreProtocol, fkey: str = "") -> None:
         """Busca a tabela de roteamento com o filtro selecionado.
 

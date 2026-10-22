@@ -1,6 +1,7 @@
 """Testes de caracterização — FetchMixin (handlers/fetch.py).
 
-Testa caminhos de _fetch_config, _fetch_route, _fetch_arp, _fetch_info.
+Testa caminhos de _fetch_route, _fetch_arp, _fetch_info.
+_fetch_config migrou para tabs/config/ (F2-config — tests/tabs/config/).
 """
 from __future__ import annotations
 
@@ -19,7 +20,6 @@ def _make_mixin(**attrs) -> FetchMixin:
         _write=MagicMock(),
         _loading=MagicMock(),
         _event_queue=MagicMock(),
-        out_config=MagicMock(),
         out_route=MagicMock(),
         out_arp=MagicMock(),
         out_info=MagicMock(),
@@ -29,26 +29,6 @@ def _make_mixin(**attrs) -> FetchMixin:
     for k, v in attrs.items():
         setattr(mixin, k, v)
     return mixin
-
-
-class TestFetchConfig:
-    def test_writes_output(self):
-        mixin = _make_mixin()
-        mixin._sb.send_command.return_value = "interface GigabitEthernet0/0/1"
-        mixin._fetch_config()
-        mixin._write.assert_called_once_with(mixin.out_config, "interface GigabitEthernet0/0/1")
-
-    def test_posts_event(self):
-        mixin = _make_mixin()
-        mixin._sb.send_command.return_value = "config"
-        mixin._fetch_config()
-        mixin._event_queue.put.assert_called_once()
-
-    def test_invalidates_on_error(self):
-        mixin = _make_mixin()
-        mixin._sb.send_command.side_effect = SdnError("fail")
-        mixin._fetch_config()
-        mixin._sb.invalidate_connection.assert_called_once()
 
 
 class TestFetchRoute:

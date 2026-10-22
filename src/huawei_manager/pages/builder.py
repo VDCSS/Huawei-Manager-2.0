@@ -68,17 +68,6 @@ class PageBuilder(PageBuilderServicesMixin):
         bg_css = f"background: {bg};" if bg else ""
         return f"color: {color}; {bg_css} font: {weight} {font_size}px {C.FONT_UI_FAMILY};"
 
-    # ── Config ────────────────────────────────────────────────────────
-    def _build_config_page(self: AppCoreProtocol) -> None:
-        p = self._make_page("config")
-        self._page_title(p, "Configuracao Atual", C.NEON_CYAN, "")
-        self.out_config = output_text(p)
-        self._page_layout(p).addWidget(self.out_config, stretch=1)
-        self._page_layout(p).addSpacing(10)
-        btn = action_button(p, "\u21bb  Carregar Configuracao Atual",
-                            lambda: self._run(self._fetch_config), C.NEON_CYAN)
-        self._page_layout(p).addWidget(btn)
-
     # ── Route ─────────────────────────────────────────────────────────
     def _build_route_page(self: AppCoreProtocol) -> None:
         p = self._make_page("route")

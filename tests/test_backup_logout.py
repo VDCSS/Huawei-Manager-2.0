@@ -87,13 +87,12 @@ class TestBackupEnterShortcut:
         mixin = ShortcutsMixin()
         mixin._auth_overlay = None
         mixin._current_page = "backup"
-        mixin._run = MagicMock()
         mixin._do_backup = MagicMock()
         mixin.focusWidget = MagicMock(return_value=None)  # Mock focusWidget
 
         mixin._on_enter()
-        mixin._run.assert_called_once()
-        mixin._run.call_args.args[0]()
+        # O shell chama a fachada direto (sem _run externo — a aba envolve
+        # ctx.run; ver F2-config, que corrigiu o double-run).
         mixin._do_backup.assert_called_once_with(C.BACKUP_FMT_TEXT)
 
 

@@ -43,7 +43,7 @@ class ShortcutsMixin:
             return
         page = self._current_page
         if page == "config":
-            self._run(self._fetch_config)
+            self._fetch_config()
         elif page == "route":
             label_to_key = {v: k for k, v in C.ROUTE_FILTER_LABELS.items()}
             fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
@@ -57,7 +57,7 @@ class ShortcutsMixin:
             if cmd:
                 self._run_cmd_safe(cmd)
         elif page == "backup":
-            self._run(lambda: self._do_backup(C.BACKUP_FMT_TEXT))
+            self._do_backup(C.BACKUP_FMT_TEXT)
 
     def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
@@ -79,8 +79,10 @@ class ShortcutsMixin:
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         page = self._current_page
-        if page == "config" and self.out_config is not None:
-            self._write(self.out_config, "")
+        if page == "config":
+            out = self._config_out()
+            if out is not None:
+                self._write(out, "")
         elif page == "route" and self.out_route is not None:
             self._write(self.out_route, "")
         elif page == "arp" and self.out_arp is not None:
