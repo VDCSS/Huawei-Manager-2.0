@@ -6,17 +6,26 @@ from typing import TYPE_CHECKING
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMainWindow
 
+from huawei_manager.sdn_controller.listeners import stop_alert_listeners
+
 if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
     from huawei_manager.agents.watcher import Watcher
+    from huawei_manager.sdn_controller.listeners import EventSource
     from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
 
 _app_log = logging.getLogger("huawei.app")
 
+# Base só para tipagem: o Pyrefly rejeita expressão condicional como base de
+# classe (`invalid-inheritance`). Em tempo de checagem é QMainWindow (para
+# tipar super().closeEvent); em runtime é object — o MRO concreto vem da
+# composição (AppCore → NotifyMixin → QMainWindow → ThreadingMixin).
+_NotifyBase = QMainWindow if TYPE_CHECKING else object
 
-class NotifyMixin(QMainWindow if TYPE_CHECKING else object):
+
+class NotifyMixin(_NotifyBase):
     if TYPE_CHECKING:
         # Membros do AppCore usados aqui (self é implícito: closeEvent precisa
         # de super(), que não funciona com self de protocolo).
@@ -26,6 +35,7 @@ class NotifyMixin(QMainWindow if TYPE_CHECKING else object):
         _watcher: Watcher
         _sb: SouthboundProtocol
         _shutdown: bool
+        _alert_listeners: list[EventSource]
 
     def _cleanup_executors(self) -> None:
         for pool in (self._io_executor, self._cpu_executor):
@@ -42,6 +52,10 @@ class NotifyMixin(QMainWindow if TYPE_CHECKING else object):
         if getattr(self, "_session_factory", None) is not None:
             self._session_factory.dispose()
         self._watcher.shutdown(wait=False)
+        listeners: list[EventSource] | None = getattr(
+            self, "_alert_listeners", None)
+        if listeners:
+            stop_alert_listeners(listeners)
         self._sb.disconnect()
         self._cleanup_executors()
 

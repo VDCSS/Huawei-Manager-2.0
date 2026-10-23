@@ -1,0 +1,15 @@
+"""Estado privado da aba Configuração Atual (F2-config)."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QTextEdit
+
+
+@dataclass
+class ConfigState:
+    """Widgets da aba — o App nunca lê estes campos."""
+
+    out: QTextEdit | None = None

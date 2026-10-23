@@ -8,12 +8,12 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QMessageBox, QStackedWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QMessageBox, QWidget
 
 import huawei_manager.constants as C
 from huawei_manager.app_shortcuts import ShortcutsMixin
 from huawei_manager.handlers.auth import AuthMixin
-from huawei_manager.pages.builder import PageBuilder
+from huawei_manager.tabs.backup import BackupTab
 
 
 @pytest.fixture(autouse=True)
@@ -22,14 +22,17 @@ def _app():
     yield app
 
 
-def _make_builder() -> PageBuilder:
-    builder = PageBuilder()
-    builder._page_container = QStackedWidget()
-    builder._access_level = "user"
-    builder._target_device = None
-    builder._run = MagicMock()
-    builder._do_backup = MagicMock()
-    return builder
+def _make_tab() -> tuple[BackupTab, MagicMock, QWidget]:
+    """BackupTab com ctx fake (build não usa ctx; run é MagicMock).
+
+    A página é devolvida para manter a referência Python viva — QWidget
+    sem pai seria deletado no GC e levaria os filhos junto ( RuntimeError
+    de "Internal C++ object already deleted" ).
+    """
+    tab = BackupTab()
+    ctx = MagicMock()
+    page = tab.build(ctx)
+    return tab, ctx, page
 
 
 def _make_auth_mixin(**attrs) -> AuthMixin:
@@ -56,27 +59,27 @@ def _make_auth_mixin(**attrs) -> AuthMixin:
 
 class TestBackupFormatLabel:
     def test_backup_page_has_label_not_combo(self):
-        builder = _make_builder()
-        builder._build_backup_page()
-        page = builder._page_container.widget(0)
+        tab, _ctx, page = _make_tab()
 
-        assert isinstance(builder._backup_fmt_lbl, QLabel)
-        assert builder._backup_fmt_lbl.text() == f"Formato: {C.BACKUP_FMT_TEXT}"
+        assert isinstance(tab.state.fmt_lbl, QLabel)
+        assert tab.state.fmt_lbl.text() == f"Formato: {C.BACKUP_FMT_TEXT}"
         assert page.findChildren(QComboBox) == []
 
     def test_backup_button_uses_constant_format(self):
-        builder = _make_builder()
-        builder._build_backup_page()
-        # O botão Fazer Backup dispara self._run(lambda: _do_backup(BACKUP_FMT_TEXT))
+        tab, ctx, page = _make_tab()
+        # O botão Fazer Backup despacha run_backup(BACKUP_FMT_TEXT) → ctx.run
         btns = [
-            b for b in builder._page_container.widget(0).findChildren(object)
+            b for b in page.findChildren(object)
             if hasattr(b, "text") and "Fazer Backup" in getattr(b, "text")()
         ]
         assert len(btns) == 1
         btns[0].click()
-        builder._run.assert_called_once()
-        builder._run.call_args.args[0]()
-        builder._do_backup.assert_called_once_with(C.BACKUP_FMT_TEXT)
+        ctx.run.assert_called_once()
+        # executa a lambda p/ provar que despacha do_backup c/ a constante
+        do_backup = MagicMock()
+        tab._h().do_backup = do_backup
+        ctx.run.call_args.args[0]()
+        do_backup.assert_called_once_with(C.BACKUP_FMT_TEXT)
 
 
 class TestBackupEnterShortcut:
@@ -84,13 +87,12 @@ class TestBackupEnterShortcut:
         mixin = ShortcutsMixin()
         mixin._auth_overlay = None
         mixin._current_page = "backup"
-        mixin._run = MagicMock()
         mixin._do_backup = MagicMock()
         mixin.focusWidget = MagicMock(return_value=None)  # Mock focusWidget
 
         mixin._on_enter()
-        mixin._run.assert_called_once()
-        mixin._run.call_args.args[0]()
+        # O shell chama a fachada direto (sem _run externo — a aba envolve
+        # ctx.run; ver F2-config, que corrigiu o double-run).
         mixin._do_backup.assert_called_once_with(C.BACKUP_FMT_TEXT)
 
 

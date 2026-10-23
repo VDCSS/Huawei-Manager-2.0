@@ -13,7 +13,7 @@ from huawei_manager.handlers.ssh import SshMixin
 def _make_mixin(**attrs) -> SshMixin:
     mixin = SshMixin()
     defaults = dict(
-        _topo_canvas=MagicMock(),
+        _topo_canvas_widget=MagicMock(return_value=MagicMock()),
         _target_device=None,
         _sb=MagicMock(),
         _session_tracker=MagicMock(),
@@ -43,18 +43,18 @@ class TestGetSelectedDevice:
         device = _make_device()
         canvas = MagicMock()
         canvas.get_selected.return_value = device
-        mixin = _make_mixin(_topo_canvas=canvas, _target_device=None)
+        mixin = _make_mixin(_topo_canvas_widget=lambda: canvas, _target_device=None)
         assert mixin._get_selected_device() is device
 
     def test_returns_target_when_canvas_none(self):
         device = _make_device()
-        mixin = _make_mixin(_topo_canvas=None, _target_device=device)
+        mixin = _make_mixin(_topo_canvas_widget=lambda: None, _target_device=device)
         assert mixin._get_selected_device() is device
 
     def test_returns_none_when_nothing_selected(self):
         canvas = MagicMock()
         canvas.get_selected.return_value = None
-        mixin = _make_mixin(_topo_canvas=canvas, _target_device=None)
+        mixin = _make_mixin(_topo_canvas_widget=lambda: canvas, _target_device=None)
         assert mixin._get_selected_device() is None
 
     def test_returns_canvas_selection_over_target(self):
@@ -62,7 +62,7 @@ class TestGetSelectedDevice:
         target_device = _make_device(name="TargetDevice")
         canvas = MagicMock()
         canvas.get_selected.return_value = canvas_device
-        mixin = _make_mixin(_topo_canvas=canvas, _target_device=target_device)
+        mixin = _make_mixin(_topo_canvas_widget=lambda: canvas, _target_device=target_device)
         assert mixin._get_selected_device() is canvas_device
 
 

@@ -22,7 +22,7 @@ def resolve_filter(filter_xml: str | None) -> str | None:
     if "lldp" in f:
         return "display lldp neighbor brief"
     if "qos" in f:
-        return "display qos policy"
+        return "display traffic policy"
     if "system" in f or "cpu" in f or "mem" in f:
         return "display cpu-usage"
     if "arp" in f:

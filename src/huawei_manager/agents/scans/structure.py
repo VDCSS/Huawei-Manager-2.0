@@ -22,7 +22,7 @@ REQUIRED_DIRS = [
 REQUIRED_FILES = [
     "src/huawei_manager/__init__.py",
     "src/huawei_manager/app.py",
-    "src/huawei_manager/pages/__init__.py",      # package, not single file
+    "src/huawei_manager/tabs/__init__.py",       # package, not single file
     "src/huawei_manager/handlers/__init__.py",    # package, not single file
     "src/huawei_manager/session.py",
     "src/huawei_manager/topology.py",

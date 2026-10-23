@@ -110,21 +110,40 @@ class TestDisconnectColor:
         assert "NEON_PURP" not in dot_line
 
     def test_dashboard_conn_status_uses_red(self):
-        from PySide6.QtWidgets import QApplication, QStackedWidget
+        from PySide6.QtWidgets import QApplication
 
         QApplication.instance() or QApplication([])
-        from huawei_manager.pages.builder import PageBuilder
+        from huawei_manager.tabs._contract import TabContext
+        from huawei_manager.tabs.home import HomeTab
 
-        builder = PageBuilder()
-        builder._page_container = QStackedWidget()
-        builder._access_level = "user"
-        builder._target_device = None
-        builder._run = MagicMock()
-        builder._get_editor_cmd = MagicMock(return_value="display version")
-        builder._exec_cmd = MagicMock()
-        builder._exec_config = MagicMock()
-        builder._build_home_page()
-
-        assert builder._dash_conn_status.text() == "Desconectado"
-        assert C.NEON_RED in builder._dash_conn_status.styleSheet()
-        assert "NEON_PURP" not in builder._dash_conn_status.styleSheet()
+        ctx = TabContext(
+            sb=MagicMock(), audit=None, event_bus=MagicMock(),
+            role=lambda: "admin", device=lambda: None,
+            dispatch=lambda fn: fn() if callable(fn) else None,
+            require_access=lambda level: True,
+            spawn_io=lambda fn, *a: None, spawn_cpu=lambda fn, *a: None,
+            watcher=MagicMock(), is_mock=lambda: False,
+            toggle_mock=lambda: False, show_auth_dialog=lambda: None,
+            watcher_results=lambda: None, set_watcher_results=MagicMock(),
+            session=MagicMock(), run=MagicMock(), set_status=MagicMock(),
+            touch_session=MagicMock(), cmd_validator=None, dry_run=None,
+            get_last_config_command=lambda: None,
+            set_last_config_command=MagicMock(),
+            drv=lambda: MagicMock(), devices=lambda: [],
+            show_page=MagicMock(),
+            svc_mode=lambda: "mock",
+            ui_bridge=lambda: None,
+            ensure_device_ready=MagicMock(return_value=None),
+            refresh_devices=MagicMock(),
+            show_device_dialog=MagicMock(),
+            delete_device=MagicMock(),
+            on_device_selected=MagicMock(),
+            clear_device_target=MagicMock(),
+        )
+        tab = HomeTab()
+        page = tab.build(ctx)  # ref local: QWidget sem pai
+        assert page is not None
+        assert tab.state.conn_status is not None
+        assert tab.state.conn_status.text() == "Desconectado"
+        assert C.NEON_RED in tab.state.conn_status.styleSheet()
+        assert "NEON_PURP" not in tab.state.conn_status.styleSheet()

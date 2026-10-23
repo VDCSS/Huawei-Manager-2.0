@@ -113,11 +113,19 @@ class TestParseParams:
         assert parse_params(svc) == []
 
     def test_multiple_same_param_names(self):
+        """NAT server expõe 2 IPs + 2 portas com labels ÚNICOS.
+
+        Labels repetidos (`<ip>`, `<port>`) colapsavam no dict de UI
+        (_svc_param_entries) e o `str.replace` global forçava
+        IP global == IP inside — bug corrigido.
+        """
         svc = get_service_by_id("router-config-nat-server")
         assert svc is not None
         params = parse_params(svc)
-        ips = [p for p in params if p[0] == "ip"]
-        assert len(ips) == 2
+        labels = [p[0] for p in params]
+        assert labels == ["global-ip", "global-port", "inside-ip", "inside-port"]
+        assert len(set(labels)) == len(labels)
+        assert [p[1] for p in params] == ["10.0.0.1", "80", "192.168.1.10", "80"]
 
 
 class TestExecuteServiceMock:

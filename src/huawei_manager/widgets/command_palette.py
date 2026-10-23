@@ -49,6 +49,32 @@ class Command:
     enabled: bool = True
 
 
+class CommandRegistry:
+    """Registro vivo de comandos da palette (API para abas — Fase 0).
+
+    A lista é a MESMA instância entregue à :class:`CommandPalette` —
+    ``register``/``unregister`` mutam in-place e a paleta vê as mudanças
+    no próximo filtro. Cada aba registra suas ações no build e remove no
+    dispose (nada de lista hardcoded crescente no shell).
+    """
+
+    def __init__(self, commands: list[Command]) -> None:
+        self._commands = commands
+
+    def register(self, cmd: Command) -> None:
+        """Adiciona o comando; id repetido substitui o anterior."""
+        self.unregister(cmd.id)
+        self._commands.append(cmd)
+
+    def unregister(self, cmd_id: str) -> None:
+        """Remove o comando pelo id (idempotente)."""
+        self._commands[:] = [c for c in self._commands if c.id != cmd_id]
+
+    def commands(self) -> list[Command]:
+        """Cópia da lista atual (para construir a paleta)."""
+        return list(self._commands)
+
+
 class CommandPalette(QFrame):
     """
     Overlay modal com busca fuzzy e lista de comandos.
@@ -320,28 +346,15 @@ def create_default_commands(app: AppCoreProtocol) -> list[Command]:
     """
     cmds: list[Command] = []
 
-    # --- Navegação de páginas ---
-    page_map = {
-        "home": ("Dashboard", "Visão geral do sistema", "Ctrl+1"),
-        "topology": ("Topologia / Devices", "Visualizar e gerenciar dispositivos", "Ctrl+2"),
-        "config": ("Config Atual", "Exibir configuração atual do roteador", "Ctrl+3"),
-        "route": ("Routing", "Tabela de roteamento", "Ctrl+4"),
-        "arp": ("ARP Table", "Tabela ARP", "Ctrl+5"),
-        "info": ("Info", "Informações do sistema", "Ctrl+6"),
-        "cmd": ("Editor de Comandos", "Executar comandos personalizados", "Ctrl+7"),
-        "backup": ("Backup", "Gerenciar backups de configuração", "Ctrl+8"),
-        "services": ("Serviços", "Gerenciar serviços do roteador", "Ctrl+9"),
-        "manutencao": ("Manutenção", "Ferramentas de manutenção", "Ctrl+0"),
-    }
-
-    for key, (label, desc, shortcut) in page_map.items():
+    # --- Navegação de páginas (derivada do registry de abas — Fase 0) ---
+    for td in app._tabs:
         cmds.append(Command(
-            id=f"nav:{key}",
-            label=label,
-            description=desc,
+            id=f"nav:{td.key}",
+            label=td.label,
+            description=td.description,
             category="Navegação",
-            shortcut=shortcut,
-            action=lambda k=key: app._show_page(k),
+            shortcut=td.shortcut,
+            action=lambda k=td.key: app._show_page(k),
         ))
 
     # --- Comandos rápidos ---
@@ -377,6 +390,17 @@ def create_default_commands(app: AppCoreProtocol) -> list[Command]:
             category="Ações",
             shortcut="F5",
             action=app._on_f5,
+        ),
+        Command(
+            id="undo_config",
+            label="Desfazer última configuração",
+            description=(
+                "Rollback best-effort da última configuração aplicada "
+                "(Editor de Comandos ou Serviços)"
+            ),
+            category="Ações",
+            shortcut=None,
+            action=app._rollback_last_config,
         ),
     ])
 

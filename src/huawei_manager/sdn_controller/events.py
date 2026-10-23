@@ -73,3 +73,20 @@ class DeviceStatusChangedPayload(BaseEventPayload):
     """Payload para ``EventType.DEVICE_STATUS_CHANGED``."""
 
     status: str
+
+
+@dataclass
+class AlertPayload(BaseEventPayload):
+    """Payload para ``EventType.ALERT`` — trap SNMP ou mensagem syslog.
+
+    Publicado por fontes event-driven (``sdn_controller.listeners``), em
+    contraste com a descoberta por polling. Nunca carrega credenciais:
+    a community string do SNMP é descartada na decodificação.
+    """
+
+    kind: str  # "snmp-trap" | "syslog"
+    severity: str = "info"  # info | warning | error | critical
+    message: str = ""
+    host: str = ""
+    oid: str | None = None
+    raw_size: int = 0

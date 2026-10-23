@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 def _make_app() -> MagicMock:
     """Cria mock de AppCore com atributos essenciais preenchidos."""
     from huawei_manager.app import AppCore
+    from huawei_manager.tabs import build_registry
     app = MagicMock(spec=AppCore)
     app._theme = "dark"
     app._theme_toggling = False
@@ -20,6 +21,8 @@ def _make_app() -> MagicMock:
     app._page_container = MagicMock()
     app._nav_buttons = {"home": MagicMock()}
     app.theme_btn = MagicMock()
+    # _rebuild_page consulta o registry (Fase 0) — spec do MagicMock não o expõe.
+    app._tabs = build_registry()
     return app
 
 
@@ -37,11 +40,6 @@ class TestAppCoreComposition:
         from huawei_manager.app import AppCore
         from huawei_manager.app_threading import ThreadingMixin
         assert issubclass(AppCore, ThreadingMixin)
-
-    def test_huawei_router_app_inherits_page_builder(self):
-        from huawei_manager.app import HuaweiRouterApp
-        from huawei_manager.pages import PageBuilder
-        assert issubclass(HuaweiRouterApp, PageBuilder)
 
     def test_huawei_router_app_inherits_event_handlers(self):
         from huawei_manager.app import HuaweiRouterApp
@@ -119,3 +117,37 @@ class TestTheme:
         AppCore._unlock_theme(app)
         assert app._theme_toggling is False
         app.theme_btn.setEnabled.assert_called_once_with(True)
+
+
+class TestBootRegression:
+    """Regressão: o app real precisa construir sem exceção (offscreen).
+
+    Bug de 20/10/2026: ``start_alert_listeners(self._event_queue)`` ficou
+    em ``_init_common_attrs()``, executado no ``__init__`` ANTES da linha
+    que cria o ``EventQueue`` — ``AttributeError`` e a aplicação não abria.
+    Reproduz aqui o mesmo caminho do ``main()`` sem ``app.exec()``.
+    """
+
+    def test_full_boot_wires_listeners_after_event_queue(self):
+        import huawei_manager._config as cfg
+
+        # Outros testes podem deixar o estado de _config resetado
+        # (tests/test_config.py zera _INITIALIZED/_secrets/audit).
+        if cfg._secrets is None or cfg.audit is None:
+            cfg._INITIALIZED = False
+            cfg.init()
+
+        from huawei_manager._app import apply_theme, get_app
+        qapp = get_app()
+        apply_theme("dark")
+
+        from huawei_manager.app import HuaweiRouterApp
+        window = HuaweiRouterApp()
+        try:
+            assert window._event_queue is not None
+            # Opt-in por ambiente: fora de teste não há listener ativo,
+            # mas o atributo precisa existir (o _on_close depende dele).
+            assert window._alert_listeners == []
+        finally:
+            window.close()
+            qapp.processEvents()

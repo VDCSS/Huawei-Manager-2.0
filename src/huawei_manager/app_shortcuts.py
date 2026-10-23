@@ -43,21 +43,19 @@ class ShortcutsMixin:
             return
         page = self._current_page
         if page == "config":
-            self._run(self._fetch_config)
+            self._fetch_config()
         elif page == "route":
-            label_to_key = {v: k for k, v in C.ROUTE_FILTER_LABELS.items()}
-            fkey = label_to_key.get(self._route_filter_cb.currentText(), "routing")
-            self._run(lambda: self._fetch_route(fkey))
+            self._fetch_route()
         elif page == "arp":
-            self._run(self._fetch_arp)
+            self._fetch_arp()
         elif page == "info":
-            self._run(self._fetch_info)
+            self._fetch_info()
         elif page == "cmd":
             cmd = self._get_editor_cmd()
             if cmd:
                 self._run_cmd_safe(cmd)
         elif page == "backup":
-            self._run(lambda: self._do_backup(C.BACKUP_FMT_TEXT))
+            self._do_backup(C.BACKUP_FMT_TEXT)
 
     def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)
@@ -79,20 +77,34 @@ class ShortcutsMixin:
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         page = self._current_page
-        if page == "config" and self.out_config is not None:
-            self._write(self.out_config, "")
-        elif page == "route" and self.out_route is not None:
-            self._write(self.out_route, "")
-        elif page == "arp" and self.out_arp is not None:
-            self._write(self.out_arp, "")
-        elif page == "info" and self.out_info is not None:
-            self._write(self.out_info, "")
-        elif page == "cmd" and self.out_cmd is not None:
-            self._write(self.out_cmd, "")
-        elif page == "backup" and self.out_backup is not None:
-            self._write(self.out_backup, "")
-        elif page == "services" and self._svc_output is not None:
-            self._write(self._svc_output, "")
+        if page == "config":
+            out = self._config_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "route":
+            out = self._route_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "arp":
+            out = self._arp_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "info":
+            out = self._info_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "cmd":
+            out = self._cmd_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "backup":
+            out = self._backup_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "services":
+            out = self._svc_out()
+            if out is not None:
+                self._write(out, "")
 
     def _on_ctrl_q(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)

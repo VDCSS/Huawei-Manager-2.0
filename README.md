@@ -68,8 +68,12 @@ src/huawei_manager/
 ├── constants.py        # Cores, famílias de fonte, filtros CLI
 ├── exceptions.py       # Custom exceptions
 │
-├── pages/              # PageBuilder — 10 abas da interface
-├── handlers/           # EventHandlers — SSH, auth, VNFs, serviços
+├── tabs/               # Registry único + módulos TabModule (10 abas)
+│   ├── __init__.py     # _TabMeta/TabDef — sidebar, grupos, RBAC
+│   ├── _contract.py    # TabDef, TabModule (Protocol), TabContext (34 campos)
+│   ├── _ui.py          # helpers de UI puros (page_frame/css_label/...)
+│   └── <aba>/          # page.py + state.py por aba (cmd, services, ...)
+├── handlers/           # EventHandlers — SSH, auth, devices (transversais)
 │
 ├── session.py          # NetmikoSession — connect, run_cli_rpc, edit_config
 ├── vault.py            # SecretsBackend + 5 backends + rotate_ssh_key()
@@ -259,7 +263,6 @@ make clean-all       # DESTRUTIVO: clean + .venv + logs
 | ⚡ **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
 | 🔧 **Manutenção** | Dev tools, scans de agentes, setup |
 
----
 
 ## Modos de Operação
 

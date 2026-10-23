@@ -27,9 +27,9 @@ class TestClearDeviceTarget:
         mixin.session.override_username = "admin"
         mixin.session.override_password = "secret"
         mixin.session.override_ssh_key = None
-        mixin._topo_canvas = MagicMock()
+        mixin._topo_canvas_widget = MagicMock(return_value=MagicMock())
         mixin._device_target_lbl = MagicMock()
-        mixin._device_info_lbl = MagicMock()
+        mixin._device_info_widget = MagicMock(return_value=MagicMock())
         mixin._sb = MagicMock()
         mixin._sb.is_alive.return_value = True
         mixin._set_status = MagicMock()
@@ -57,9 +57,9 @@ class TestClearDeviceTarget:
         mixin.session.override_username = "admin"
         mixin.session.override_password = "secret"
         mixin.session.override_ssh_key = None
-        mixin._topo_canvas = MagicMock()
+        mixin._topo_canvas_widget = MagicMock(return_value=MagicMock())
         mixin._device_target_lbl = MagicMock()
-        mixin._device_info_lbl = MagicMock()
+        mixin._device_info_widget = MagicMock(return_value=MagicMock())
         mixin._sb = MagicMock()
         mixin._sb.is_alive.return_value = True
         mixin._set_status = MagicMock()
@@ -81,9 +81,9 @@ class TestClearDeviceTarget:
         mixin.session.override_username = "admin"
         mixin.session.override_password = "secret"
         mixin.session.override_ssh_key = None
-        mixin._topo_canvas = MagicMock()
+        mixin._topo_canvas_widget = MagicMock(return_value=MagicMock())
         mixin._device_target_lbl = MagicMock()
-        mixin._device_info_lbl = MagicMock()
+        mixin._device_info_widget = MagicMock(return_value=MagicMock())
         mixin._sb = MagicMock()
         mixin._sb.is_alive.return_value = True
         mixin._set_status = MagicMock()
@@ -104,9 +104,9 @@ class TestClearDeviceTarget:
         mixin = DevicesMixin()
         mixin._target_device = MagicMock()
         mixin.session = MagicMock()
-        mixin._topo_canvas = MagicMock()
+        mixin._topo_canvas_widget = MagicMock(return_value=MagicMock())
         mixin._device_target_lbl = MagicMock()
-        mixin._device_info_lbl = MagicMock()
+        mixin._device_info_widget = MagicMock(return_value=MagicMock())
         mixin._sb = MagicMock()
         mixin._sb.is_alive.return_value = False
         mixin._set_status = MagicMock()

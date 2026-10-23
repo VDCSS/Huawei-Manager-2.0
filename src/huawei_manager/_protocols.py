@@ -1,7 +1,7 @@
 """AppCoreProtocol — type-safe contract for mixin inheritance.
 
 Contrato estrutural único da janela principal: todos os mixins
-(Shortcuts, AppState, PageBuilder, EventHandlers, Threading) acessam
+(Shortcuts, AppState, EventHandlers, Threading) acessam
 membros uns dos outros anotando ``self: AppCoreProtocol``. Manter este
 arquivo em sincronia com as implementações é o que mantém o pyright
 estrito sem ciclos de import em runtime.
@@ -14,6 +14,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from huawei_manager.command import ConfigCommand
 from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.sdn_controller.bus import IEventBus
@@ -25,12 +26,7 @@ from huawei_manager.services.device_service import DeviceService
 if TYPE_CHECKING:
     from PySide6.QtGui import QPixmap
     from PySide6.QtWidgets import (
-        QComboBox,
         QLabel,
-        QLineEdit,
-        QListWidget,
-        QListWidgetItem,
-        QRadioButton,
         QStackedWidget,
         QTextEdit,
         QVBoxLayout,
@@ -39,12 +35,14 @@ if TYPE_CHECKING:
 
     from huawei_manager.agents import AgentResult
     from huawei_manager.agents.watcher import Watcher
+    from huawei_manager.audit_log import AuditLogger
     from huawei_manager.sdn_controller.core import ControllerCore
-    from huawei_manager.sdn_controller.drivers.router import RouterDriver
+    from huawei_manager.sdn_controller.drivers.base import BaseDriver
     from huawei_manager.sdn_controller.event_queue import Event
     from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
-    from huawei_manager.services import ServiceDef
+    from huawei_manager.services.ui_bridge import UiBridge
     from huawei_manager.session import NetmikoSession
+    from huawei_manager.tabs._contract import TabContext, TabDef
     from huawei_manager.topology import TopologyCanvas
     from huawei_manager.widgets.neon_button import ActionButton, NeonButton
 
@@ -54,11 +52,14 @@ class AppCoreProtocol(Protocol):
     # ── Núcleo / SDN ────────────────────────────────────────────────
     _sb: SouthboundProtocol
     session: NetmikoSession
+    audit_logger: AuditLogger | None
     _target_device: Device | None
 
     _event_queue: IEventBus
     _session_tracker: SessionTracker
     _access_level: str
+    _tabs: list[TabDef]
+    _tab_context: TabContext
     _mock_mode: bool
 
     _ui_queue: deque[Callable[[], object]]
@@ -68,24 +69,22 @@ class AppCoreProtocol(Protocol):
 
     _devices: list[Device]
     _devices_lock: threading.Lock
-    _topo_canvas: TopologyCanvas | None
     _watcher: Watcher
     _device_service: DeviceService
 
     _cmd_validator: CommandValidator | None
     _dry_run: DryRunEngine | None
+    _last_config_command: ConfigCommand | None
     _controller: ControllerCore
-    _drv: RouterDriver
+    _drv: BaseDriver
 
     _auth_overlay: QWidget | None
     _admin_attempts: int
     _admin_locked_until: float
     _session_factory: SSHSessionFactory
     _shutdown: bool
-    _sysview_var: bool
     ADMIN_MAX_ATTEMPTS: int
     ADMIN_LOCKOUT_SECS: int
-    backup_path: str
 
     content: QWidget | None
 
@@ -105,62 +104,16 @@ class AppCoreProtocol(Protocol):
     _PAGE_KEYS: list[str]
     _logo_pixmap: QPixmap | None
 
-    route_filter_var: str
-    _route_filter_cb: QComboBox
-    _admin_btn: ActionButton
-    _backup_entry: QLineEdit | None
-    _backup_fmt_lbl: QLabel
     _device_target_lbl: QLabel
 
     # ── Páginas: saídas de texto ────────────────────────────────────
-    out_config: QTextEdit | None
-    out_route: QTextEdit | None
-    out_arp: QTextEdit | None
-    out_info: QTextEdit | None
-    out_cmd: QTextEdit | None
-    out_backup: QTextEdit | None
-    _cmd_editor: QTextEdit | None
-
-    # ── Dashboard ───────────────────────────────────────────────────
-    _dash_conn_status: QLabel | None
-    _dash_conn_host: QLabel | None
-    _dash_device_online: QLabel | None
-    _dash_device_offline: QLabel | None
-    _dash_device_unknown: QLabel | None
-    _dash_audit_text: QTextEdit | None
-    _dash_shortcut_btns: dict[str, str]
-
-    # ── Topologia / devices ─────────────────────────────────────────
-    _device_info_lbl: QLabel | None
-    _device_status_lbl: QLabel | None
 
     # ── Serviços ────────────────────────────────────────────────────
-    _svc_output: QTextEdit | None
-    _svc_cat_cb: QComboBox | None
-    _svc_cat_var: str
     _svc_mode_var: str
-    _svc_listbox: QListWidget | None
-    _svc_detail_frame: QWidget | None
-    _svc_device_lbl: QLabel | None
-    _svc_type_lbl: QLabel | None
-    _svc_status_lbl: QLabel | None
-    _svc_param_entries: dict[str, QLineEdit]
-    _svc_services: list[ServiceDef]
-    _svc_current_svc: ServiceDef | None
-
-    # ── Comandos / templates ────────────────────────────────────────
-    _tpl_cmd_map: dict[str, str]
-    _tpl_listbox: QListWidget
+    # Ponte I/O→GUI para confirmações (UiBridge); None = app sem GUI.
+    _ui_bridge: UiBridge | None
 
     # ── Manutenção ──────────────────────────────────────────────────
-    _manut_output: QTextEdit | None
-    _manut_summary: QTextEdit | None
-    _manut_filter: str
-    _manut_rb_group: list[QRadioButton]
-    _mode_btn: ActionButton
-    _watcher_btn: ActionButton
-    _cancel_event: threading.Event | None
-    _last_manut_results: Sequence[AgentResult]
     _watcher_results: Sequence[AgentResult] | None
     _devices_gen: int
 
@@ -180,14 +133,6 @@ class AppCoreProtocol(Protocol):
 
     # ── Navegação / páginas ─────────────────────────────────────────
     def _show_page(self, key: str) -> None: ...
-    def _make_page(self, key: str) -> QWidget: ...
-    def _page_layout(self, p: QWidget) -> QVBoxLayout: ...
-    def _page_title(
-        self, parent: QWidget, title: str, color: str, subtitle: str = ""
-    ) -> None: ...
-    def _css_label(
-        self, color: str, bg: str = "", font_size: int = 12, bold: bool = False
-    ) -> str: ...
     def _rebuild_page(self, key: str) -> None: ...
     def _toggle_command_palette(self) -> None: ...
     def _toggle_theme(self) -> None: ...
@@ -228,9 +173,13 @@ class AppCoreProtocol(Protocol):
 
     # ── Fetch ───────────────────────────────────────────────────────
     def _fetch_config(self) -> None: ...
-    def _fetch_route(self, fkey: str = "") -> None: ...
+    def _config_out(self) -> QTextEdit | None: ...
+    def _fetch_route(self) -> None: ...
+    def _route_out(self) -> QTextEdit | None: ...
     def _fetch_arp(self) -> None: ...
+    def _arp_out(self) -> QTextEdit | None: ...
     def _fetch_info(self) -> None: ...
+    def _info_out(self) -> QTextEdit | None: ...
 
     # ── Devices ─────────────────────────────────────────────────────
     def _refresh_devices(self) -> None: ...
@@ -242,57 +191,21 @@ class AppCoreProtocol(Protocol):
 
     # ── Comandos / backup ───────────────────────────────────────────
     def _get_editor_cmd(self) -> str: ...
-    def _confirm_destructive(self, cmd: str) -> bool: ...
     def _run_cmd_safe(self, cmd: str = "") -> None: ...
     def _run_config_safe(self, cmd: str = "") -> None: ...
-    def _exec_cmd(self, cmd: str = "") -> None: ...
-    def _exec_config(self, cmd: str = "") -> None: ...
+    def _rollback_last_config(self) -> None: ...
+    def _cmd_out(self) -> QTextEdit | None: ...
     def _do_backup(self, fmt: str = "") -> None: ...
-    def _choose_backup_dir(self) -> None: ...
+    def _backup_out(self) -> QTextEdit | None: ...
 
     # ── Serviços ────────────────────────────────────────────────────
-    def _run_service(
-        self, svc: ServiceDef, final_svc: ServiceDef | None = None
-    ) -> None: ...
-    def _validate_service(
-        self, svc: ServiceDef, final_cmds: list[str]
-    ) -> list[tuple[str, str]]: ...
     def _refresh_service_list(self) -> None: ...
-    def _show_service_detail(self, svc: ServiceDef) -> None: ...
-    def _on_svc_cat_changed(self, text: str) -> None: ...
-    def _on_service_select(self, row: int) -> None: ...
-    def _clear_detail_panel(self) -> None: ...
-    def _build_services_info_row(self, parent: QWidget) -> None: ...
-    def _build_services_filter_row(self, parent: QWidget) -> None: ...
-    def _build_services_split(self, parent: QWidget) -> None: ...
-    def _build_param_fields(self, parent: QWidget, svc: ServiceDef) -> None: ...
-    def _build_services_page(self) -> None: ...
+    def _svc_out(self) -> QTextEdit | None: ...
 
-    # ── Builders de página ──────────────────────────────────────────
-    def _build_home_page(self) -> None: ...
-    def _build_config_page(self) -> None: ...
-    def _build_route_page(self) -> None: ...
-    def _build_arp_page(self) -> None: ...
-    def _build_info_page(self) -> None: ...
-    def _build_cmd_page(self) -> None: ...
-    def _build_backup_page(self) -> None: ...
-    def _build_topology_page(self) -> None: ...
-    def _build_manutencao_page(self) -> None: ...
-
-    # ── Manutenção ──────────────────────────────────────────────────
-    def _run_agents(self) -> None: ...
-    def _toggle_watcher(self) -> None: ...
-    def _toggle_probe_mode(self) -> None: ...
-    def _cancel_and_clear(self) -> None: ...
-    def _run_setup(self, mode: str) -> None: ...
-    def _run_dev_cmd(self, target: str) -> None: ...
-    def _display_watcher_results(self, results: Sequence[AgentResult]) -> None: ...
-    def _apply_manut_filter(self) -> None: ...
-    def _on_manut_filter_toggled(self, checked: bool, value: str) -> None: ...
-
-    # ── Templates de comando ────────────────────────────────────────
-    def _on_tpl_select(self, row: int) -> None: ...
-    def _on_tpl_activate(self, item: QListWidgetItem) -> None: ...
+    # ── Fachadas da aba Topologia (F2-topology) ────────────────────
+    def _topo_canvas_widget(self) -> TopologyCanvas | None: ...
+    def _device_info_widget(self) -> QLabel | None: ...
+    def _device_status_widget(self) -> QLabel | None: ...
 
     # ── Qt (usados via self de protocolo nos mixins) ────────────────
     def close(self) -> bool: ...

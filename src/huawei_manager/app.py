@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QStackedWidget,
     QTextEdit,
@@ -30,42 +29,56 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QComboBox, QListWidget, QListWidgetItem, QRadioButton
 
     from huawei_manager._protocols import AppCoreProtocol
     from huawei_manager.agents import AgentResult
     from huawei_manager.sdn_controller.bus import IEventBus
     from huawei_manager.sdn_controller.event_queue import Event
     from huawei_manager.sdn_controller.southbound import SouthboundProtocol
-    from huawei_manager.services import ServiceDef
+    from huawei_manager.tabs._contract import TabDef
+    from huawei_manager.tabs.arp import ArpTab
+    from huawei_manager.tabs.backup import BackupTab
+    from huawei_manager.tabs.cmd import CmdTab
+    from huawei_manager.tabs.config import ConfigTab
+    from huawei_manager.tabs.home import HomeTab
+    from huawei_manager.tabs.info import InfoTab
+    from huawei_manager.tabs.route import RouteTab
+    from huawei_manager.tabs.services import ServicesTab
+    from huawei_manager.tabs.topology import TopologyTab
     from huawei_manager.topology import TopologyCanvas
+    from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
 import huawei_manager.constants as C
+from huawei_manager import _config
 from huawei_manager._app import apply_theme
-from huawei_manager._config import PROJECT_ROOT, _s, _secrets, audit
+from huawei_manager._config import PROJECT_ROOT, _s
 from huawei_manager.agents.watcher import Watcher
 from huawei_manager.app_notify import NotifyMixin
 from huawei_manager.app_shortcuts import ShortcutsMixin
 from huawei_manager.app_state import AppStateMixin
 from huawei_manager.app_threading import ThreadingMixin
+from huawei_manager.command import ConfigCommand
 from huawei_manager.constants import set_theme
 from huawei_manager.db import get_connection, init_database
 from huawei_manager.device_models import Device
 from huawei_manager.device_repository import DeviceRepository
 from huawei_manager.handlers import EventHandlers
 from huawei_manager.migration import migrate_json_inventory
-from huawei_manager.pages import PageBuilder
 from huawei_manager.sdn_controller.authz import SessionTracker
 from huawei_manager.sdn_controller.core import ControllerCore
-from huawei_manager.sdn_controller.drivers.router import RouterDriver
+from huawei_manager.sdn_controller.drivers.factory import driver_for
 from huawei_manager.sdn_controller.dryrun import DryRunEngine
 from huawei_manager.sdn_controller.event_queue import EventQueue
+from huawei_manager.sdn_controller.listeners import start_alert_listeners
 from huawei_manager.sdn_controller.polling_manager import PollingManager
 from huawei_manager.sdn_controller.session_factory import SSHSessionFactory
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.sdn_controller.validator import CommandValidator
 from huawei_manager.services.device_service import DeviceService
+from huawei_manager.services.ui_bridge import UiBridge
 from huawei_manager.session import NetmikoSession
+from huawei_manager.tabs import build_registry, tab_by_key
+from huawei_manager.tabs._contract import TabContext
 from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button, neon_button
 
 log = logging.getLogger("huawei_manager")
@@ -77,52 +90,12 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     if TYPE_CHECKING:
         # ── Membros do AppCoreProtocol que vivem em mixins/builder ──────
         # (declarações estáticas; as implementações reais ficam em
-        # AppStateMixin / ShortcutsMixin / EventHandlers / PageBuilder e
+        # AppStateMixin / ShortcutsMixin / EventHandlers e
         # só existem na composição final HuaweiRouterApp.)
         ADMIN_MAX_ATTEMPTS: int
         ADMIN_LOCKOUT_SECS: int
-        _sysview_var: bool
-        route_filter_var: str
-        _route_filter_cb: QComboBox
-        _admin_btn: ActionButton
-        _backup_fmt_lbl: QLabel
-        _svc_cat_var: str
-        _tpl_cmd_map: dict[str, str]
-        _tpl_listbox: QListWidget
-        _manut_rb_group: list[QRadioButton]
-        _mode_btn: ActionButton
-        _watcher_btn: ActionButton
-        _svc_device_lbl: QLabel | None
-        _svc_type_lbl: QLabel | None
-        _svc_status_lbl: QLabel | None
-        _svc_cat_cb: QComboBox | None
-        _svc_listbox: QListWidget | None
-        _svc_detail_frame: QWidget | None
-        _svc_services: list[ServiceDef]
-        _svc_current_svc: ServiceDef | None
-        _dash_conn_status: QLabel | None
-        _dash_conn_host: QLabel | None
-        _dash_device_online: QLabel | None
-        _dash_device_offline: QLabel | None
-        _dash_device_unknown: QLabel | None
-        _dash_audit_text: QTextEdit | None
-        _dash_shortcut_btns: dict[str, str]
-        _manut_summary: QTextEdit | None
-        _manut_output: QTextEdit | None
-        _cmd_editor: QTextEdit | None
-        _backup_entry: QLineEdit | None
-
         # ── Métodos implementados fora do AppCore (espelho do protocolo) ─
         def _on_sdn_event(self: AppCoreProtocol, ev: Event | None) -> None: ...
-        def _page_layout(self: AppCoreProtocol, p: QWidget) -> QVBoxLayout: ...
-        def _page_title(
-            self: AppCoreProtocol, parent: QWidget, title: str, color: str,
-            subtitle: str = "",
-        ) -> None: ...
-        def _css_label(
-            self: AppCoreProtocol, color: str, bg: str = "",
-            font_size: int = 12, bold: bool = False,
-        ) -> str: ...
         def _set_status(self: AppCoreProtocol, text: str, color: str) -> None: ...
         def _set_conn_btn(
             self: AppCoreProtocol, text: str = "", disabled: bool = False
@@ -134,7 +107,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, results: Sequence[AgentResult]
         ) -> None: ...
         def _rebuild_manutencao_if_active(self: AppCoreProtocol) -> None: ...
-        def _refresh_dashboard(self: AppCoreProtocol) -> None: ...
         def _setup_bindings(self: AppCoreProtocol) -> None: ...
         def _on_enter(self: AppCoreProtocol) -> None: ...
         def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None: ...
@@ -159,10 +131,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self: AppCoreProtocol, on_success_fmt: str, on_error_msg: str
         ) -> None: ...
         def _connect_with_device(self: AppCoreProtocol, device: Device) -> None: ...
-        def _fetch_config(self: AppCoreProtocol) -> None: ...
-        def _fetch_route(self: AppCoreProtocol, fkey: str = "") -> None: ...
-        def _fetch_arp(self: AppCoreProtocol) -> None: ...
-        def _fetch_info(self: AppCoreProtocol) -> None: ...
         def _refresh_devices(self: AppCoreProtocol) -> None: ...
         def _update_devices_ui(
             self: AppCoreProtocol, devices: list[Device]
@@ -173,65 +141,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         def _delete_device(self: AppCoreProtocol, device: Device) -> None: ...
         def _on_device_selected(self: AppCoreProtocol, device: Device) -> None: ...
         def _clear_device_target(self: AppCoreProtocol) -> None: ...
-        def _get_editor_cmd(self: AppCoreProtocol) -> str: ...
-        def _confirm_destructive(self: AppCoreProtocol, cmd: str) -> bool: ...
-        def _run_cmd_safe(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _run_config_safe(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _exec_cmd(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _exec_config(self: AppCoreProtocol, cmd: str = "") -> None: ...
-        def _do_backup(self: AppCoreProtocol, fmt: str = "") -> None: ...
-        def _choose_backup_dir(self: AppCoreProtocol) -> None: ...
-        def _run_service(
-            self: AppCoreProtocol, svc: ServiceDef,
-            final_svc: ServiceDef | None = None,
-        ) -> None: ...
-        def _validate_service(
-            self: AppCoreProtocol, svc: ServiceDef, final_cmds: list[str]
-        ) -> list[tuple[str, str]]: ...
-        def _refresh_service_list(self: AppCoreProtocol) -> None: ...
-        def _show_service_detail(self: AppCoreProtocol, svc: ServiceDef) -> None: ...
-        def _on_svc_cat_changed(self: AppCoreProtocol, text: str) -> None: ...
-        def _on_service_select(self: AppCoreProtocol, row: int) -> None: ...
-        def _clear_detail_panel(self: AppCoreProtocol) -> None: ...
-        def _build_services_info_row(
-            self: AppCoreProtocol, parent: QWidget
-        ) -> None: ...
-        def _build_services_filter_row(
-            self: AppCoreProtocol, parent: QWidget
-        ) -> None: ...
-        def _build_services_split(
-            self: AppCoreProtocol, parent: QWidget
-        ) -> None: ...
-        def _build_param_fields(
-            self: AppCoreProtocol, parent: QWidget, svc: ServiceDef
-        ) -> None: ...
-        def _build_services_page(self: AppCoreProtocol) -> None: ...
-        def _build_home_page(self: AppCoreProtocol) -> None: ...
-        def _build_config_page(self: AppCoreProtocol) -> None: ...
-        def _build_route_page(self: AppCoreProtocol) -> None: ...
-        def _build_arp_page(self: AppCoreProtocol) -> None: ...
-        def _build_info_page(self: AppCoreProtocol) -> None: ...
-        def _build_cmd_page(self: AppCoreProtocol) -> None: ...
-        def _build_backup_page(self: AppCoreProtocol) -> None: ...
-        def _build_topology_page(self: AppCoreProtocol) -> None: ...
-        def _build_manutencao_page(self: AppCoreProtocol) -> None: ...
-        def _run_agents(self: AppCoreProtocol) -> None: ...
-        def _toggle_watcher(self: AppCoreProtocol) -> None: ...
-        def _toggle_probe_mode(self: AppCoreProtocol) -> None: ...
-        def _cancel_and_clear(self: AppCoreProtocol) -> None: ...
-        def _run_setup(self: AppCoreProtocol, mode: str) -> None: ...
-        def _run_dev_cmd(self: AppCoreProtocol, target: str) -> None: ...
-        def _display_watcher_results(
-            self: AppCoreProtocol, results: Sequence[AgentResult]
-        ) -> None: ...
-        def _apply_manut_filter(self: AppCoreProtocol) -> None: ...
-        def _on_manut_filter_toggled(
-            self: AppCoreProtocol, checked: bool, value: str
-        ) -> None: ...
-        def _on_tpl_select(self: AppCoreProtocol, row: int) -> None: ...
-        def _on_tpl_activate(
-            self: AppCoreProtocol, item: QListWidgetItem
-        ) -> None: ...
 
     def __init__(self) -> None:
         super().__init__()
@@ -249,17 +158,30 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         apply_theme("dark")
 
-        if _secrets is None:
+        # Globais de _config lidos em tempo de uso (não fixados no import):
+        # um `from _config import _secrets` capturaria None se app.py fosse
+        # importado antes do init(), quebrando o boot por ordem de import.
+        secrets = _config._secrets
+        audit_log = _config.audit
+        if secrets is None:
             raise RuntimeError("_config.init() must be called first")
-        if audit is None:
+        if audit_log is None:
             raise RuntimeError("_config.init() must be called first")
-        self.session = NetmikoSession(_secrets, audit)
+        self.session = NetmikoSession(secrets, audit_log)
         self._event_queue: IEventBus = EventQueue(maxsize=1000)
+        # Gap 2: fontes push (traps SNMP / syslog), opt-in por ambiente.
+        # Cada listener é isolado — bind negado vira warning, não crash.
+        # Precisa nascer DEPOIS do barramento (start_alert_listeners usa
+        # _event_queue); _init_common_attrs roda antes deste ponto.
+        self._alert_listeners = start_alert_listeners(self._event_queue)
         self._cmd_validator = CommandValidator()
         self._sb: SouthboundProtocol = SSHSouthbound(
-            _secrets, audit, session=self.session, validator=self._cmd_validator
+            secrets, audit_log, session=self.session, validator=self._cmd_validator
         )
         self._dry_run = DryRunEngine()
+        # Última mutação de configuração (Editor/Serviços) com snapshot
+        # pré-mudança — alimenta o rollback da paleta de comandos.
+        self._last_config_command: ConfigCommand | None = None
         self._controller = ControllerCore(
             event_queue=self._event_queue,
             dump_path=str(Path.home() / ".huawei_manager" / "sdn_state.json"),
@@ -298,7 +220,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
                 "HW_ADAPTIVE_POLLING=1 mas VNF_ENCRYPT_KEY ausente — polling desabilitado"
             )
             self._polling_enabled = False
-        self._session_factory = SSHSessionFactory(_secrets, audit)
+        self._session_factory = SSHSessionFactory(secrets, audit_log)
         self._polling_mgr = PollingManager(
             factory=self._session_factory,
             device_service=self._device_service,
@@ -308,7 +230,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._adaptive_timer.timeout.connect(self._tick_adaptive_polling)
         self._adaptive_timer.start(C.POLL_TICK_FLOOR_MS)
 
-        self._drv = RouterDriver(southbound=self._sb, event_queue=self._event_queue)
+        # Factory (Gap 1): driver resolvido pelo tipo do dispositivo; no
+        # boot não há device selecionado, então vale o perfil padrão (VRP).
+        self._drv = driver_for(None, self._sb, self._event_queue)
         self._session_tracker = SessionTracker(timeout_secs=300)
         self._active_btn: NeonButton | None = None
         self._access_level: str = "user"
@@ -321,7 +245,6 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         self._target_device: Device | None = None
         self._devices: list[Device] = []
-        self._topo_canvas: TopologyCanvas | None = None
         io_w = int(os.environ.get("HW_IO_WORKERS", "6"))
         cpu_w = int(os.environ.get("HW_CPU_WORKERS", "2"))
         self._io_executor = ThreadPoolExecutor(max_workers=io_w, thread_name_prefix="hw-io")
@@ -367,34 +290,28 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         """Garante que todos os atributos dos mixins existem antes do uso."""
         self._logo_pixmap: QPixmap | None = None
         self.theme_btn: ActionButton | None = None
-        self.out_config: QTextEdit | None = None
-        self.out_route: QTextEdit | None = None
-        self.out_arp: QTextEdit | None = None
-        self.out_info: QTextEdit | None = None
-        self.out_cmd: QTextEdit | None = None
-        self.out_backup: QTextEdit | None = None
-        self._svc_output: QTextEdit | None = None
         self._page_container: QStackedWidget | None = None
-        self._device_info_lbl: QLabel | None = None
-        self._device_status_lbl: QLabel | None = None
         self._auth_overlay: QWidget | None = None
-        self._last_manut_results: Sequence[AgentResult] = []
-        self._manut_filter: str = "all"
         self._devices_lock = threading.Lock()
         self._devices_gen: int = 0
         self._devices: list[Device] = []
         self._mock_mode: bool = False
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
-        self._cancel_event: threading.Event | None = None
-        self.backup_path: str = ""
         self._svc_mode_var: str = os.environ.get("HW_SVC_MODE", "mock")
         if self._svc_mode_var not in ("mock", "cli"):
             log.warning("HW_SVC_MODE invalido (%r) — usando mock", self._svc_mode_var)
             self._svc_mode_var = "mock"
-        self._svc_param_entries: dict[str, QLineEdit] = {}
         self._shutdown: bool = False
         self._event_drop_count: int = 0
+        # Logger de auditoria do app (era inacessível aos mixins; o caminho
+        # NAPALM e o audit de comandos negados dependem dele).
+        # Lido em tempo de uso: _init_common_attrs roda antes do __init__
+        # montar os serviços, e o audit nasce no _config.init().
+        self.audit_logger = _config.audit
+        # Ponte I/O→GUI: workers pedem confirmação via ask_from_worker()
+        # (QMessageBox nunca fora da thread GUI — ver services/ui_bridge.py).
+        self._ui_bridge: UiBridge | None = UiBridge(self)
 
     # ── Layout ───────────────────────────────────────────────────────
     def _build_layout(self) -> None:
@@ -438,21 +355,53 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             f"background: {C.BG_CARD}; border-radius: 4px;")
         self.content_layout.addWidget(self._page_container, stretch=1)
 
+        # Registry único de abas (plano plano-abas-independentes): sidebar e
+        # RBAC derivam de tabs/_TAB_META; as 10 abas são módulos reais.
+        self._tabs: list[TabDef] = build_registry()
+        self._tab_context = TabContext(
+            sb=self._sb,
+            audit=self.audit_logger,
+            event_bus=self._event_queue,
+            role=lambda: self._access_level,
+            device=self._get_selected_device,
+            dispatch=self._dispatch,
+            require_access=self._require_access,
+            spawn_io=self._spawn_io,
+            spawn_cpu=self._spawn_cpu,
+            watcher=self._watcher,
+            is_mock=lambda: self._mock_mode,
+            toggle_mock=self._toggle_mock_mode,
+            show_auth_dialog=self._show_auth_dialog,
+            watcher_results=lambda: self._watcher_results,
+            set_watcher_results=self._set_watcher_results,
+            session=self.session,
+            run=self._run,
+            set_status=self._set_status,
+            touch_session=self._session_tracker.touch,
+            cmd_validator=self._cmd_validator,
+            dry_run=self._dry_run,
+            get_last_config_command=lambda: self._last_config_command,
+            set_last_config_command=lambda cmd: setattr(
+                self, "_last_config_command", cmd),
+            drv=lambda: self._drv,
+            devices=lambda: self._devices,
+            show_page=self._show_page,
+            svc_mode=lambda: self._svc_mode_var,
+            ui_bridge=lambda: self._ui_bridge,
+            ensure_device_ready=self._ensure_device_ready,
+            refresh_devices=self._refresh_devices,
+            show_device_dialog=self._show_device_dialog,
+            delete_device=self._delete_device,
+            on_device_selected=self._on_device_selected,
+            clear_device_target=self._clear_device_target,
+        )
+
         self._build_sidebar()
         self._build_footer(right_layout)
 
         self.pages: dict[str, QWidget] = {}
         self._page_builders: dict[str, Callable[[], None]] = {
-            "home":       self._build_home_page,
-            "config":     self._build_config_page,
-            "route":      self._build_route_page,
-            "arp":        self._build_arp_page,
-            "info":       self._build_info_page,
-            "cmd":        self._build_cmd_page,
-            "backup":     self._build_backup_page,
-            "topology":   self._build_topology_page,
-            "services":   self._build_services_page,
-            "manutencao": self._build_manutencao_page,
+            td.key: (lambda key=td.key: self._build_tab(key)) for td in self._tabs
         }
 
     # ── Header ───────────────────────────────────────────────────────
@@ -551,28 +500,13 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         self._nav_buttons: dict[str, NeonButton] = {}
 
-        groups = (
-            ("DASHBOARD", (
-                ("home", "\U0001f3e0", "Dashboard", C.NEON_CYAN),
-            )),
-            ("DISPOSITIVOS", (
-                ("topology", "\U0001f5fa", "Topologia / Devices", C.NEON_AMBER),
-                ("config",   "\U0001f4cb", "Config Atual", C.NEON_CYAN),
-                ("route",    "\U0001f310", "Roteamento", C.NEON_CYAN),
-                ("arp",      "\U0001f4e1", "Tabela ARP", C.NEON_CYAN),
-                ("info",     "\U0001f4bb", "Info do Sistema", C.NEON_MAG),
-            )),
-            ("FERRAMENTAS", (
-                ("cmd",      "\u2328",     "Editor de Comandos", C.NEON_MAG),
-                ("backup",   "\U0001f4be", "Backup", C.NEON_PURP),
-                ("services", "\u26a1",     "Servicos", C.NEON_AMBER),
-            )),
-            ("ADMINISTRACAO", (
-                ("manutencao", "\U0001f6e0", "Manutencao", C.NEON_MAG),
-            )),
-        )
+        # Sidebar gerada do registry (Fase 0): grupos e itens vêm de self._tabs
+        # na ordem declarada em tabs/_TAB_META — fonte única.
+        groups: dict[str, list[TabDef]] = {}
+        for td in self._tabs:
+            groups.setdefault(td.group, []).append(td)
 
-        for cat_label, items in groups:
+        for cat_label, items in groups.items():
             cat_w = QWidget(sb)
             cat_w.setStyleSheet(f"background: {C.BG_SIDEBAR};")
             cat_layout = QVBoxLayout(cat_w)
@@ -584,11 +518,11 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
                               f"font: {C.FONT_CAPTION}px {C.FONT_UI_FAMILY};")
             cat_layout.addWidget(lbl)
 
-            for key, icon_char, label, color in items:
-                btn = neon_button(cat_w, label,
-                                  lambda _chk, k=key: self._show_page(k),
-                                  color=color, icon=icon_char)
-                self._nav_buttons[key] = btn
+            for td in items:
+                btn = neon_button(cat_w, td.label,
+                                  lambda _chk, k=td.key: self._show_page(k),
+                                  color=td.color, icon=td.icon)
+                self._nav_buttons[td.key] = btn
                 cat_layout.addWidget(btn)
             sb_layout.addWidget(cat_w)
 
@@ -644,11 +578,238 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         parent_layout.addWidget(foot)
 
-    # ── Helpers de pagina ─────────────────────────────────────────────
-    def _make_page(self, key: str) -> QWidget:
-        p = cast("AppCoreProtocol", super())._make_page(key)
-        self.pages[key] = p
-        return p
+    def _build_tab(self, key: str) -> None:
+        """Constrói a aba pelo registry e registra a QWidget no shell."""
+        td = tab_by_key(self._tabs, key)
+        if td is None:
+            return
+        page = td.module.build(self._tab_context)
+        if page is not None:
+            self.pages[key] = page
+            if self._page_container is not None:
+                self._page_container.addWidget(page)
+
+    def _toggle_mock_mode(self) -> bool:
+        """Alterna o modo probe global (Real/Mock) — injetado no TabContext."""
+        self._mock_mode = not self._mock_mode
+        return self._mock_mode
+
+    def _set_watcher_results(self, results: Sequence[AgentResult]) -> None:
+        """Snapshot imutável (R18) dos resultados dos agentes."""
+        self._watcher_results = tuple(results)
+
+    # ── Fachadas da aba Editor de Comandos (F2-cmd) ─────────────────
+    def _cmd_tab(self) -> CmdTab | None:
+        """Módulo real da aba cmd (instância única do registry) + contexto.
+
+        ``attach`` é idempotente: injeta o TabContext mesmo sem a UI
+        ter sido construída (rollback via paleta, ex.).
+        """
+        from huawei_manager.tabs.cmd import CmdTab
+
+        td = tab_by_key(self._tabs, "cmd")
+        if td is None or not isinstance(td.module, CmdTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _get_editor_cmd(self) -> str:
+        tab = self._cmd_tab()
+        return "" if tab is None else tab.get_editor_cmd()
+
+    def _run_cmd_safe(self, cmd: str = "") -> None:
+        tab = self._cmd_tab()
+        if tab is not None:
+            tab.run_cmd_safe(cmd)
+
+    def _run_config_safe(self, cmd: str = "") -> None:
+        tab = self._cmd_tab()
+        if tab is not None:
+            tab.run_config_safe(cmd)
+
+    def _rollback_last_config(self) -> None:
+        tab = self._cmd_tab()
+        if tab is not None:
+            tab.rollback_last_config()
+
+    def _cmd_out(self) -> QTextEdit | None:
+        """Widget de saída da aba cmd (Ctrl+L limpa a saída)."""
+        tab = self._cmd_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Backup (F2-backup) ──────────────────────────
+    def _backup_tab(self) -> BackupTab | None:
+        """Módulo real da aba backup (instância única do registry) + contexto."""
+        from huawei_manager.tabs.backup import BackupTab
+
+        td = tab_by_key(self._tabs, "backup")
+        if td is None or not isinstance(td.module, BackupTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _do_backup(self, fmt: str = "") -> None:
+        tab = self._backup_tab()
+        if tab is not None:
+            tab.run_backup(fmt)
+
+    def _backup_out(self) -> QTextEdit | None:
+        """Widget de saída da aba backup (Ctrl+L limpa a saída)."""
+        tab = self._backup_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Configuração Atual (F2-config) ─────────────
+    def _config_tab(self) -> ConfigTab | None:
+        """Módulo real da aba config (instância única do registry) + contexto."""
+        from huawei_manager.tabs.config import ConfigTab
+
+        td = tab_by_key(self._tabs, "config")
+        if td is None or not isinstance(td.module, ConfigTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_config(self) -> None:
+        tab = self._config_tab()
+        if tab is not None:
+            tab.fetch_config()
+
+    def _config_out(self) -> QTextEdit | None:
+        """Widget de saída da aba config (Ctrl+L limpa a saída)."""
+        tab = self._config_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Roteamento (F2-route) ───────────────────────
+    def _route_tab(self) -> RouteTab | None:
+        """Módulo real da aba route (instância única do registry) + contexto."""
+        from huawei_manager.tabs.route import RouteTab
+
+        td = tab_by_key(self._tabs, "route")
+        if td is None or not isinstance(td.module, RouteTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_route(self) -> None:
+        tab = self._route_tab()
+        if tab is not None:
+            tab.fetch_route()
+
+    def _route_out(self) -> QTextEdit | None:
+        """Widget de saída da aba route (Ctrl+L limpa a saída)."""
+        tab = self._route_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Tabela ARP (F2-arp) ─────────────────────────
+    def _arp_tab(self) -> ArpTab | None:
+        """Módulo real da aba arp (instância única do registry) + contexto."""
+        from huawei_manager.tabs.arp import ArpTab
+
+        td = tab_by_key(self._tabs, "arp")
+        if td is None or not isinstance(td.module, ArpTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_arp(self) -> None:
+        tab = self._arp_tab()
+        if tab is not None:
+            tab.fetch_arp()
+
+    def _arp_out(self) -> QTextEdit | None:
+        """Widget de saída da aba arp (Ctrl+L limpa a saída)."""
+        tab = self._arp_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Info do Sistema (F2-info) ───────────────────
+    def _info_tab(self) -> InfoTab | None:
+        """Módulo real da aba info (instância única do registry) + contexto."""
+        from huawei_manager.tabs.info import InfoTab
+
+        td = tab_by_key(self._tabs, "info")
+        if td is None or not isinstance(td.module, InfoTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _fetch_info(self) -> None:
+        tab = self._info_tab()
+        if tab is not None:
+            tab.fetch_info()
+
+    def _info_out(self) -> QTextEdit | None:
+        """Widget de saída da aba info (Ctrl+L limpa a saída)."""
+        tab = self._info_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Dashboard (F2-home) ──────────────────────────
+    def _home_tab(self) -> HomeTab | None:
+        """Módulo real da aba home (instância única do registry) + contexto."""
+        from huawei_manager.tabs.home import HomeTab
+
+        td = tab_by_key(self._tabs, "home")
+        if td is None or not isinstance(td.module, HomeTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _refresh_dashboard(self) -> None:
+        tab = self._home_tab()
+        if tab is not None:
+            tab.refresh()
+
+    # ── Fachadas da aba Serviços (F2-services) ───────────────────────
+    def _services_tab(self) -> ServicesTab | None:
+        """Módulo real da aba services (instância única do registry) + contexto."""
+        from huawei_manager.tabs.services import ServicesTab
+
+        td = tab_by_key(self._tabs, "services")
+        if td is None or not isinstance(td.module, ServicesTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _refresh_service_list(self) -> None:
+        tab = self._services_tab()
+        if tab is not None:
+            tab.refresh_service_list()
+
+    def _svc_out(self) -> QTextEdit | None:
+        """Widget de saída da aba services (Ctrl+L limpa a saída)."""
+        tab = self._services_tab()
+        return None if tab is None else tab.out_widget()
+
+    # ── Fachadas da aba Topologia (F2-topology) ───────────────────────
+    def _topology_tab(self) -> TopologyTab | None:
+        """Módulo real da aba topology (instância única do registry) + contexto."""
+        from huawei_manager.tabs.topology import TopologyTab
+
+        td = tab_by_key(self._tabs, "topology")
+        if td is None or not isinstance(td.module, TopologyTab):
+            return None
+        tab = td.module
+        tab.attach(self._tab_context)
+        return tab
+
+    def _topo_canvas_widget(self) -> TopologyCanvas | None:
+        tab = self._topology_tab()
+        return None if tab is None else tab.state.topo_canvas
+
+    def _device_info_widget(self) -> QLabel | None:
+        tab = self._topology_tab()
+        return None if tab is None else tab.state.device_info_lbl
+
+    def _device_status_widget(self) -> QLabel | None:
+        tab = self._topology_tab()
+        return None if tab is None else tab.state.device_status_lbl
 
     # ── Navegacao ────────────────────────────────────────────────────
     def _show_page(self, key: str) -> None:
@@ -668,6 +829,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._current_page = key
 
     def _rebuild_page(self, key: str) -> None:
+        td = tab_by_key(self._tabs, key)
+        if td is not None:
+            td.module.dispose()
         if key in self.pages:
             old = self.pages.pop(key)
             if self._page_container is not None:
@@ -759,13 +923,34 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         if self._command_palette is None:
             from huawei_manager.widgets.command_palette import (
                 CommandPalette,
+                CommandRegistry,
                 create_default_commands,
             )
-            self._command_palette = CommandPalette(self, create_default_commands(self))
+            # Mesma lista viva: o registry muta in-place e a paleta vê as
+            # mudanças no próximo filtro (abas registrando ações — Fase 0).
+            cmds = create_default_commands(self)
+            self._command_registry = CommandRegistry(cmds)
+            self._command_palette = CommandPalette(self, cmds)
         if self._command_palette.isVisible():
             self._command_palette.hide()
         else:
             self._command_palette.show()
+
+    def register_command(self, cmd: Command) -> None:
+        """Registra um comando na palette — API para abas (Fase 0)."""
+        if getattr(self, "_command_registry", None) is None:
+            self._toggle_command_palette()
+        registry = cast(
+            "CommandRegistry | None", getattr(self, "_command_registry", None))
+        if registry is not None:
+            registry.register(cmd)
+
+    def unregister_command(self, cmd_id: str) -> None:
+        """Remove comando da palette pelo id — cleanup no dispose da aba."""
+        registry = cast(
+            "CommandRegistry | None", getattr(self, "_command_registry", None))
+        if registry is not None:
+            registry.unregister(cmd_id)
 
     def _rebuild_ui(self) -> None:
         # 1. Parar todos os timers antes de destruir widgets
@@ -784,34 +969,10 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # 2. Salvar estado
         current_page = self._current_page
         self._active_btn = None
-        self._topo_canvas = None
         self.pages.clear()
         # Widgets recriados em _build_layout/_rebuild_page: zerar refs para
         # nao apontar para objetos C++ deletados (RuntimeError/AttributeError).
-        self._svc_output = None
-        self._svc_device_lbl = None
-        self._svc_type_lbl = None
-        self._svc_status_lbl = None
-        self._svc_cat_cb = None
-        self._svc_listbox = None
-        self._svc_detail_frame = None
-        self._svc_param_entries = {}
-        self._svc_services = []
-        self._svc_current_svc = None
-        self._dash_conn_status = None
-        self._dash_conn_host = None
-        self._dash_device_online = None
-        self._dash_device_offline = None
-        self._dash_device_unknown = None
-        self._dash_audit_text = None
-        self._dash_shortcut_btns = {}
-        self._manut_summary = None
-        self._manut_output = None
-        self._cmd_editor = None
-        self._backup_entry = None
         self._auth_overlay = None
-        self._device_info_lbl = None
-        self._device_status_lbl = None
         self._ui_queue.clear()
 
         # 3. Destruir UI antiga
@@ -839,5 +1000,5 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         if watcher_was_active:
             self._watcher.start()
 
-class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, AppCore, PageBuilder, EventHandlers):
-    """Classe final que combina os mixins AppCore, PageBuilder e EventHandlers."""
+class HuaweiRouterApp(AppStateMixin, ShortcutsMixin, AppCore, EventHandlers):
+    """Classe final que combina os mixins AppCore e EventHandlers."""

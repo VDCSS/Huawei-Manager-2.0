@@ -26,3 +26,7 @@ class SdnCommandError(SdnError):
 
 class SdnValidationError(SdnError):
     """Falha de validação de dados, credenciais ou parâmetros."""
+
+
+class SnapshotError(SdnError):
+    """Falha ao capturar snapshot pré-mudança — mutação abortada (fail-closed)."""
