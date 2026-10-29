@@ -46,6 +46,18 @@ class _OriginAuditWrapper(AuditLogger):
     def _write(self, entry: AuditEntry) -> None:
         self._inner._write(entry)
 
+    # Delegacoes: o wrapper nao roda o __init__ de AuditLogger (nao tem
+    # arquivo/chave proprios), entao os metodos herdados que leem o arquivo
+    # precisam apontar para o logger interno.
+    def verify(self) -> bool:
+        return self._inner.verify()
+
+    def tail(self, n: int = 10) -> list[dict[str, Any]]:
+        return self._inner.tail(n)
+
+    def format_tail(self, n: int = 5) -> str:
+        return self._inner.format_tail(n)
+
     def log_operation(
         self,
         op: str,
@@ -88,6 +100,9 @@ class _OriginAuditWrapper(AuditLogger):
 class _PoolEntry:
     ssb: SSHSouthbound
     last_used: float
+    # Host/porta/usuário no momento da criação: se o Device for editado,
+    # a sessão antiga não pode continuar atendendo o mesmo id (M6).
+    fingerprint: tuple[str, int, str]
 
 
 class SSHSessionFactory:
@@ -114,6 +129,7 @@ class SSHSessionFactory:
         self._max_retries = max_retries
         self._pool: dict[str, _PoolEntry] = {}
         self._lock = threading.Lock()
+        self._disposed = False
 
     @property
     def active_sessions(self) -> int:
@@ -127,23 +143,42 @@ class SSHSessionFactory:
         Valida credenciais estritas antes de criar. Se o Device estiver
         mal configurado ou a conexão falhar, retorna None sem lançar.
         """
+        fingerprint = self._fingerprint(device)
         with self._lock:
+            if self._disposed:
+                return None
             existing = self._pool.get(device.id)
             if existing is not None:
-                existing.last_used = time.time()
-                return existing.ssb
+                if existing.fingerprint == fingerprint:
+                    existing.last_used = time.time()
+                    return existing.ssb
+                # Device editado (host/porta/usuário): descarta a sessão
+                # antiga para não pollar o equipamento errado.
+                self._pool.pop(device.id, None)
+        if existing is not None:
+            self._close_ssb(existing.ssb)
         if not self._validate_device(device):
             return None
         ssb = self._create(device)
         if ssb is None:
             return None
         with self._lock:
-            again = self._pool.get(device.id)
-            if again is not None:
-                again.last_used = time.time()
+            if self._disposed:
+                discard = True
+                again = None
             else:
-                self._pool[device.id] = _PoolEntry(ssb, time.time())
+                discard = False
+                again = self._pool.get(device.id)
+                if again is not None:
+                    again.last_used = time.time()
+                else:
+                    self._pool[device.id] = _PoolEntry(
+                        ssb, time.time(), fingerprint
+                    )
         # Disconnect fora do lock: I/O de rede não bloqueia outros threads.
+        if discard:
+            self._close_ssb(ssb)
+            return None
         if again is not None:
             self._close_ssb(ssb)
             return again.ssb
@@ -159,21 +194,27 @@ class SSHSessionFactory:
     def purge_expired(self) -> None:
         """Fecha sessões ociosas há mais de ``ttl_seconds``."""
         now = time.time()
-        expired = [
-            dev_id
-            for dev_id, entry in list(self._pool.items())
-            if now - entry.last_used > self._ttl
-        ]
+        with self._lock:
+            expired = [
+                dev_id
+                for dev_id, entry in self._pool.items()
+                if now - entry.last_used > self._ttl
+            ]
         for dev_id in expired:
             self.release(dev_id)
 
     def dispose(self) -> None:
-        """Fecha todas as sessões e esvazia o pool."""
+        """Fecha todas as sessões e esvazia o pool (idempotente)."""
         with self._lock:
+            self._disposed = True
             entries = list(self._pool.values())
             self._pool.clear()
         for entry in entries:
             self._close_ssb(entry.ssb)
+
+    @staticmethod
+    def _fingerprint(device: Device) -> tuple[str, int, str]:
+        return (device.host, device.port if device.port else 22, device.username)
 
     # ── helpers ──────────────────────────────────────────────────────
 
