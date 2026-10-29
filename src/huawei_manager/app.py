@@ -84,6 +84,50 @@ from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_
 log = logging.getLogger("huawei_manager")
 
 
+def _adaptive_polling_flag(resolve_env: Callable[[str], str]) -> bool:
+    """Lê a flag de polling com fail-closed (D15).
+
+    Sem ``VNF_ENCRYPT_KEY`` o inventário não pode ser decriptado; nesse caso
+    o polling é recusado com CRITICAL em vez de rodar pela metade.
+    """
+    if os.environ.get(C.POLL_ENABLED_ENV, "0") != "1":
+        return False
+    if not resolve_env("VNF_ENCRYPT_KEY"):
+        log.critical(
+            "HW_ADAPTIVE_POLLING=1 mas VNF_ENCRYPT_KEY ausente — polling desabilitado"
+        )
+        return False
+    return True
+
+
+def _adaptive_polling_guard(
+    enabled: bool, mock_mode: bool, svc_mode: str
+) -> bool:
+    """Polling só roda com flag ON, fora de mock e em modo CLI.
+
+    ``svc_mode`` é lido ao vivo: ``HW_SVC_MODE=mock`` (default do .env)
+    nunca deve abrir SSH real em segundo plano.
+    """
+    return enabled and not mock_mode and svc_mode != "mock"
+
+
+def _adaptive_rearm_delay_ms(
+    next_due: float | None, now: float, floor_ms: int
+) -> int:
+    """Converte ``next_due`` (epoch absoluto) no delay relativo do QTimer."""
+    if next_due is None:
+        return C.POLL_MIN_INTERVAL * 1000
+    return max(floor_ms, int((next_due - now) * 1000))
+
+
+def _resolve_svc_mode(raw: str) -> str:
+    """Normaliza ``HW_SVC_MODE`` (``real`` documentado no .env vira ``cli``)."""
+    mode = (raw or "").strip().lower()
+    if mode == "real":
+        return "cli"
+    return mode if mode in ("mock", "cli") else "mock"
+
+
 class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     """Mixin principal Qt — inicializa janela, layout, navegação e helpers de threading."""
 
@@ -214,12 +258,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             repository=DeviceRepository(db_conn),
         )
 
-        self._polling_enabled = os.environ.get(C.POLL_ENABLED_ENV, "0") == "1"
-        if self._polling_enabled and not _s("VNF_ENCRYPT_KEY"):
-            log.critical(
-                "HW_ADAPTIVE_POLLING=1 mas VNF_ENCRYPT_KEY ausente — polling desabilitado"
-            )
-            self._polling_enabled = False
+        self._polling_enabled = _adaptive_polling_flag(_s)
         self._session_factory = SSHSessionFactory(secrets, audit_log)
         self._polling_mgr = PollingManager(
             factory=self._session_factory,
@@ -298,10 +337,10 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._mock_mode: bool = False
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
-        self._svc_mode_var: str = os.environ.get("HW_SVC_MODE", "mock")
-        if self._svc_mode_var not in ("mock", "cli"):
-            log.warning("HW_SVC_MODE invalido (%r) — usando mock", self._svc_mode_var)
-            self._svc_mode_var = "mock"
+        raw_svc_mode = os.environ.get("HW_SVC_MODE", "mock")
+        self._svc_mode_var: str = _resolve_svc_mode(raw_svc_mode)
+        if raw_svc_mode.strip().lower() not in ("mock", "cli", "real"):
+            log.warning("HW_SVC_MODE invalido (%r) — usando mock", raw_svc_mode)
         self._shutdown: bool = False
         self._event_drop_count: int = 0
         # Logger de auditoria do app (era inacessível aos mixins; o caminho
@@ -845,20 +884,18 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
 
     def _tick_adaptive_polling(self) -> None:
-        if self._polling_enabled and not self._mock_mode:
+        if _adaptive_polling_guard(
+            self._polling_enabled, self._mock_mode, self._svc_mode_var
+        ):
             try:
                 self._spawn_io(self._polling_mgr.tick)
             except Exception:
                 log.exception("adaptive polling tick falhou ao despachar")
         try:
             nxt = self._polling_mgr.next_due_min()
-            if nxt is None:
-                delay_ms = C.POLL_MIN_INTERVAL * 1000
-            else:
-                delay_ms = max(
-                    C.POLL_TICK_FLOOR_MS,
-                    int((nxt - time.time()) * 1000),
-                )
+            delay_ms = _adaptive_rearm_delay_ms(
+                nxt, time.time(), C.POLL_TICK_FLOOR_MS
+            )
             self._adaptive_timer.start(delay_ms)
         except Exception:
             # B-1: re-arm nunca deve morrer com o timer — polling continua.
