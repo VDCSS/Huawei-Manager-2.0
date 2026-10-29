@@ -149,6 +149,31 @@ def test_release_and_dispose(factory):
     s2.disconnect.assert_called()
 
 
+def test_default_builder_wires_netmiko_session(monkeypatch, audit_logger):
+    """Caminho de produção: NetmikoSession + SSHSouthbound reais (classes mockadas)."""
+    import huawei_manager.sdn_controller.session_factory as sf
+
+    netmiko_cls = MagicMock()
+    ssb_cls = MagicMock()
+    monkeypatch.setattr(sf, "NetmikoSession", netmiko_cls)
+    monkeypatch.setattr(sf, "SSHSouthbound", ssb_cls)
+
+    backend = _FakeBackend()
+    fac = SSHSessionFactory(backend, audit_logger, timeout=42, max_retries=3)
+
+    ssb = fac._default_builder(backend, audit_logger)
+
+    netmiko_cls.assert_called_once_with(backend, audit_logger)
+    ssb_cls.assert_called_once_with(
+        backend,
+        audit_logger,
+        timeout=42,
+        max_retries=3,
+        session=netmiko_cls.return_value,
+    )
+    assert ssb is ssb_cls.return_value
+
+
 def test_ui_session_untouched(factory):
     # VNF completo: factory NUNCA consulta backend (ROUTER_* não usado)
     factory.factory.get(_device())
