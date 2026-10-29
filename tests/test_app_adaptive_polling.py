@@ -20,10 +20,25 @@ from huawei_manager.app import (
 )
 
 
+class _FakeFuture:
+    """Future mínimo para testar o re-arm após a conclusão do tick."""
+
+    def __init__(self) -> None:
+        self.callbacks: list = []
+
+    def add_done_callback(self, cb) -> None:
+        self.callbacks.append(cb)
+
+    def fire(self) -> None:
+        for cb in list(self.callbacks):
+            cb(self)
+
+
 class _FakePollingApp:
     """Empresta o método real de AppCore sem instanciar QMainWindow."""
 
     _tick_adaptive_polling = AppCore._tick_adaptive_polling
+    _rearm_adaptive_timer = AppCore._rearm_adaptive_timer
 
     def __init__(
         self,
@@ -32,14 +47,18 @@ class _FakePollingApp:
         mock_mode: bool = False,
         svc_mode: str = "cli",
         next_due: float | None = None,
+        shutdown: bool = False,
     ) -> None:
         self._polling_enabled = enabled
         self._mock_mode = mock_mode
         self._svc_mode_var = svc_mode
+        self._shutdown = shutdown
         self._polling_mgr = MagicMock()
         self._polling_mgr.next_due_min.return_value = next_due
         self._adaptive_timer = MagicMock()
-        self._spawn_io = MagicMock()
+        self._future = _FakeFuture()
+        self._spawn_io = MagicMock(return_value=self._future)
+        self._dispatch = MagicMock(side_effect=lambda fn: fn())
 
 
 class TestGuard:
@@ -47,6 +66,18 @@ class TestGuard:
         app = _FakePollingApp()
         app._tick_adaptive_polling()
         app._spawn_io.assert_called_once_with(app._polling_mgr.tick)
+        # Timer só re-arma depois que o tick conclui (M1)
+        app._adaptive_timer.start.assert_not_called()
+        app._future.fire()
+        app._adaptive_timer.start.assert_called_once_with(
+            C.POLL_MIN_INTERVAL * 1000
+        )
+
+    def test_shutdown_does_not_dispatch_or_rearm(self) -> None:
+        app = _FakePollingApp(shutdown=True)
+        app._tick_adaptive_polling()
+        app._spawn_io.assert_not_called()
+        app._adaptive_timer.start.assert_not_called()
 
     @pytest.mark.parametrize(
         "kwargs",
@@ -85,6 +116,7 @@ class TestRearm:
         app = _FakePollingApp()
         app._polling_mgr.next_due_min.side_effect = RuntimeError("boom")
         app._tick_adaptive_polling()
+        app._future.fire()
         app._adaptive_timer.start.assert_called_once_with(
             C.POLL_TICK_FLOOR_MS
         )

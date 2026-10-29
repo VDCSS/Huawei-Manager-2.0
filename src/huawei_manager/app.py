@@ -883,14 +883,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self.clock_lbl.setText(
             datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
 
-    def _tick_adaptive_polling(self) -> None:
-        if _adaptive_polling_guard(
-            self._polling_enabled, self._mock_mode, self._svc_mode_var
-        ):
-            try:
-                self._spawn_io(self._polling_mgr.tick)
-            except Exception:
-                log.exception("adaptive polling tick falhou ao despachar")
+    def _rearm_adaptive_timer(self) -> None:
+        if getattr(self, "_shutdown", False):
+            return
         try:
             nxt = self._polling_mgr.next_due_min()
             delay_ms = _adaptive_rearm_delay_ms(
@@ -901,6 +896,26 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             # B-1: re-arm nunca deve morrer com o timer — polling continua.
             log.exception("adaptive polling re-arm falhou")
             self._adaptive_timer.start(C.POLL_TICK_FLOOR_MS)
+
+    def _tick_adaptive_polling(self) -> None:
+        if getattr(self, "_shutdown", False):
+            return
+        if _adaptive_polling_guard(
+            self._polling_enabled, self._mock_mode, self._svc_mode_var
+        ):
+            try:
+                fut = self._spawn_io(self._polling_mgr.tick)
+            except Exception:
+                log.exception("adaptive polling tick falhou ao despachar")
+            else:
+                if fut is not None:
+                    # Re-arma só quando o tick concluir: next_due_min() já
+                    # enxerga o estado novo e não há ticks sobrepostos.
+                    fut.add_done_callback(
+                        lambda _f: self._dispatch(self._rearm_adaptive_timer)
+                    )
+                    return
+        self._rearm_adaptive_timer()
 
     # ── Tema ──────────────────────────────────────────────────────────
     def _toggle_theme(self) -> None:
