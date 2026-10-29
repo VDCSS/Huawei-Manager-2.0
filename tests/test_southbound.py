@@ -572,6 +572,37 @@ class TestSSHSouthboundServiceCommands:
         assert "output2" in out
         assert mock_session.run_cli_rpc.call_count == 2
 
+    def test_detailed_preserves_per_command_output(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        mock_session = MagicMock()
+        mock_session.run_cli_rpc.side_effect = ["output1", "output2"]
+        sb._session = mock_session
+        sb._connected = True
+
+        results = sb.send_service_commands_detailed(
+            ["display clock", "display version"]
+        )
+        assert results == [
+            ("display clock", "output1"),
+            ("display version", "output2"),
+        ]
+
+    def test_detailed_config_mode(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        mock_session = MagicMock()
+        mock_session.edit_config.return_value = (True, "ok")
+        sb._session = mock_session
+        sb._connected = True
+
+        results = sb.send_service_commands_detailed(
+            ["vlan 10"], config_mode=True
+        )
+        assert results == [("vlan 10", "ok")]
+
     def test_raises_if_not_connected(self):
         from huawei_manager.sdn_controller.southbound import SSHSouthbound
 

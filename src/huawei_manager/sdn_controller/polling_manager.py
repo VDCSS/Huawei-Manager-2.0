@@ -42,6 +42,11 @@ _ERROR_PREFIXES = ("ERRO:", "Sem conex", "Error:", "Unknown command",
                    "Incomplete command", "Ambiguous", "Unrecognized",
                    "Invalid input")
 
+# Comando que o device nao suporta (ex.: BGP/OSPF ausente) e esquecido por
+# este TTL para nao ser reenviado a cada poll. Curto o bastante para detectar
+# protocolo habilitado depois, longo o bastante para nao poluir o CLI.
+_UNSUPPORTED_TTL_SECS = 6 * 60 * 60
+
 
 def _normalize_output(text: str) -> str:
     """Normaliza output p/ comparação de estabilidade.
@@ -192,6 +197,9 @@ class PollingManager:
         self._next_due: dict[str, float] = {}
         self._next_due_lock = threading.Lock()
         self._tick_lock = threading.Lock()
+        # (device_id, comando) -> epoch de expiracao do cache de nao suportados
+        self._unsupported: dict[tuple[str, str], float] = {}
+        self._unsupported_lock = threading.Lock()
 
     @property
     def enabled(self) -> bool:
@@ -239,20 +247,55 @@ class PollingManager:
         try:
             svcs = self._matching_services(device)
             if not svcs:
+                # Nenhum serviço do catálogo casa com o tipo: não reavalia
+                # a cada tick.
+                self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
                 return
             ssb = self._factory.get(device)
             if ssb is None:
                 # Falha de conexão/validação — backoff p/ não martelar
                 self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
                 return
-            cmds = [c for s in svcs for c in (s.cli_commands or [])]
-            out = ssb.send_service_commands(cmds)
-            if _is_error_string(out):
-                log.warning("device %s erro-como-string — instável", device.id)
-                self._decider.next_interval(device.id, False)
-                self._set_next_due(device.id, POLL_MIN_INTERVAL)
+            cmds = [
+                c
+                for s in svcs
+                for c in (s.cli_commands or [])
+                if not self._is_unsupported(device.id, c)
+            ]
+            if not cmds:
+                # Todos os comandos já são conhecidos como não suportados:
+                # não há o que medir nem por que reenviar CLI.
+                self._set_next_due(device.id, POLL_MAX_INTERVAL)
                 return
-            norm = _normalize_output(out)
+            results = ssb.send_service_commands_detailed(cmds)
+            ok_outputs: list[str] = []
+            failed: list[str] = []
+            for cmd, out in results:
+                if _is_error_string(out):
+                    failed.append(cmd)
+                else:
+                    ok_outputs.append(out)
+            if failed:
+                new = self._remember_unsupported(device.id, failed)
+                if new:
+                    log.warning(
+                        "device %s: %d comando(s) nao suportado(s) — "
+                        "ignorados no hash por %dh",
+                        device.id, new, _UNSUPPORTED_TTL_SECS // 3600,
+                    )
+            if not ok_outputs:
+                # Nenhum comando respondeu: backoff de falha (D20) e reinicia
+                # a janela de estabilidade para não herdar estado antigo.
+                self._tracker.reset(device.id)
+                self._decider.next_interval(device.id, False)
+                self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
+                return
+            norm = _normalize_output("\n\n".join(ok_outputs))
+            if not norm.strip():
+                # Output vazio/só contadores não prova estabilidade.
+                self._tracker.reset(device.id)
+                self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
+                return
             sha = hashlib.sha256(norm.encode("utf-8")).hexdigest()
             stable = self._tracker.record(device.id, sha)
             interval = self._decider.next_interval(device.id, stable)
@@ -267,6 +310,30 @@ class PollingManager:
         # (poll > intervalo) nunca é re-agendado no passado nem martelado.
         with self._next_due_lock:
             self._next_due[device_id] = time.time() + interval
+
+    def _is_unsupported(self, device_id: str, cmd: str) -> bool:
+        """True se o comando está no cache de não suportados e não expirou."""
+        key = (device_id, cmd)
+        now = time.time()
+        with self._unsupported_lock:
+            expires = self._unsupported.get(key)
+            if expires is None:
+                return False
+            if expires <= now:
+                del self._unsupported[key]
+                return False
+            return True
+
+    def _remember_unsupported(self, device_id: str, cmds: list[str]) -> int:
+        """Cacheia comandos não suportados; retorna quantos são novos."""
+        expires = time.time() + _UNSUPPORTED_TTL_SECS
+        new = 0
+        with self._unsupported_lock:
+            for cmd in cmds:
+                if (device_id, cmd) not in self._unsupported:
+                    new += 1
+                self._unsupported[(device_id, cmd)] = expires
+        return new
 
     def _matching_services(self, device: Device) -> list[ServiceDef]:
         vtype = device.type.upper()
@@ -287,6 +354,8 @@ class PollingManager:
             d: self._decider.get_current_interval(d)
             for d in devices
         }
+        with self._unsupported_lock:
+            unsupported = len(self._unsupported)
         return {
             "enabled": self._enabled,
             "devices": len(devices),
@@ -294,6 +363,7 @@ class PollingManager:
             "active_sessions": self._factory.active_sessions,
             "stable": self._tracker.get_all_states(),
             "intervals": intervals,
+            "unsupported_commands": unsupported,
         }
 
     def force_poll(self, device_id: str) -> None:
