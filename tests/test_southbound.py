@@ -572,6 +572,20 @@ class TestSSHSouthboundServiceCommands:
         assert "output2" in out
         assert mock_session.run_cli_rpc.call_count == 2
 
+    def test_send_command_forwards_read_timeout(self):
+        from huawei_manager.sdn_controller.southbound import SSHSouthbound
+
+        sb = SSHSouthbound(EnvBackend(), AuditLogger())
+        mock_session = MagicMock()
+        mock_session.run_cli_rpc.return_value = "ok"
+        sb._session = mock_session
+        sb._connected = True
+
+        assert sb.send_command("display clock", read_timeout=7) == "ok"
+        mock_session.run_cli_rpc.assert_called_once_with(
+            "display clock", read_timeout=7
+        )
+
     def test_detailed_preserves_per_command_output(self):
         from huawei_manager.sdn_controller.southbound import SSHSouthbound
 

@@ -227,6 +227,8 @@ POLL_MAX_DEVICES = 10           # bound por tick (enforcement no loop)
 POLL_MAX_WORKERS = 4            # paralelismo máximo do sub-pool
 POLL_ORIGIN = "auto-poll"       # origin no audit (via wrapper)
 POLL_TICK_FLOOR_MS = 5000       # piso do re-arm (evita busy loop)
+POLL_READ_TIMEOUT = 30          # segundos por comando no polling
+POLL_DEVICE_BUDGET_SECS = 90    # orçamento de parede por device/tick
 
 # Serviços estruturalmente estáveis — EXCLUÍDOS os voláteis:
 # sys-cpu, sys-mem, fw-session-table, ap-client (nunca estabilizam).

@@ -16,11 +16,13 @@ from typing import Any
 
 from huawei_manager.constants import (
     POLL_DEFAULT_INTERVAL,
+    POLL_DEVICE_BUDGET_SECS,
     POLL_HISTORY_SIZE,
     POLL_MAX_DEVICES,
     POLL_MAX_INTERVAL,
     POLL_MAX_WORKERS,
     POLL_MIN_INTERVAL,
+    POLL_READ_TIMEOUT,
     POLL_SERVICES,
     POLL_STABLE_MULTIPLIER,
 )
@@ -200,6 +202,8 @@ class PollingManager:
         # (device_id, comando) -> epoch de expiracao do cache de nao suportados
         self._unsupported: dict[tuple[str, str], float] = {}
         self._unsupported_lock = threading.Lock()
+        self._truncation_warned = False
+        self._last_status_log = 0.0
 
     @property
     def enabled(self) -> bool:
@@ -214,7 +218,8 @@ class PollingManager:
         if not self._enabled:
             return
         if not self._tick_lock.acquire(blocking=False):
-            log.warning("tick sobreposto ignorado")
+            # Defesa em profundidade: o timer só re-arma após o tick.
+            log.debug("tick sobreposto ignorado")
             return
         try:
             self._tick_impl()
@@ -227,7 +232,16 @@ class PollingManager:
         try:
             now = time.time()
             devices = self._device_service.load_inventory()
-            online = [v for v in devices if v.status == "online"][: self._max_devices]
+            all_online = [v for v in devices if v.status == "online"]
+            online = all_online[: self._max_devices]
+            if len(all_online) > self._max_devices and not self._truncation_warned:
+                log.warning(
+                    "polling: %d devices online, limite %d por tick — "
+                    "os demais aguardam ciclos seguintes",
+                    len(all_online), self._max_devices,
+                )
+                self._truncation_warned = True
+            self._prune_state({v.id for v in online})
             with self._next_due_lock:
                 next_due = dict(self._next_due)
             due = [v for v in online if now >= next_due.get(v.id, 0)]
@@ -240,6 +254,15 @@ class PollingManager:
                         exc = fut.exception()
                         if exc is not None:
                             log.error("device poll future falhou: %s", exc)
+            if now - self._last_status_log >= 300:
+                self._last_status_log = now
+                with self._unsupported_lock:
+                    unsupported = len(self._unsupported)
+                log.info(
+                    "polling: %d online, %d due, %d sessions, unsupported=%d",
+                    len(online), len(due),
+                    self._factory.active_sessions, unsupported,
+                )
         finally:
             self._factory.purge_expired()
 
@@ -267,7 +290,27 @@ class PollingManager:
                 # não há o que medir nem por que reenviar CLI.
                 self._set_next_due(device.id, POLL_MAX_INTERVAL)
                 return
-            results = ssb.send_service_commands_detailed(cmds)
+            results: list[tuple[str, str]] = []
+            deadline = time.monotonic() + POLL_DEVICE_BUDGET_SECS
+            budget_exhausted = False
+            for cmd in cmds:
+                if time.monotonic() >= deadline:
+                    budget_exhausted = True
+                    break
+                results.extend(
+                    ssb.send_service_commands_detailed(
+                        [cmd], read_timeout=POLL_READ_TIMEOUT
+                    )
+                )
+            if budget_exhausted:
+                log.warning(
+                    "device %s: orcamento de %ss esgotado — poll parcial",
+                    device.id, POLL_DEVICE_BUDGET_SECS,
+                )
+                self._tracker.reset(device.id)
+                self._decider.next_interval(device.id, False)
+                self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
+                return
             ok_outputs: list[str] = []
             failed: list[str] = []
             for cmd, out in results:
@@ -304,6 +347,19 @@ class PollingManager:
             log.exception("device %s skip", device.id)
             self._factory.release(device.id)
             self._set_next_due(device.id, POLL_DEFAULT_INTERVAL)
+
+    def _prune_state(self, online_ids: set[str]) -> None:
+        """Descarta estado de devices que saíram do snapshot online (M5)."""
+        with self._next_due_lock:
+            stale = [d for d in self._next_due if d not in online_ids]
+            for device_id in stale:
+                del self._next_due[device_id]
+        for device_id in stale:
+            self._tracker.reset(device_id)
+            self._decider.reset(device_id)
+        with self._unsupported_lock:
+            for key in [k for k in self._unsupported if k[0] not in online_ids]:
+                del self._unsupported[key]
 
     def _set_next_due(self, device_id: str, interval: float) -> None:
         # Anchora no tempo DE CONCLUSÃO, não no início do tick: device lento
@@ -343,9 +399,18 @@ class PollingManager:
         ]
 
     def next_due_min(self) -> float | None:
+        """Menor vencimento futuro; ``now`` se todos venceram; None se vazio.
+
+        Valores no passado (device offline/removido) não podem fixar o timer
+        no piso de 5s para sempre (M5).
+        """
         with self._next_due_lock:
             values = list(self._next_due.values())
-        return min(values) if values else None
+        if not values:
+            return None
+        now = time.time()
+        future = [t for t in values if t > now]
+        return min(future) if future else now
 
     def get_status(self) -> dict[str, Any]:
         with self._next_due_lock:

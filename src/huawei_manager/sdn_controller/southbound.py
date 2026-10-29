@@ -236,12 +236,17 @@ class SSHSouthbound(SouthboundProtocol):
         """Atualiza o papel de acesso usado pelo validator."""
         self._access_role = role
 
-    def send_command(self, command: str) -> str:
+    def send_command(
+        self, command: str, read_timeout: int | None = None
+    ) -> str:
         """Envia um comando show e retorna o output.
 
         Se um ``validator`` foi configurado, valida o comando antes
         de executar. Comandos negados disparam ``SdnAuthError``;
         falhas de execucao disparam ``SdnCommandError``.
+
+        ``read_timeout`` opcional (segundos); None preserva o default do
+        caminho manual (120s). O polling passa um valor menor por comando.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
@@ -252,7 +257,9 @@ class SSHSouthbound(SouthboundProtocol):
                 log.warning("send_command blocked: %s — %s", command[:60], vr.reason)
                 raise SdnAuthError(msg)
         try:
-            return self._session.run_cli_rpc(command)
+            if read_timeout is None:
+                return self._session.run_cli_rpc(command)
+            return self._session.run_cli_rpc(command, read_timeout=read_timeout)
         except Exception as exc:
             sanitized = _sanitize(str(exc))
             log.error("send_command failed: %s", sanitized)
@@ -296,6 +303,7 @@ class SSHSouthbound(SouthboundProtocol):
         commands: list[str],
         config_mode: bool = False,
         requires_privilege: bool = False,
+        read_timeout: int | None = None,
     ) -> list[tuple[str, str]]:
         """Executa comandos de servico e devolve ``(comando, output)``.
 
@@ -319,7 +327,9 @@ class SSHSouthbound(SouthboundProtocol):
                     _ok, msg = self.send_config([cmd])
                     results.append((cmd, msg))
                 else:
-                    results.append((cmd, self.send_command(cmd)))
+                    results.append(
+                        (cmd, self.send_command(cmd, read_timeout=read_timeout))
+                    )
         except SdnError:
             self.invalidate_connection()
             raise

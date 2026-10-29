@@ -394,6 +394,13 @@ class TestOnCloseLifecycle:
         app._on_close()
         app._session_factory.dispose.assert_called_once()
 
+    def test_on_close_disables_polling(self) -> None:
+        app = _NotifyFakeApp()
+        app._polling_mgr = MagicMock()
+        app._polling_mgr.enabled = True
+        app._on_close()
+        assert app._polling_mgr.enabled is False
+
     def test_on_close_handles_missing_timers(self) -> None:
         app = _NotifyFakeApp()
         app._poll_timer = None
