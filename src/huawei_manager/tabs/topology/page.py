@@ -95,9 +95,21 @@ class TopologyTab:
             on_delete=ctx.delete_device,
         )
         state.topo_canvas = canvas
-        _ui.page_layout(p).addWidget(canvas, stretch=1)
 
-        status_lbl = QLabel("Inventário: 0 devices", p)
+        current_devices = list(ctx.devices())
+        if current_devices:
+            canvas.set_access(access)
+            canvas.update_devices(current_devices)
+            status_lbl = QLabel(f"Inventário: {len(current_devices)} devices", p)
+        else:
+            status_lbl = QLabel("Inventário: 0 devices", p)
+
+        selected = ctx.device()
+        if selected:
+            canvas._selected = selected
+            info_lbl.setText(f"  {selected.name} ({selected.host})")
+
+        _ui.page_layout(p).addWidget(canvas, stretch=1)
         status_lbl.setStyleSheet(_ui.css_label(C.NEON_AMBER, C.BG_CARD, 10))
         state.device_status_lbl = status_lbl
         _ui.page_layout(p).addWidget(status_lbl)

@@ -1,3 +1,49 @@
 {
-  "vnfs": []
+  "vnfs": [
+    {
+      "id": "dev-001-roteador-gredes",
+      "name": "Roteador Gredes",
+      "host": "10.100.64.254",
+      "port": 55022,
+      "type": "ROUTER",
+      "status": "offline",
+      "version": "",
+      "location": "Lab Gredes",
+      "username": "gredes",
+      "password": "",
+      "password_env": "ROUTER_PASSWORD",
+      "ssh_key": "",
+      "extra_metadata": {}
+    },
+    {
+      "id": "dev-002-switch-labmatica",
+      "name": "LabMatica - SWITCH - Secundário",
+      "host": "10.100.64.252",
+      "port": 55022,
+      "type": "SWITCH",
+      "status": "offline",
+      "version": "",
+      "location": "LabMatica",
+      "username": "labmatica",
+      "password": "",
+      "password_env": "ROUTER_PASSWORD",
+      "ssh_key": "",
+      "extra_metadata": {}
+    },
+    {
+      "id": "dev-003-roteador-externo",
+      "name": "Roteador Externo Gredes",
+      "host": "200.129.176.42",
+      "port": 55022,
+      "type": "ROUTER",
+      "status": "offline",
+      "version": "",
+      "location": "Lab Externo",
+      "username": "gredes",
+      "password": "",
+      "password_env": "ROUTER_PASSWORD",
+      "ssh_key": "",
+      "extra_metadata": {}
+    }
+  ]
 }

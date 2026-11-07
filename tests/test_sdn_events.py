@@ -16,6 +16,7 @@ class _FakeApp(AppStateMixin):
         self._current_page = "home"
         self._refresh_devices = MagicMock()
         self._spawn_io = MagicMock()
+        self._devices: list = []
 
 
 class TestOnSdnEvent:

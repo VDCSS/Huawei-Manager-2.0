@@ -59,7 +59,7 @@ from huawei_manager.app_state import AppStateMixin
 from huawei_manager.app_threading import ThreadingMixin
 from huawei_manager.command import ConfigCommand
 from huawei_manager.constants import set_theme
-from huawei_manager.db import get_connection, init_database
+from huawei_manager.db import get_connection, get_database_path, init_database
 from huawei_manager.device_models import Device
 from huawei_manager.device_repository import DeviceRepository
 from huawei_manager.handlers import EventHandlers
@@ -226,11 +226,12 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # Última mutação de configuração (Editor/Serviços) com snapshot
         # pré-mudança — alimenta o rollback da paleta de comandos.
         self._last_config_command: ConfigCommand | None = None
+        db_path = get_database_path()
         self._controller = ControllerCore(
             event_queue=self._event_queue,
-            dump_path=str(Path.home() / ".huawei_manager" / "sdn_state.json"),
+            dump_path=str(db_path.parent / "sdn_state.json"),
         )
-        db_conn = get_connection()
+        db_conn = get_connection(db_path)
         init_database(db_conn)
 
         # Auto-generate VNF_ENCRYPT_KEY on first boot (fail-closed: if put fails, log and continue)
@@ -283,7 +284,11 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._admin_locked_until: float = 0
 
         self._target_device: Device | None = None
-        self._devices: list[Device] = []
+        try:
+            self._devices: list[Device] = self._device_service.load_inventory()
+        except Exception as exc:
+            log.warning("Falha ao carregar inventário inicial: %s", exc)
+            self._devices = []
         io_w = int(os.environ.get("HW_IO_WORKERS", "6"))
         cpu_w = int(os.environ.get("HW_CPU_WORKERS", "2"))
         self._io_executor = ThreadPoolExecutor(max_workers=io_w, thread_name_prefix="hw-io")
@@ -324,6 +329,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._command_palette = None
         self._setup_bindings()
         self._show_page("home")
+        self._spawn_io(self._refresh_devices)
 
     def _init_common_attrs(self) -> None:
         """Garante que todos os atributos dos mixins existem antes do uso."""
@@ -866,6 +872,16 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             btn._activate()
             self._active_btn = btn
         self._current_page = key
+        if key == "home":
+            self._refresh_dashboard()
+        elif key == "topology":
+            canvas = self._topo_canvas_widget()
+            if canvas is not None:
+                canvas.set_access(self._access_level)
+                canvas.update_devices(self._devices)
+            status_lbl = self._device_status_widget()
+            if status_lbl is not None:
+                status_lbl.setText(f"Inventário: {len(self._devices)} devices")
 
     def _rebuild_page(self, key: str) -> None:
         td = tab_by_key(self._tabs, key)
