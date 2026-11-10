@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Huawei Manager
+Comment=Administracao de equipamentos Huawei via SSH/CLI
+Exec=__EXEC_PATH__
+Icon=huawei-manager
+Terminal=false
+Categories=Network;System;
+StartupWMClass=huawei-manager

@@ -1,0 +1,19 @@
+LLDP neighbor information has 2 ports:
+
+GigabitEthernet0/0/0:
+  Neighbor index     : 1
+  Neighbor type      : bridge
+  Neighbor MAC       : 00e0-fc78-9abc
+  Neighbor chassis ID: 00e0-fc78-9abc
+  Neighbor port ID   : GigabitEthernet0/0/0
+  Neighbor system name: CE6800-02
+  Time to live       : 120 seconds
+
+40GE0/0/0:
+  Neighbor index     : 2
+  Neighbor type      : bridge
+  Neighbor MAC       : 00e0-fcde-f012
+  Neighbor chassis ID: 00e0-fcde-f012
+  Neighbor port ID   : 40GE0/0/0
+  Neighbor system name: CE12800-01
+  Time to live       : 120 seconds

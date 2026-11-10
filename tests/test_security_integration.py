@@ -1,0 +1,176 @@
+"""Integration tests for SDN security modules (CommandValidator, DryRunEngine, NorthboundAPI, ControllerCore)."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+from huawei_manager.sdn_controller.core import ControllerCore
+from huawei_manager.sdn_controller.dryrun import DryRunEngine
+from huawei_manager.sdn_controller.event_queue import Event, EventQueue, EventType
+from huawei_manager.sdn_controller.validator import CommandValidator
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  B1 — CommandValidator: bloqueia comandos perigosos
+# ═══════════════════════════════════════════════════════════════════
+class TestCommandValidatorBlocking:
+    """Verifica que o CommandValidator bloqueia padroes de comandos destrutivos."""
+
+    def test_b1_blocks_format_flash(self):
+        v = CommandValidator()
+        result = v.validate("format flash:", role="user")
+        assert not result.allowed
+        assert result.reason is not None
+        assert "denied" in result.reason
+
+    def test_b1_blocks_reset_saved_config(self):
+        v = CommandValidator()
+        result = v.validate("reset saved-configuration", role="user")
+        assert not result.allowed
+
+    def test_b1_blocks_delete(self):
+        v = CommandValidator()
+        result = v.validate("delete /unreserved vrpcfg.zip", role="user")
+        assert not result.allowed
+
+    def test_b1_blocks_undo_startup(self):
+        v = CommandValidator()
+        result = v.validate("undo startup", role="user")
+        assert not result.allowed
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  B2 — CommandValidator: bypass para admin/tecnico
+# ═══════════════════════════════════════════════════════════════════
+class TestCommandValidatorBypass:
+    """Admin/Tecnico podem bypassar comandos negados com flag bypass_2fa."""
+
+    def test_b2_admin_can_bypass(self):
+        v = CommandValidator()
+        result = v.validate("reset saved-configuration", role="admin")
+        assert result.allowed
+        assert result.bypass_2fa
+
+    def test_b2_tecnico_can_bypass(self):
+        v = CommandValidator()
+        result = v.validate("reset saved-configuration", role="tecnico")
+        assert result.allowed
+        assert result.bypass_2fa
+
+    def test_b2_user_cannot_bypass(self):
+        v = CommandValidator()
+        result = v.validate("reset saved-configuration", role="user")
+        assert not result.allowed
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  B3 — DryRunEngine: diff generation
+# ═══════════════════════════════════════════════════════════════════
+class TestDryRunEngineDiff:
+    """Gera diff corretamente entre config atual e proposta."""
+
+    def test_b3_diff_no_changes(self):
+        e = DryRunEngine()
+        report = e.diff("config", "config")
+        assert not report.has_changes
+
+    def test_b3_diff_detects_additions(self):
+        e = DryRunEngine()
+        report = e.diff("config\n", "config\nnew-line\n")
+        assert report.has_changes
+        assert report.total_added > 0
+
+    def test_b3_diff_detects_removals(self):
+        e = DryRunEngine()
+        report = e.diff("config\nold-line\n", "config\n")
+        assert report.has_changes
+        assert report.total_removed > 0
+
+    def test_b3_diff_summary(self):
+        e = DryRunEngine()
+        report = e.diff("a\nb\n", "a\nb\nc\n")
+        assert "added" in report.summary
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  B6 — ControllerCore: gerenciamento de estado
+# ═══════════════════════════════════════════════════════════════════
+class TestControllerCore:
+    """ControllerCore gerencia estado de dispositivos corretamente."""
+
+    def test_b6_register_device(self):
+        c = ControllerCore()
+        state = c.register("rtr-01", "10.0.0.1", 22, "router")
+        assert state.device_id == "rtr-01"
+        assert state.status == "unknown"
+
+    def test_b6_get_state(self):
+        c = ControllerCore()
+        c.register("rtr-01", "10.0.0.1", 22, "router")
+        state = c.get_state("rtr-01")
+        assert state is not None
+        assert state.host == "10.0.0.1"
+
+    def test_b6_get_state_nonexistent(self):
+        c = ControllerCore()
+        assert c.get_state("nonexistent") is None
+
+    def test_b6_deregister(self):
+        c = ControllerCore()
+        c.register("rtr-01", "10.0.0.1", 22, "router")
+        assert c.deregister("rtr-01")
+        assert c.get_state("rtr-01") is None
+
+    def test_b6_update_state(self):
+        c = ControllerCore()
+        c.register("rtr-01", "10.0.0.1", 22, "router")
+        c.update_state("rtr-01", status="online")
+        state = c.get_state("rtr-01")
+        assert state is not None
+        assert state.status == "online"
+
+    def test_b6_list_devices(self):
+        c = ControllerCore()
+        c.register("rtr-01", "10.0.0.1", 22, "router")
+        c.register("sw-01", "10.0.0.2", 22, "switch")
+        assert len(c.list_devices()) == 2
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  B7 — EventQueue: eventos e subscriptions
+# ═══════════════════════════════════════════════════════════════════
+class TestEventQueue:
+    """EventQueue thread-safe com prioridade e subscription."""
+
+    def test_b7_put_and_poll(self):
+        q = EventQueue()
+        assert q.poll(timeout=0.1) == []
+
+        e = Event(type=EventType.DEVICE_CONNECTED, source="rtr-01")
+        q.put(e)
+        events = q.poll(timeout=0.1)
+        assert len(events) == 1
+        assert events[0].type == EventType.DEVICE_CONNECTED
+        assert events[0].source == "rtr-01"
+
+    def test_b7_subscribe_callback(self):
+        q = EventQueue()
+        callback = MagicMock()
+        q.subscribe(EventType.DEVICE_CONNECTED, callback)
+
+        e = Event(type=EventType.DEVICE_CONNECTED, source="rtr-01")
+        q.put(e)
+        q.poll(timeout=0.1)
+
+        callback.assert_called_once_with(e)
+
+    def test_b7_event_priority(self):
+        q = EventQueue()
+        critical = Event(type=EventType.DEVICE_ERROR, source="rtr-01", priority=0)
+        normal = Event(type=EventType.DEVICE_CONNECTED, source="rtr-02", priority=10)
+        q.put(normal)
+        q.put(critical)
+
+        events = q.poll(timeout=0.1)
+        assert events[0].priority == 0
+        assert events[1].priority == 10

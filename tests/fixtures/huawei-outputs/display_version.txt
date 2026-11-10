@@ -1,0 +1,12 @@
+Huawei Versatile Routing Platform Software
+VRP (R) Software, Version 8.180 (CE6800 V200R005C10SPC800)
+Copyright (C) 2012-2020 Huawei Technologies Co., Ltd.
+ uptime is 42 days, 6 hours, 38 minutes
+
+CE6800 uptime is 42 days, 6 hours, 38 minutes
+Patch Package: CE6800-V200R005SPH010
+
+Hardware : 48x10GE + 6x40GE
+Memory  : 2048 Mbytes
+Flash   : 2048 Mbytes
+MAC Address : 00e0-fc12-3456

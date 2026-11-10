@@ -1,0 +1,200 @@
+"""Testes de caracterização — paridade dark/light em output, hover e cores semânticas (D1+D2+D3).
+
+Verifica que:
+- o QTextEdit read-only usa cor theme-aware (FG_CODE), não #b0b0d0 hardcoded;
+- NeonButton deriva hover/active de BG_INPUT/BG_SIDEBAR, não de #1a1a3a/#1a1a3e;
+- NEON_RED_L/NEON_AMBER_L existem, entram no LIGHT_THEME e têm contraste WCAG AA ≥ 4.5:1
+  sobre BG_CARD_L (#ffffff).
+"""
+from __future__ import annotations
+
+from PySide6.QtWidgets import QApplication
+
+import huawei_manager.constants as C
+from huawei_manager.widgets.neon_button import NeonButton
+from huawei_manager.widgets.neon_entry import output_text
+
+
+def _luminance(hex_color: str) -> float:
+    def chan(v: int) -> float:
+        s = v / 255
+        return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
+
+    r = int(hex_color[1:3], 16)
+    g = int(hex_color[3:5], 16)
+    b = int(hex_color[5:7], 16)
+    return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    la, lb = _luminance(a), _luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+class TestSemanticColors:
+    def test_light_theme_has_red_and_amber(self):
+        assert C.LIGHT_THEME["NEON_RED"] == C.NEON_RED_L
+        assert C.LIGHT_THEME["NEON_AMBER"] == C.NEON_AMBER_L
+
+    def test_red_contrast_aa_on_white(self):
+        assert _contrast(C.NEON_RED_L, C.BG_CARD_L) >= 4.5
+
+    def test_amber_contrast_aa_on_white(self):
+        assert _contrast(C.NEON_AMBER_L, C.BG_CARD_L) >= 4.5
+
+    def test_set_theme_light_swaps_red(self):
+        original = C.NEON_RED
+        try:
+            C.set_theme("light")
+            assert C.NEON_RED == C.NEON_RED_L
+        finally:
+            C.set_theme("dark")
+            assert C.NEON_RED == original
+
+
+class TestOutputThemeAware:
+    def test_readonly_uses_fg_code(self):
+        QApplication.instance() or QApplication([])
+        ed = output_text()
+        css = ed.styleSheet()
+        assert f"color: {C.FG_CODE}" in css
+        assert "#b0b0d0" not in css
+
+    def test_readonly_block_theme_aware(self):
+        # O bloco read-only herda FG_CODE (varia com o tema), nunca cor fixa.
+        QApplication.instance() or QApplication([])
+        ed = output_text()
+        block = ed.styleSheet().split("read-only")[1]
+        assert f"color: {C.FG_CODE}" in block
+
+
+class TestNeonButtonThemeAware:
+    def test_active_bg_painted_with_gradient(self):
+        import inspect
+
+        from huawei_manager.widgets import neon_button
+        source = inspect.getsource(neon_button.NeonButton.paintEvent)
+        # Estado ativo: gradiente cyan-soft → transparente (dark) e
+        # #e0e0e0 no light — nada de BG_INPUT/#1a1a3a hardcoded.
+        assert "QLinearGradient" in source
+        assert "0.09" in source
+        assert "#e0e0e0" in source
+        assert "#1a1a3a" not in source
+
+    def test_hover_uses_surface_hover(self):
+        import inspect
+
+        from huawei_manager.widgets import neon_button
+        source = inspect.getsource(neon_button.NeonButton.paintEvent)
+        assert "_C.BG_HOVER" in source
+        assert "#e4e4e4" in source
+        assert "#1a1a3e" not in source
+
+    def test_focus_ring_and_accent_bar(self):
+        import inspect
+
+        from huawei_manager.widgets import neon_button
+        source = inspect.getsource(neon_button.NeonButton.paintEvent)
+        assert "hasFocus" in source
+        assert "_C.NAV_ACCENT_BAR_W" in source
+        assert "drawRoundedRect" in source
+
+    def test_action_button_focus_border_color(self):
+        from huawei_manager.widgets.neon_button import ActionButton
+        QApplication.instance() or QApplication([])
+        btn = ActionButton(None, "x", None, C.NEON_CYAN)
+        btn._apply_style()
+        css = btn.styleSheet()
+        assert "ActionButton:focus" in css
+        assert "border-color:" in css
+
+
+class TestContrastAA:
+    def test_fg_dim_contrast_aa_on_dark(self):
+        assert _contrast(C.FG_DIM, C.BG_BASE) >= 4.5
+
+    def test_neon_purp_contrast_aa_on_dark(self):
+        assert _contrast(C.NEON_PURP, C.BG_BASE) >= 4.5
+
+    def test_fg_dim_light_contrast_aa_on_white(self):
+        assert _contrast(C.FG_DIM_L, C.BG_CARD_L) >= 4.5
+
+    def test_neon_purp_light_contrast_aa_on_white(self):
+        assert _contrast(C.NEON_PURP_L, C.BG_CARD_L) >= 4.5
+
+
+class TestFocusRules:
+    def test_themes_qss_listwidget_focus_paired(self):
+        from huawei_manager.themes import QSS_DARK, QSS_LIGHT
+        assert "QListWidget:focus" in QSS_DARK
+        assert "border-color: #00e5ff" in QSS_DARK
+        assert "QListWidget:focus" in QSS_LIGHT
+        assert f"border-color: {C.NEON_CYAN_L}" in QSS_LIGHT
+
+    def test_services_qss_listwidget_focus_paired(self):
+        import inspect
+
+        from huawei_manager.tabs.services.page import ServicesTab
+        source = inspect.getsource(ServicesTab._build_split)
+        assert "QListWidget:focus" in source
+        assert "border:" in source and "NEON_CYAN" in source
+
+
+class TestTemplatesAccessible:
+    def test_cmd_templates_use_qlistwidget(self):
+        from unittest.mock import MagicMock
+
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QListWidget
+
+        from huawei_manager.tabs._contract import TabContext
+        from huawei_manager.tabs.cmd import CmdTab
+        QApplication.instance() or QApplication([])
+        ctx = TabContext(
+            sb=MagicMock(), audit=None, event_bus=MagicMock(),
+            role=lambda: "admin", device=lambda: None,
+            dispatch=lambda fn: fn() if callable(fn) else None,
+            require_access=lambda level: True,
+            spawn_io=lambda fn, *args: None, spawn_cpu=lambda fn, *args: None,
+            watcher=MagicMock(), is_mock=lambda: False, toggle_mock=lambda: False,
+            show_auth_dialog=lambda: None, watcher_results=lambda: None,
+            set_watcher_results=MagicMock(), session=MagicMock(), run=MagicMock(),
+            set_status=MagicMock(), touch_session=MagicMock(), cmd_validator=None,
+            dry_run=None, get_last_config_command=lambda: None,
+            set_last_config_command=MagicMock(),
+            drv=lambda: MagicMock(),
+            devices=lambda: [],
+            show_page=MagicMock(),
+            svc_mode=lambda: "mock",
+            ui_bridge=lambda: None,
+            ensure_device_ready=MagicMock(return_value=None),
+            refresh_devices=MagicMock(),
+            show_device_dialog=MagicMock(),
+            delete_device=MagicMock(),
+            on_device_selected=MagicMock(),
+            clear_device_target=MagicMock(),
+        )
+        page = CmdTab().build(ctx)
+        tpl_list = page.findChild(QListWidget)
+        assert tpl_list is not None
+        assert tpl_list.count() > 0
+        assert tpl_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
+
+
+class TestNoPixelSize:
+    def test_no_setpixelsize_in_src(self):
+        # Implementação em Python puro: ``grep`` não existe no Windows e o
+        # teste falhava por ambiente, não por regressão real.
+        from pathlib import Path
+
+        src = Path(__file__).resolve().parents[1] / "src" / "huawei_manager"
+        hits = [
+            f"{path.relative_to(src)}:{lineno}: {line.strip()}"
+            for path in src.rglob("*.py")
+            for lineno, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            )
+            if "pixelSize" in line
+        ]
+        assert not hits, "pixelSize found:\n" + "\n".join(hits)

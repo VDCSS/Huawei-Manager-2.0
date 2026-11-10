@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Huawei Manager 2.0 — réplica desktop em HTML, CSS e JavaScript puro. Serviços de rede, ACLs e wizard de configuração.">
+  <meta name="theme-color" content="#05050d">
+  <title>Huawei Manager 2.0 · Serviços de Rede</title>
+
+  <script>
+    /* Aplica o tema antes da primeira pintura para evitar flash. */
+    (function () {
+      try {
+        var saved = localStorage.getItem("hw-manager-theme");
+        if (saved === "light" || saved === "dark") {
+          document.documentElement.dataset.theme = saved;
+        }
+      } catch (_) { /* storage indisponível */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body data-theme="dark">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SPRITE DE ÍCONES — SVG inline, sem dependências externas
+       ═══════════════════════════════════════════════════════════════════ -->
+  <svg class="svg-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="i-logo" viewBox="0 0 32 32">
+      <path d="M16 2.9 28 9.5v13L16 29.1 4 22.5v-13Z" fill="none" stroke="currentColor" stroke-width="1.55"/>
+      <ellipse cx="16" cy="16" rx="9.4" ry="4.1" fill="none" stroke="currentColor" stroke-width="1.45" transform="rotate(36 16 16)"/>
+      <ellipse cx="16" cy="16" rx="9.4" ry="4.1" fill="none" stroke="currentColor" stroke-width="1.45" transform="rotate(-36 16 16)"/>
+      <circle cx="16" cy="16" r="2.15" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-square" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24"><rect x="8" y="4" width="12" height="12" rx="1.5"/><path d="M16 16v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h3"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></symbol>
+    <symbol id="i-panel-collapse" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><path d="m16.5 9-3 3 3 3"/></symbol>
+    <symbol id="i-panel-expand" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><path d="m13.5 9 3 3-3 3"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><line x1="7" y1="7" x2="7.01" y2="7"/><line x1="7" y1="17" x2="7.01" y2="17"/></symbol>
+    <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="14" x2="14" y2="14"/></symbol>
+    <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+    <symbol id="i-shield-off" viewBox="0 0 24 24"><path d="M19.7 14A10.7 10.7 0 0 1 20 12V5l-8-3-3.2 1.2"/><path d="M4.7 4.7 4 5v7c0 6 8 10 8 10a15 15 0 0 0 4.2-3.1"/><line x1="2" y1="2" x2="22" y2="22"/></symbol>
+    <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><polyline points="8.5 12 11 14.5 15.5 10"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><path d="M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16.5 9"/></symbol>
+    <symbol id="i-alert-triangle" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.4.5.7.95.8H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.2Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="7 4 21 12 7 20 7 4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 22 7 12 12 2 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m11 12 10-10M16 4l4 4M18 2l4 4"/></symbol>
+    <symbol id="i-audit" viewBox="0 0 24 24"><path d="M9 3h6l4 4v14H5V3Z"/><polyline points="9 12 11 14 15 10"/><line x1="9" y1="18" x2="15" y2="18"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/><line x1="12" y1="2" x2="12" y2="10"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4.2 18a9 9 0 1 1 15.6 0"/><line x1="12" y1="14" x2="16" y2="9"/><circle cx="12" cy="14" r="1.5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></symbol>
+  </svg>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       ÁREA DE TRABALHO / JANELA DESKTOP
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="desktop" id="desktop">
+
+    <div class="desktop-icons" aria-hidden="false">
+      <button class="desktop-shortcut" id="desktopShortcut" type="button" aria-label="Abrir Huawei Manager">
+        <span class="desktop-shortcut__icon"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+        <span>Huawei Manager</span>
+      </button>
+    </div>
+
+    <section class="app-window" id="appWindow" aria-label="Huawei Manager 2.0">
+
+      <!-- Barra de título -->
+      <header class="titlebar" id="titlebar">
+        <div class="titlebar__identity">
+          <span class="titlebar__icon"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+          <span class="titlebar__title">Huawei Manager</span>
+          <span class="titlebar__version">2.0</span>
+          <span class="titlebar__separator" aria-hidden="true"></span>
+          <span class="titlebar__context" id="windowContext">Serviços de Rede</span>
+        </div>
+        <div class="window-controls" aria-label="Controles da janela">
+          <button class="window-control" id="winMinimize" type="button" title="Minimizar" aria-label="Minimizar janela">
+            <svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg>
+          </button>
+          <button class="window-control" id="winMaximize" type="button" title="Maximizar" aria-label="Maximizar janela" aria-pressed="false">
+            <svg class="icon icon--max" aria-hidden="true"><use href="#i-square"/></svg>
+            <svg class="icon icon--restore" aria-hidden="true"><use href="#i-restore"/></svg>
+          </button>
+          <button class="window-control window-control--close" id="winClose" type="button" title="Fechar" aria-label="Fechar janela">
+            <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Barra de menus -->
+      <nav class="menubar" aria-label="Menu principal">
+        <div class="menubar__items">
+          <div class="menu">
+            <button class="menu__trigger" type="button" data-menu="arquivo" aria-expanded="false" aria-haspopup="true">Arquivo</button>
+            <div class="menu__dropdown" role="menu">
+              <button type="button" role="menuitem" data-menu-action="backup"><svg class="icon"><use href="#i-archive"/></svg> Novo backup <kbd>Ctrl+B</kbd></button>
+              <button type="button" role="menuitem" data-menu-action="config"><svg class="icon"><use href="#i-download"/></svg> Exportar configuração</button>
+              <span class="menu__sep" role="separator"></span>
+              <button type="button" role="menuitem" data-menu-action="close"><svg class="icon"><use href="#i-power"/></svg> Sair <kbd>Alt+F4</kbd></button>
+            </div>
+          </div>
+          <div class="menu">
+            <button class="menu__trigger" type="button" data-menu="editar" aria-expanded="false" aria-haspopup="true">Editar</button>
+            <div class="menu__dropdown" role="menu">
+              <button type="button" role="menuitem" data-menu-action="settings"><svg class="icon"><use href="#i-settings"/></svg> Preferências</button>
+              <button type="button" role="menuitem" data-menu-action="theme"><svg class="icon"><use href="#i-sun"/></svg> Alternar tema <kbd>Ctrl+J</kbd></button>
+              <button type="button" role="menuitem" data-menu-action="search"><svg class="icon"><use href="#i-search"/></svg> Buscar serviço <kbd>Ctrl+K</kbd></button>
+            </div>
+          </div>
+          <div class="menu">
+            <button class="menu__trigger" type="button" data-menu="exibir" aria-expanded="false" aria-haspopup="true">Exibir</button>
+            <div class="menu__dropdown" role="menu">
+              <button type="button" role="menuitem" data-menu-action="sidebar"><svg class="icon"><use href="#i-panel-collapse"/></svg> Recolher barra lateral <kbd>Ctrl+B</kbd></button>
+              <button type="button" role="menuitem" data-menu-action="maximize"><svg class="icon"><use href="#i-square"/></svg> Maximizar janela</button>
+              <span class="menu__sep" role="separator"></span>
+              <button type="button" role="menuitem" data-menu-action="fullscreen"><svg class="icon"><use href="#i-monitor"/></svg> Tela cheia <kbd>F11</kbd></button>
+            </div>
+          </div>
+          <div class="menu">
+            <button class="menu__trigger" type="button" data-menu="ferramentas" aria-expanded="false" aria-haspopup="true">Ferramentas</button>
+            <div class="menu__dropdown" role="menu">
+              <button type="button" role="menuitem" data-menu-action="wizard"><svg class="icon"><use href="#i-shield"/></svg> Nova regra ACL <kbd>Ctrl+N</kbd></button>
+              <button type="button" role="menuitem" data-menu-action="commands"><svg class="icon"><use href="#i-terminal"/></svg> Editor de comandos</button>
+              <button type="button" role="menuitem" data-menu-action="catalog"><svg class="icon"><use href="#i-zap"/></svg> Catálogo de serviços</button>
+            </div>
+          </div>
+          <div class="menu">
+            <button class="menu__trigger" type="button" data-menu="ajuda" aria-expanded="false" aria-haspopup="true">Ajuda</button>
+            <div class="menu__dropdown" role="menu">
+              <button type="button" role="menuitem" data-menu-action="about"><svg class="icon"><use href="#i-info"/></svg> Sobre o Huawei Manager</button>
+              <button type="button" role="menuitem" data-menu-action="shortcuts"><svg class="icon"><use href="#i-key"/></svg> Atalhos de teclado</button>
+            </div>
+          </div>
+        </div>
+        <div class="menubar__meta">
+          <span class="menubar__dot" aria-hidden="true"></span>
+          <span id="menubarTarget">ROTEADOR-LAB</span>
+          <span class="menubar__sep" aria-hidden="true"></span>
+          <span>SSH · modo mock</span>
+        </div>
+      </nav>
+
+      <!-- Corpo do aplicativo -->
+      <div class="app-shell">
+        <div class="sidebar-scrim" id="sidebarScrim" aria-hidden="true"></div>
+
+        <!-- ═══════════════ SIDEBAR ═══════════════ -->
+        <aside class="sidebar" id="sidebar" aria-label="Navegação principal">
+          <div class="sidebar__head">
+            <span class="sidebar__logo" aria-hidden="true"><svg class="icon"><use href="#i-logo"/></svg></span>
+            <span class="sidebar__logo-copy">
+              <strong>HUAWEI</strong>
+              <small>Network Console</small>
+            </span>
+            <button class="icon-btn sidebar__toggle" id="sidebarToggle" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Recolher barra lateral" title="Recolher barra lateral (Ctrl+B)">
+              <svg class="icon icon--collapse" aria-hidden="true"><use href="#i-panel-collapse"/></svg>
+              <svg class="icon icon--expand" aria-hidden="true"><use href="#i-panel-expand"/></svg>
+            </button>
+          </div>
+
+          <div class="sidebar__scroll">
+            <nav class="nav" aria-label="Seções do sistema">
+
+              <div class="nav__group">
+                <p class="nav__label">Dashboard</p>
+                <button class="nav__item is-active" type="button" data-modal="dashboard" data-tooltip="Visão geral" style="--item-color: var(--cyan)">
+                  <svg class="icon nav__icon" aria-hidden="true"><use href="#i-home"/></svg>
+                  <span class="nav__text">Visão geral</span>
+                  <span class="nav__badge"><span class="status-dot status-dot--online"></span>live</span>
+                </button>
+              </div>
+
+              <div class="nav__group">
+                <p class="nav__label">Dispositivos</p>
+                <button class="nav__item nav__item--parent" type="button" data-accordion="devices" aria-expanded="false" aria-controls="submenu-devices" data-tooltip="Dispositivos" style="--item-color: var(--amber)">
+                  <svg class="icon nav__icon" aria-hidden="true"><use href="#i-server"/></svg>
+                  <span class="nav__text">Dispositivos</span>
+                  <svg class="icon nav__chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </button>
+                <div class="nav__submenu" id="submenu-devices" inert>
+                  <div class="nav__submenu-inner">
+                    <ul class="nav__sublist">
+                      <li><button class="nav__subitem" type="button" data-modal="topology"><svg class="icon"><use href="#i-target"/></svg>Topologia / Devices</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="config"><svg class="icon"><use href="#i-file-text"/></svg>Config Atual</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="routing"><svg class="icon"><use href="#i-route"/></svg>Roteamento</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="arp"><svg class="icon"><use href="#i-radio"/></svg>Tabela ARP</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="sysinfo"><svg class="icon"><use href="#i-cpu"/></svg>Info do Sistema</button></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="nav__group">
+                <p class="nav__label">Serviços</p>
+                <button class="nav__item nav__item--parent is-open" type="button" data-accordion="services" aria-expanded="true" aria-controls="submenu-services" data-tooltip="Serviços" style="--item-color: var(--magenta)">
+                  <svg class="icon nav__icon" aria-hidden="true"><use href="#i-zap"/></svg>
+                  <span class="nav__text">Serviços</span>
+                  <svg class="icon nav__chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </button>
+                <div class="nav__submenu is-open" id="submenu-services">
+                  <div class="nav__submenu-inner">
+                    <ul class="nav__sublist">
+                      <li><button class="nav__subitem is-active" type="button" data-modal="services"><svg class="icon"><use href="#i-gauge"/></svg>Painel de Serviços</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="catalog"><svg class="icon"><use href="#i-layers"/></svg>Catálogo de Serviços</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="acl"><svg class="icon"><use href="#i-shield"/></svg>Regras ACL</button></li>
+                      <li><button class="nav__subitem nav__subitem--accent" type="button" data-wizard-preset="block"><svg class="icon"><use href="#i-shield-off"/></svg>Bloquear Internet</button></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="nav__group">
+                <p class="nav__label">Ferramentas</p>
+                <button class="nav__item nav__item--parent" type="button" data-accordion="tools" aria-expanded="false" aria-controls="submenu-tools" data-tooltip="Ferramentas" style="--item-color: var(--purple)">
+                  <svg class="icon nav__icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+                  <span class="nav__text">Ferramentas</span>
+                  <svg class="icon nav__chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </button>
+                <div class="nav__submenu" id="submenu-tools" inert>
+                  <div class="nav__submenu-inner">
+                    <ul class="nav__sublist">
+                      <li><button class="nav__subitem" type="button" data-modal="commands"><svg class="icon"><use href="#i-terminal"/></svg>Editor de Comandos</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="backup"><svg class="icon"><use href="#i-archive"/></svg>Backup</button></li>
+                      <li><button class="nav__subitem" type="button" data-modal="audit"><svg class="icon"><use href="#i-audit"/></svg>Auditoria</button></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="nav__group">
+                <p class="nav__label">Administração</p>
+                <button class="nav__item" type="button" data-modal="maintenance" data-tooltip="Manutenção" style="--item-color: var(--magenta)">
+                  <svg class="icon nav__icon" aria-hidden="true"><use href="#i-wrench"/></svg>
+                  <span class="nav__text">Manutenção</span>
+                </button>
+                <button class="nav__item" type="button" data-modal="settings" data-tooltip="Preferências" style="--item-color: var(--dim)">
+                  <svg class="icon nav__icon" aria-hidden="true"><use href="#i-settings"/></svg>
+                  <span class="nav__text">Preferências</span>
+                </button>
+              </div>
+
+            </nav>
+          </div>
+
+          <div class="sidebar__foot">
+            <button class="target-card" type="button" data-modal="topology" title="Trocar device alvo">
+              <span class="status-dot status-dot--online" aria-hidden="true"></span>
+              <span class="target-card__copy">
+                <span class="target-card__label">Alvo do device</span>
+                <strong data-target-name>ROTEADOR-LAB</strong>
+              </span>
+              <svg class="icon target-card__icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+            </button>
+
+            <button class="theme-row" type="button" data-theme-toggle aria-label="Alternar para o tema claro">
+              <span class="theme-row__icon" aria-hidden="true">
+                <svg class="icon theme-icon theme-icon--sun"><use href="#i-sun"/></svg>
+                <svg class="icon theme-icon theme-icon--moon"><use href="#i-moon"/></svg>
+              </span>
+              <span class="theme-row__copy">
+                <span class="theme-row__title">Aparência</span>
+                <span class="theme-row__value" data-theme-label>Tema claro</span>
+              </span>
+              <span class="switch" aria-hidden="true"><span class="switch__thumb"></span></span>
+            </button>
+
+            <div class="user-card">
+              <span class="user-card__avatar" aria-hidden="true">LS</span>
+              <span class="user-card__copy">
+                <strong>Lucas Silva</strong>
+                <span>Administrador</span>
+              </span>
+              <span class="user-card__status" title="Sessão ativa" aria-label="Sessão ativa"></span>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ═══════════════ WORKSPACE ═══════════════ -->
+        <div class="workspace">
+
+          <header class="topbar">
+            <div class="topbar__left">
+              <button class="icon-btn topbar__menu" id="mobileMenuToggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Abrir barra lateral">
+                <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+              </button>
+
+              <div class="wordmark" aria-label="Huawei Manager">
+                <span class="wordmark__icon"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+                <span class="wordmark__text"><strong>HUAWEI</strong> MANAGER</span>
+              </div>
+
+              <span class="topbar__divider" aria-hidden="true"></span>
+
+              <nav class="breadcrumbs" aria-label="Trilha de navegação">
+                <span>Serviços</span>
+                <svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                <span aria-current="page">Visão geral</span>
+              </nav>
+            </div>
+
+            <div class="topbar__right">
+              <label class="searchbox" for="globalSearch">
+                <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <input id="globalSearch" type="search" placeholder="Buscar serviço…" autocomplete="off" aria-label="Buscar serviço no catálogo">
+                <kbd>Ctrl K</kbd>
+              </label>
+
+              <span class="conn-state">
+                <span class="status-dot" id="connDot" aria-hidden="true"></span>
+                <span id="connLabel">Desconectado</span>
+              </span>
+
+              <button class="btn btn--outline btn--sm" id="connectBtn" type="button">Conectar</button>
+
+              <button class="icon-btn theme-btn" type="button" data-theme-toggle aria-label="Alternar para o tema claro" title="Alternar tema (Ctrl+J)">
+                <svg class="icon theme-icon theme-icon--sun" aria-hidden="true"><use href="#i-sun"/></svg>
+                <svg class="icon theme-icon theme-icon--moon" aria-hidden="true"><use href="#i-moon"/></svg>
+              </button>
+
+              <button class="avatar-btn" type="button" data-modal="settings" aria-label="Abrir preferências do usuário">LS</button>
+            </div>
+          </header>
+
+          <main class="content" id="main-content" tabindex="-1">
+            <div class="content__scroll">
+
+              <!-- Cabeçalho da página -->
+              <section class="page-heading">
+                <div class="page-heading__copy">
+                  <p class="eyebrow"><span class="eyebrow__mark" aria-hidden="true"></span> Serviços · Operações de rede</p>
+                  <h1>Serviços de Rede</h1>
+                  <p class="page-subtitle">Aplique políticas de acesso, bloqueie destinos e revise o impacto antes de tocar na configuração do device.</p>
+                </div>
+                <div class="page-heading__actions">
+                  <button class="target-chip" type="button" data-modal="topology" title="Trocar device alvo">
+                    <span class="status-dot status-dot--online" aria-hidden="true"></span>
+                    <span class="target-chip__label">Alvo</span>
+                    <strong data-target-name>ROTEADOR-LAB</strong>
+                    <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                  </button>
+                  <button class="btn btn--primary" type="button" data-wizard-preset="custom">
+                    <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>
+                    Nova regra ACL
+                  </button>
+                </div>
+              </section>
+
+              <!-- KPIs -->
+              <section class="stats-grid" aria-label="Resumo operacional">
+                <article class="stat-card" style="--card-accent: var(--cyan)">
+                  <div class="stat-card__top">
+                    <span class="stat-card__label">Devices conectados</span>
+                    <span class="stat-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-server"/></svg></span>
+                  </div>
+                  <p class="stat-card__value"><span>3</span><small>/ 4</small></p>
+                  <p class="stat-card__meta"><span class="status-dot status-dot--online" aria-hidden="true"></span> 1 device em manutenção</p>
+                </article>
+
+                <article class="stat-card" style="--card-accent: var(--green)">
+                  <div class="stat-card__top">
+                    <span class="stat-card__label">Regras ACL ativas</span>
+                    <span class="stat-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></span>
+                  </div>
+                  <p class="stat-card__value"><span id="statRules">3</span><small>regras</small></p>
+                  <p class="stat-card__meta"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg> Sincronizadas com o device</p>
+                </article>
+
+                <article class="stat-card" style="--card-accent: var(--amber)">
+                  <div class="stat-card__top">
+                    <span class="stat-card__label">Tráfego bloqueado</span>
+                    <span class="stat-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></span>
+                  </div>
+                  <p class="stat-card__value"><span id="statHits">9.654</span><small>hits</small></p>
+                  <p class="stat-card__meta">Contadores nas últimas 24 h</p>
+                </article>
+
+                <article class="stat-card" style="--card-accent: var(--purple)">
+                  <div class="stat-card__top">
+                    <span class="stat-card__label">Última alteração</span>
+                    <span class="stat-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg></span>
+                  </div>
+                  <p class="stat-card__value stat-card__value--text"><span id="statUpdated">há 2 min</span></p>
+                  <p class="stat-card__meta">Lucas Silva · <span data-target-name>ROTEADOR-LAB</span></p>
+                </article>
+              </section>
+
+              <!-- Ações rápidas -->
+              <section class="section" aria-labelledby="quickActionsTitle">
+                <div class="section-heading">
+                  <div>
+                    <h2 id="quickActionsTitle">Ações rápidas</h2>
+                    <p>Fluxos guiados para as operações mais frequentes.</p>
+                  </div>
+                  <span class="section-heading__hint"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg> Revisão obrigatória antes de aplicar</span>
+                </div>
+
+                <div class="quick-grid">
+                  <button class="quick-card" type="button" data-wizard-preset="block" style="--quick-color: var(--red)">
+                    <span class="quick-card__top">
+                      <span class="quick-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-shield-off"/></svg></span>
+                      <span class="badge badge--danger">ACL</span>
+                    </span>
+                    <span class="quick-card__title">Bloquear Internet</span>
+                    <span class="quick-card__desc">Negue a saída para a WAN e defina exceções de acesso em um wizard guiado.</span>
+                    <span class="quick-card__footer">Abrir wizard <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></span>
+                  </button>
+
+                  <button class="quick-card" type="button" data-wizard-preset="deny-site" style="--quick-color: var(--amber)">
+                    <span class="quick-card__top">
+                      <span class="quick-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                      <span class="badge badge--warning">Destino</span>
+                    </span>
+                    <span class="quick-card__title">Bloquear site específico</span>
+                    <span class="quick-card__desc">Negue IPs ou sub-redes pontuais e mantenha o restante do tráfego liberado.</span>
+                    <span class="quick-card__footer">Configurar regra <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></span>
+                  </button>
+
+                  <button class="quick-card" type="button" data-modal="acl" style="--quick-color: var(--cyan)">
+                    <span class="quick-card__top">
+                      <span class="quick-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg></span>
+                      <span class="badge">Gestão</span>
+                    </span>
+                    <span class="quick-card__title">Gerenciar ACLs</span>
+                    <span class="quick-card__desc">Revise regras, contadores e a aplicação de traffic-filter por interface.</span>
+                    <span class="quick-card__footer">Ver regras <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></span>
+                  </button>
+
+                  <button class="quick-card" type="button" data-modal="backup" style="--quick-color: var(--purple)">
+                    <span class="quick-card__top">
+                      <span class="quick-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg></span>
+                      <span class="badge badge--violet">Backup</span>
+                    </span>
+                    <span class="quick-card__title">Backup da configuração</span>
+                    <span class="quick-card__desc">Salve o running-config antes de aplicar mudanças de política no device.</span>
+                    <span class="quick-card__footer">Executar backup <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></span>
+                  </button>
+                </div>
+              </section>
+
+              <!-- Regras + atividade -->
+              <div class="content-grid">
+                <section class="panel" aria-labelledby="rulesTitle">
+                  <header class="panel__header">
+                    <div>
+                      <h2 id="rulesTitle">Regras ACL <span class="count-pill" id="rulesCount">4</span></h2>
+                      <p>Políticas aplicadas no momento e seus contadores.</p>
+                    </div>
+                    <button class="text-button" type="button" data-modal="acl">Ver detalhes <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
+                  </header>
+
+                  <div class="table-wrap">
+                    <table class="data-table">
+                      <caption class="sr-only">Regras de controle de acesso ativas</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">ACL</th>
+                          <th scope="col">Política</th>
+                          <th scope="col">Aplicação</th>
+                          <th scope="col">Direção</th>
+                          <th scope="col" class="is-numeric">Hits</th>
+                          <th scope="col">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="rulesBody"></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <aside class="panel" aria-labelledby="activityTitle">
+                  <header class="panel__header">
+                    <div>
+                      <h2 id="activityTitle">Atividade recente</h2>
+                      <p>Trilha auditável do ambiente.</p>
+                    </div>
+                    <button class="icon-btn" type="button" data-modal="audit" aria-label="Abrir auditoria" title="Abrir auditoria">
+                      <svg class="icon" aria-hidden="true"><use href="#i-audit"/></svg>
+                    </button>
+                  </header>
+                  <ol class="timeline" id="activityList"></ol>
+                  <button class="text-button panel__footer-link" type="button" data-modal="audit">Abrir auditoria completa <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
+                </aside>
+              </div>
+
+              <!-- Catálogo resumido -->
+              <section class="panel panel--catalog" id="catalogSection" aria-labelledby="catalogTitle">
+                <header class="panel__header panel__header--catalog">
+                  <div>
+                    <h2 id="catalogTitle">Catálogo de serviços <span class="count-pill" id="servicesCount">8</span></h2>
+                    <p>Atalhos para operações de ACL, segurança e diagnóstico.</p>
+                  </div>
+                  <button class="btn btn--ghost btn--sm" type="button" data-modal="catalog">
+                    <svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg> Abrir catálogo completo
+                  </button>
+                </header>
+
+                <div class="catalog-toolbar">
+                  <div class="filter-chips" role="group" aria-label="Filtrar catálogo por categoria">
+                    <button class="filter-chip is-active" type="button" data-service-filter="all" aria-pressed="true">Todos</button>
+                    <button class="filter-chip" type="button" data-service-filter="acl" aria-pressed="false">ACL</button>
+                    <button class="filter-chip" type="button" data-service-filter="security" aria-pressed="false">Segurança</button>
+                    <button class="filter-chip" type="button" data-service-filter="qos" aria-pressed="false">QoS</button>
+                    <button class="filter-chip" type="button" data-service-filter="interfaces" aria-pressed="false">Interfaces</button>
+                    <button class="filter-chip" type="button" data-service-filter="diagnostics" aria-pressed="false">Diagnóstico</button>
+                    <button class="filter-chip" type="button" data-service-filter="backup" aria-pressed="false">Backup</button>
+                  </div>
+                  <span class="catalog-toolbar__count" id="catalogCount">8 serviços</span>
+                </div>
+
+                <div class="services-grid" id="servicesGrid"></div>
+                <div class="empty-state" id="servicesEmpty" hidden>
+                  <span class="empty-state__icon"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg></span>
+                  <h3>Nenhum serviço encontrado</h3>
+                  <p>Altere a busca ou selecione outra categoria.</p>
+                  <button class="btn btn--secondary btn--sm" type="button" data-clear-service-filters>Limpar filtros</button>
+                </div>
+              </section>
+
+            </div>
+          </main>
+
+          <footer class="statusbar">
+            <div class="statusbar__left">
+              <span class="statusbar__brand"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg> Huawei Manager</span>
+              <span class="statusbar__sep" aria-hidden="true"></span>
+              <span>v2.0.0</span>
+            </div>
+            <div class="statusbar__center">
+              <span class="status-dot status-dot--online" aria-hidden="true"></span>
+              <span data-target-name>ROTEADOR-LAB</span>
+              <span class="statusbar__sep" aria-hidden="true"></span>
+              <span class="mono">192.168.1.1</span>
+              <span class="statusbar__sep" aria-hidden="true"></span>
+              <span>Modo mock</span>
+            </div>
+            <div class="statusbar__right">
+              <span class="statusbar__secure"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg> Sessão segura</span>
+              <span class="statusbar__sep" aria-hidden="true"></span>
+              <span id="statusClock" class="mono">--:--:--</span>
+            </div>
+          </footer>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Barra de tarefas do desktop -->
+    <footer class="taskbar" aria-label="Barra de tarefas">
+      <button class="taskbar__start" type="button" title="Área de trabalho" aria-label="Área de trabalho">
+        <svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>
+      </button>
+      <span class="taskbar__separator" aria-hidden="true"></span>
+      <button class="taskbar__app is-running" id="taskbarApp" type="button" title="Restaurar Huawei Manager">
+        <span class="taskbar__app-icon"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+        <span>Huawei Manager</span>
+        <span class="taskbar__app-indicator" aria-hidden="true"></span>
+      </button>
+      <div class="taskbar__spacer"></div>
+      <div class="taskbar__tray">
+        <svg class="icon" aria-hidden="true"><use href="#i-wifi"/></svg>
+        <svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg>
+        <span class="taskbar__clock">
+          <span id="taskbarTime">--:--</span>
+          <span id="taskbarDate">--/--/----</span>
+        </span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       MODAL GENÉRICO DE CONTEÚDO
+       ═══════════════════════════════════════════════════════════════════ -->
+  <dialog class="dialog" id="contentDialog" aria-labelledby="contentDialogTitle">
+    <div class="dialog__frame">
+      <header class="dialog__titlebar">
+        <div class="dialog__identity">
+          <span class="dialog__icon" id="contentDialogIcon"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></span>
+          <div>
+            <p class="dialog__eyebrow" id="contentDialogEyebrow">Huawei Manager</p>
+            <h2 id="contentDialogTitle">Detalhes</h2>
+          </div>
+        </div>
+        <button class="window-control window-control--close" type="button" data-close-dialog="content" aria-label="Fechar janela">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <p class="dialog__subtitle" id="contentDialogSubtitle"></p>
+      <div class="dialog__body" id="contentDialogBody"></div>
+      <footer class="dialog__footer">
+        <span class="dialog__footnote"><svg class="icon" aria-hidden="true"><use href="#i-audit"/></svg> Ações registradas na auditoria local</span>
+        <button class="btn btn--secondary" type="button" data-close-dialog="content">Fechar</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       WIZARD DE ACL
+       ═══════════════════════════════════════════════════════════════════ -->
+  <dialog class="dialog dialog--wizard" id="wizardDialog" aria-labelledby="wizardTitle">
+    <div class="dialog__frame">
+      <header class="dialog__titlebar">
+        <div class="dialog__identity">
+          <span class="dialog__icon dialog__icon--accent"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></span>
+          <div>
+            <p class="dialog__eyebrow">Wizard de ACL · revisão obrigatória</p>
+            <h2 id="wizardTitle">Bloquear Internet</h2>
+          </div>
+        </div>
+        <button class="window-control window-control--close" type="button" data-close-dialog="wizard" aria-label="Fechar wizard">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+
+      <div class="wizard__progress" aria-hidden="true"><span class="wizard__progress-bar" id="wizardProgressBar"></span></div>
+
+      <ol class="stepper" id="wizardStepper" aria-label="Etapas do wizard">
+        <li class="stepper__item is-current" data-step-target="1" aria-current="step">
+          <span class="stepper__marker">1</span>
+          <span class="stepper__label">Destino</span>
+        </li>
+        <li class="stepper__item" data-step-target="2">
+          <span class="stepper__marker">2</span>
+          <span class="stepper__label">Estratégia</span>
+        </li>
+        <li class="stepper__item" data-step-target="3">
+          <span class="stepper__marker">3</span>
+          <span class="stepper__label">Exceções</span>
+        </li>
+        <li class="stepper__item" data-step-target="4">
+          <span class="stepper__marker">4</span>
+          <span class="stepper__label">Revisão</span>
+        </li>
+      </ol>
+
+      <form class="wizard__form" id="wizardForm" novalidate>
+        <div class="dialog__body wizard__body">
+
+          <!-- PASSO 1 -->
+          <section class="wizard-step" data-step="1" aria-labelledby="wizardStep1Title">
+            <div class="step-heading">
+              <span class="step-kicker">Passo 1 de 4 · Destino</span>
+              <h3 id="wizardStep1Title" tabindex="-1">Onde a regra será aplicada?</h3>
+              <p>Escolha o device de borda, a interface e a direção do tráfego que será filtrado.</p>
+            </div>
+
+            <div class="form-grid">
+              <div class="field">
+                <label for="wizardDevice">Device <span class="req" aria-hidden="true">*</span></label>
+                <div class="select-wrap">
+                  <select id="wizardDevice" required aria-describedby="wizardDeviceHint"></select>
+                  <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </div>
+                <p class="field__hint" id="wizardDeviceHint">Somente devices com sessão SSH ativa.</p>
+              </div>
+
+              <div class="field">
+                <label for="wizardInterface">Interface <span class="req" aria-hidden="true">*</span></label>
+                <div class="select-wrap">
+                  <select id="wizardInterface" required></select>
+                  <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </div>
+                <p class="field__hint">A ACL será anexada por <code>traffic-filter</code>.</p>
+              </div>
+
+              <fieldset class="field field--full">
+                <legend>Direção do tráfego</legend>
+                <div class="segmented">
+                  <label class="segmented__option">
+                    <input type="radio" name="wizardDirection" value="outbound" checked>
+                    <span><svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg> Saída <small>outbound</small></span>
+                  </label>
+                  <label class="segmented__option">
+                    <input type="radio" name="wizardDirection" value="inbound">
+                    <span><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"/></svg> Entrada <small>inbound</small></span>
+                  </label>
+                </div>
+                <p class="field__hint">Para bloquear a internet, o padrão é filtrar a saída da LAN em direção à WAN.</p>
+              </fieldset>
+
+              <div class="field">
+                <label for="wizardName">Nome da política <span class="req" aria-hidden="true">*</span></label>
+                <input id="wizardName" type="text" maxlength="48" autocomplete="off" required aria-describedby="wizardNameHint wizardNameError">
+                <p class="field__hint" id="wizardNameHint">Usado no comentário da ACL e na trilha de auditoria.</p>
+                <p class="field__error" id="wizardNameError" aria-live="polite"></p>
+              </div>
+
+              <div class="field">
+                <label for="wizardAclId">ACL number <span class="req" aria-hidden="true">*</span></label>
+                <input id="wizardAclId" type="number" min="3000" max="3999" step="1" inputmode="numeric" required aria-describedby="wizardAclHint wizardAclIdError">
+                <p class="field__hint" id="wizardAclHint">ACL avançada: faixa 3000–3999.</p>
+                <p class="field__error" id="wizardAclIdError" aria-live="polite"></p>
+              </div>
+            </div>
+
+            <div class="inline-note">
+              <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <p>A regra será criada no device selecionado. Nenhuma alteração é enviada antes da etapa de revisão.</p>
+            </div>
+          </section>
+
+          <!-- PASSO 2 -->
+          <section class="wizard-step" data-step="2" aria-labelledby="wizardStep2Title" hidden>
+            <div class="step-heading">
+              <span class="step-kicker">Passo 2 de 4 · Estratégia</span>
+              <h3 id="wizardStep2Title" tabindex="-1">O que deve ser bloqueado?</h3>
+              <p>Defina a estratégia da ACL. Você poderá revisar as regras geradas antes de aplicar.</p>
+            </div>
+
+            <fieldset class="mode-grid">
+              <legend class="sr-only">Modo da política de bloqueio</legend>
+              <label class="mode-card">
+                <input type="radio" name="wizardMode" value="deny-list" checked>
+                <span class="mode-card__inner">
+                  <span class="mode-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                  <span class="mode-card__copy">
+                    <strong>Bloquear destinos específicos</strong>
+                    <small>Negue sites ou faixas pontuais. O restante do tráfego permanece liberado.</small>
+                  </span>
+                  <span class="radio-indicator" aria-hidden="true"></span>
+                </span>
+              </label>
+
+              <label class="mode-card">
+                <input type="radio" name="wizardMode" value="all-except">
+                <span class="mode-card__inner">
+                  <span class="mode-card__icon"><svg class="icon" aria-hidden="true"><use href="#i-shield-off"/></svg></span>
+                  <span class="mode-card__copy">
+                    <strong>Bloquear toda a internet, exceto…</strong>
+                    <small>Permita apenas as exceções do próximo passo. Sem exceções, toda a saída é negada.</small>
+                  </span>
+                  <span class="radio-indicator" aria-hidden="true"></span>
+                </span>
+              </label>
+            </fieldset>
+
+            <div class="field mode-panel" data-mode-panel="deny-list">
+              <label for="destinationsInput">Destinos a bloquear <span class="req" aria-hidden="true">*</span></label>
+              <div class="tag-field" data-tag-field="destinations">
+                <ul class="tag-list" id="destinationsTags" aria-live="polite"></ul>
+                <div class="tag-field__row">
+                  <input id="destinationsInput" type="text" inputmode="text" placeholder="youtube.com, 203.0.113.10 ou 203.0.113.0/24" autocomplete="off" aria-describedby="destinationsHint destinationsError">
+                  <button class="btn btn--secondary btn--sm" type="button" data-add-tag="destinations">
+                    <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> Adicionar
+                  </button>
+                </div>
+              </div>
+              <p class="field__hint" id="destinationsHint">Aceita domínio, IPv4 ou CIDR. Domínios conhecidos são resolvidos em IP para a CLI.</p>
+              <p class="field__error" id="destinationsError" aria-live="polite"></p>
+            </div>
+
+            <div class="inline-note mode-panel" data-mode-panel="all-except" hidden>
+              <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+              <p>O tráfego de saída será <strong>negado por padrão</strong>. Adicione exceções no passo 3 para manter hosts administrativos conectados.</p>
+            </div>
+          </section>
+
+          <!-- PASSO 3 -->
+          <section class="wizard-step" data-step="3" aria-labelledby="wizardStep3Title" hidden>
+            <div class="step-heading">
+              <span class="step-kicker">Passo 3 de 4 · Exceções</span>
+              <h3 id="wizardStep3Title" tabindex="-1">Quem pode continuar acessando?</h3>
+              <p>Exceções são avaliadas antes do bloqueio. Use domínios, IPs ou sub-redes confiáveis.</p>
+            </div>
+
+            <div class="field">
+              <label for="exceptionsInput">Destinos permitidos <span class="optional">(opcional)</span></label>
+              <div class="tag-field" data-tag-field="exceptions">
+                <ul class="tag-list" id="exceptionsTags" aria-live="polite"></ul>
+                <div class="tag-field__row">
+                  <input id="exceptionsInput" type="text" inputmode="text" placeholder="huawei.com, 8.8.8.8 ou 192.168.1.0/24" autocomplete="off" aria-describedby="exceptionsHint exceptionsError">
+                  <button class="btn btn--secondary btn--sm" type="button" data-add-tag="exceptions">
+                    <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> Adicionar
+                  </button>
+                </div>
+              </div>
+              <div class="quick-tags" aria-label="Sugestões de exceção">
+                <button class="quick-tag" type="button" data-quick-tag="huawei.com">+ huawei.com</button>
+                <button class="quick-tag" type="button" data-quick-tag="github.com">+ github.com</button>
+                <button class="quick-tag" type="button" data-quick-tag="microsoft.com">+ Microsoft 365</button>
+                <button class="quick-tag" type="button" data-quick-tag="8.8.8.8">+ DNS 8.8.8.8</button>
+              </div>
+              <p class="field__hint" id="exceptionsHint">Exemplo: <code>192.168.1.0/24</code> mantém a LAN administrativa liberada.</p>
+              <p class="field__error" id="exceptionsError" aria-live="polite"></p>
+            </div>
+
+            <div class="toggle-list">
+              <label class="toggle-row">
+                <span class="toggle-row__copy">
+                  <strong>Permitir consultas DNS</strong>
+                  <small>Adiciona uma regra para UDP/TCP porta 53 antes da negação.</small>
+                </span>
+                <input type="checkbox" id="wizardAllowDns" checked>
+                <span class="toggle-switch" aria-hidden="true"><span></span></span>
+              </label>
+              <label class="toggle-row">
+                <span class="toggle-row__copy">
+                  <strong>Permitir atualizações do sistema</strong>
+                  <small>Reserva a faixa de atualização da Microsoft antes do bloqueio.</small>
+                </span>
+                <input type="checkbox" id="wizardAllowUpdates">
+                <span class="toggle-switch" aria-hidden="true"><span></span></span>
+              </label>
+            </div>
+
+            <div class="inline-note" id="exceptionsImpact">
+              <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <p>Nenhuma exceção configurada. O comportamento final depende do modo escolhido no passo anterior.</p>
+            </div>
+
+            <div class="quick-tip">
+              <span class="quick-tip__icon"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg></span>
+              <div>
+                <strong>Dica de operação</strong>
+                <p>Mantenha ao menos uma exceção para a estação de administração. Sem ela, o acesso remoto ao device pode ser interrompido.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- PASSO 4 -->
+          <section class="wizard-step" data-step="4" aria-labelledby="wizardStep4Title" hidden>
+            <div class="step-heading">
+              <span class="step-kicker">Passo 4 de 4 · Revisão</span>
+              <h3 id="wizardStep4Title" tabindex="-1">Revise antes de aplicar</h3>
+              <p>Confira o destino, as regras e a CLI gerada. Nada foi enviado ao device ainda.</p>
+            </div>
+
+            <div class="review-grid">
+              <div class="review-card">
+                <span class="review-card__label">Destino</span>
+                <strong id="reviewDevice">—</strong>
+                <span id="reviewEndpoint" class="review-card__mono">—</span>
+              </div>
+              <div class="review-card">
+                <span class="review-card__label">Política</span>
+                <strong id="reviewPolicy">—</strong>
+                <span id="reviewAcl" class="review-card__mono">—</span>
+              </div>
+              <div class="review-card review-card--full">
+                <span class="review-card__label">Estratégia</span>
+                <strong id="reviewMode">—</strong>
+                <div class="review-tags" id="reviewTags"></div>
+              </div>
+            </div>
+
+            <div class="code-panel">
+              <div class="code-panel__header">
+                <span><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg> CLI gerada</span>
+                <button class="text-button" type="button" data-copy-cli>
+                  <svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg> Copiar
+                </button>
+              </div>
+              <pre><code id="cliPreview"></code></pre>
+            </div>
+
+            <div class="inline-note inline-note--warning" id="reviewWarning">
+              <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+              <p>Ao aplicar, a ACL entra em vigor imediatamente no device selecionado. Esta é uma simulação em modo mock.</p>
+            </div>
+          </section>
+
+        </div>
+
+        <p class="form-alert" id="wizardFormError" role="alert" hidden></p>
+
+        <footer class="wizard__footer">
+          <button class="btn btn--ghost" id="wizardBack" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"/></svg> Voltar
+          </button>
+          <div class="wizard__footer-right">
+            <span class="wizard__counter" id="wizardCounter">Passo 1 de 4</span>
+            <button class="btn btn--primary" id="wizardNext" type="button">
+              Avançar <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </button>
+            <button class="btn btn--primary btn--apply" id="wizardApply" type="button" hidden>
+              <svg class="icon icon--apply" aria-hidden="true"><use href="#i-check"/></svg>
+              <span>Aplicar regra</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+          </div>
+        </footer>
+      </form>
+
+      <section class="wizard-success" id="wizardSuccess" aria-labelledby="wizardSuccessTitle" hidden>
+        <div class="wizard-success__inner">
+          <span class="wizard-success__icon"><svg class="icon" aria-hidden="true"><use href="#i-shield-check"/></svg></span>
+          <p class="step-kicker">Concluído · modo mock</p>
+          <h3 id="wizardSuccessTitle">Regra aplicada com sucesso</h3>
+          <p class="wizard-success__text">A política <strong id="successPolicy">—</strong> foi adicionada ao device <strong id="successDevice">—</strong>. A CLI foi registrada na auditoria local.</p>
+          <div class="success-summary">
+            <div><span>ACL</span><strong id="successAcl">—</strong></div>
+            <div><span>Regras</span><strong id="successRules">—</strong></div>
+            <div><span>Interface</span><strong id="successInterface">—</strong></div>
+          </div>
+          <div class="wizard-success__actions">
+            <button class="btn btn--secondary" type="button" data-copy-cli>
+              <svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg> Copiar CLI
+            </button>
+            <button class="btn btn--primary" type="button" data-close-dialog="wizard">
+              <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg> Concluir
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <!-- CONFIRMAÇÃO DE DESCARTE DO WIZARD -->
+  <dialog class="dialog dialog--confirm" id="confirmDiscardDialog" aria-labelledby="confirmDiscardTitle" aria-describedby="confirmDiscardText">
+    <div class="dialog__frame">
+      <header class="dialog__titlebar">
+        <div class="dialog__identity">
+          <span class="dialog__icon dialog__icon--warning"><svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg></span>
+          <div>
+            <p class="dialog__eyebrow">Wizard de ACL</p>
+            <h2 id="confirmDiscardTitle">Descartar configuração?</h2>
+          </div>
+        </div>
+        <button class="window-control window-control--close" type="button" data-close-confirm aria-label="Continuar editando">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <div class="confirm__body" id="confirmDiscardText">
+        <p>A regra em andamento ainda não foi aplicada. Se sair agora, os passos preenchidos serão perdidos.</p>
+        <p class="confirm__hint">Você pode voltar e concluir a revisão para enviar a ACL ao device.</p>
+      </div>
+      <footer class="dialog__footer">
+        <span class="dialog__footnote"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg> O device não foi alterado</span>
+        <div class="confirm__actions">
+          <button class="btn btn--secondary" type="button" data-close-confirm>Continuar editando</button>
+          <button class="btn btn--danger" id="confirmDiscardBtn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg> Descartar e sair
+          </button>
+        </div>
+      </footer>
+    </div>
+  </dialog>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       TEMPLATES DE CONTEÚDO DOS MODAIS
+       ═══════════════════════════════════════════════════════════════════ -->
+
+  <template id="tpl-dashboard">
+    <div class="modal-stats">
+      <article class="modal-stat"><span class="modal-stat__label">Conexão</span><strong class="modal-stat__value text-red">Desconectado</strong><span class="modal-stat__meta">Host: ---</span></article>
+      <article class="modal-stat"><span class="modal-stat__label">Dispositivos</span><strong class="modal-stat__value">3 <small>online</small></strong><span class="modal-stat__meta text-amber">1 em manutenção</span></article>
+      <article class="modal-stat"><span class="modal-stat__label">Últimas operações</span><strong class="modal-stat__value">12</strong><span class="modal-stat__meta">Nas últimas 24 h</span></article>
+    </div>
+    <div class="split-2">
+      <section class="modal-section">
+        <h3>Atalhos do dashboard</h3>
+        <div class="button-grid">
+          <button class="btn btn--secondary" type="button" data-wizard-preset="block"><svg class="icon"><use href="#i-shield-off"/></svg> Bloquear Internet</button>
+          <button class="btn btn--secondary" type="button" data-modal="topology"><svg class="icon"><use href="#i-target"/></svg> Selecionar device</button>
+          <button class="btn btn--secondary" type="button" data-modal="backup"><svg class="icon"><use href="#i-archive"/></svg> Criar backup</button>
+          <button class="btn btn--secondary" type="button" data-modal="commands"><svg class="icon"><use href="#i-terminal"/></svg> Editor de comandos</button>
+        </div>
+      </section>
+      <section class="modal-section">
+        <h3>Últimas operações</h3>
+        <ol class="timeline timeline--compact" id="dashboardTimeline"></ol>
+      </section>
+    </div>
+  </template>
+
+  <template id="tpl-topology">
+    <p class="modal-lead">Selecione o device alvo usado pelo wizard, pelo catálogo e pelas ações rápidas.</p>
+    <div class="table-wrap">
+      <table class="data-table data-table--modal">
+        <thead><tr><th>Device</th><th>Tipo</th><th>Host</th><th>Status</th><th class="is-numeric">Ação</th></tr></thead>
+        <tbody id="topologyBody"></tbody>
+      </table>
+    </div>
+    <div class="inline-note"><svg class="icon"><use href="#i-info"/></svg><p>O device em manutenção permanece visível, mas não pode receber novas regras até reconectar.</p></div>
+  </template>
+
+  <template id="tpl-config">
+    <div class="toolbar">
+      <button class="btn btn--secondary btn--sm" type="button" id="loadConfigBtn"><svg class="icon"><use href="#i-refresh"/></svg> Carregar configuração atual</button>
+      <button class="btn btn--ghost btn--sm" type="button" data-copy-target="#configOutput"><svg class="icon"><use href="#i-copy"/></svg> Copiar</button>
+      <span class="toolbar__spacer"></span>
+      <span class="chip chip--mono" data-target-name>ROTEADOR-LAB</span>
+    </div>
+    <pre class="code-block" id="configOutput">sysname ROTEADOR-LAB
+#
+interface GigabitEthernet0/0/0
+ ip address 192.168.1.1 255.255.255.0
+#
+interface GigabitEthernet0/0/1
+ ip address 10.20.0.1 255.255.255.252
+#
+acl number 3000
+ rule 5 deny ip destination 203.0.113.0 0.0.0.255
+ rule 100 permit ip
+#
+return</pre>
+  </template>
+
+  <template id="tpl-routing">
+    <div class="toolbar"><span class="chip">VRF padrão</span><span class="chip chip--mono">4 rotas</span><span class="toolbar__spacer"></span><button class="btn btn--ghost btn--sm" type="button" data-refresh-demo><svg class="icon"><use href="#i-refresh"/></svg> Atualizar</button></div>
+    <div class="table-wrap">
+      <table class="data-table data-table--modal">
+        <thead><tr><th>Destino</th><th>Máscara</th><th>Próximo salto</th><th>Interface</th><th class="is-numeric">Métrica</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">0.0.0.0</td><td class="mono">0.0.0.0</td><td class="mono">10.20.0.2</td><td class="mono">GE0/0/1</td><td class="is-numeric">60</td></tr>
+          <tr><td class="mono">10.20.0.0</td><td class="mono">255.255.255.252</td><td class="mono">Direct</td><td class="mono">GE0/0/1</td><td class="is-numeric">0</td></tr>
+          <tr><td class="mono">192.168.1.0</td><td class="mono">255.255.255.0</td><td class="mono">Direct</td><td class="mono">GE0/0/0</td><td class="is-numeric">0</td></tr>
+          <tr><td class="mono">192.168.10.0</td><td class="mono">255.255.255.0</td><td class="mono">192.168.1.254</td><td class="mono">GE0/0/0</td><td class="is-numeric">70</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </template>
+
+  <template id="tpl-arp">
+    <div class="toolbar"><span class="chip chip--mono">6 entradas</span><span class="toolbar__spacer"></span><button class="btn btn--ghost btn--sm" type="button" data-refresh-demo><svg class="icon"><use href="#i-refresh"/></svg> Atualizar</button></div>
+    <div class="table-wrap">
+      <table class="data-table data-table--modal">
+        <thead><tr><th>IP</th><th>MAC</th><th>VLAN</th><th>Interface</th><th>Tipo</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">192.168.1.1</td><td class="mono">a4:5e:60:12:aa:01</td><td>1</td><td class="mono">GE0/0/0</td><td><span class="badge">Static</span></td></tr>
+          <tr><td class="mono">192.168.1.24</td><td class="mono">3c:52:82:90:12:4f</td><td>1</td><td class="mono">GE0/0/0</td><td><span class="badge">Dynamic</span></td></tr>
+          <tr><td class="mono">192.168.1.55</td><td class="mono">b8:27:eb:44:19:0c</td><td>1</td><td class="mono">GE0/0/0</td><td><span class="badge">Dynamic</span></td></tr>
+          <tr><td class="mono">192.168.1.87</td><td class="mono">00:1a:2b:3c:4d:5e</td><td>1</td><td class="mono">GE0/0/0</td><td><span class="badge">Dynamic</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </template>
+
+  <template id="tpl-sysinfo">
+    <div class="info-grid">
+      <div class="info-cell"><span>Nome do sistema</span><strong>ROTEADOR-LAB</strong></div>
+      <div class="info-cell"><span>Modelo</span><strong>AR617VW</strong></div>
+      <div class="info-cell"><span>Versão</span><strong class="mono">VRP V800R021C10</strong></div>
+      <div class="info-cell"><span>Uptime</span><strong>12 dias, 04:31:12</strong></div>
+      <div class="info-cell"><span>Serial</span><strong class="mono">2102352VTA10N6000123</strong></div>
+      <div class="info-cell"><span>Status</span><strong class="text-green">Operacional</strong></div>
+    </div>
+    <div class="meters">
+      <div class="meter"><div class="meter__head"><span>CPU</span><strong>18%</strong></div><div class="meter__track"><span style="width:18%"></span></div></div>
+      <div class="meter"><div class="meter__head"><span>Memória</span><strong>42%</strong></div><div class="meter__track"><span style="width:42%"></span></div></div>
+      <div class="meter"><div class="meter__head"><span>Tabela de rotas</span><strong>31%</strong></div><div class="meter__track"><span style="width:31%"></span></div></div>
+    </div>
+  </template>
+
+  <template id="tpl-catalog">
+    <p class="modal-lead">Serviços de configuração e leitura disponíveis para o device alvo. Ações que alteram a configuração abrem o wizard de revisão.</p>
+    <div class="catalog-toolbar">
+      <div class="filter-chips">
+        <button class="filter-chip is-active" type="button" data-modal-filter="all" aria-pressed="true">Todos</button>
+        <button class="filter-chip" type="button" data-modal-filter="acl" aria-pressed="false">ACL</button>
+        <button class="filter-chip" type="button" data-modal-filter="security" aria-pressed="false">Segurança</button>
+        <button class="filter-chip" type="button" data-modal-filter="qos" aria-pressed="false">QoS</button>
+        <button class="filter-chip" type="button" data-modal-filter="diagnostics" aria-pressed="false">Diagnóstico</button>
+      </div>
+      <span class="catalog-toolbar__count">8 serviços</span>
+    </div>
+    <div class="services-grid services-grid--modal" id="modalServicesGrid"></div>
+  </template>
+
+  <template id="tpl-acl">
+    <div class="toolbar">
+      <span class="chip chip--mono" id="aclModalCount">4 regras</span>
+      <span class="toolbar__spacer"></span>
+      <button class="btn btn--primary btn--sm" type="button" data-wizard-preset="custom"><svg class="icon"><use href="#i-plus"/></svg> Nova regra ACL</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table data-table--modal">
+        <thead><tr><th>ACL</th><th>Política</th><th>Aplicação</th><th>Direção</th><th class="is-numeric">Hits</th><th>Status</th><th class="is-numeric">Ações</th></tr></thead>
+        <tbody id="aclModalRules"></tbody>
+      </table>
+    </div>
+    <div class="inline-note"><svg class="icon"><use href="#i-info"/></svg><p>Desativar uma regra não remove a ACL do device; apenas pausa a aplicação no traffic-filter.</p></div>
+  </template>
+
+  <template id="tpl-commands">
+    <div class="command-layout">
+      <div class="field">
+        <label for="commandPreset">Modelo de comando</label>
+        <div class="select-wrap">
+          <select id="commandPreset">
+            <option value="display current-configuration">display current-configuration</option>
+            <option value="display version">display version</option>
+            <option value="display interface brief">display interface brief</option>
+            <option value="display ip routing-table">display ip routing-table</option>
+            <option value="ping -c 4 8.8.8.8">ping -c 4 8.8.8.8</option>
+          </select>
+          <svg class="icon"><use href="#i-chevron-down"/></svg>
+        </div>
+      </div>
+      <div class="field">
+        <label for="commandInput">Comando</label>
+        <textarea id="commandInput" rows="3" spellcheck="false">display version</textarea>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn--primary btn--sm" type="button" id="runCommandBtn"><svg class="icon"><use href="#i-play"/></svg> Executar</button>
+        <button class="btn btn--ghost btn--sm" type="button" id="clearCommandBtn"><svg class="icon"><use href="#i-trash"/></svg> Limpar saída</button>
+        <span class="toolbar__spacer"></span>
+        <span class="chip chip--warning"><svg class="icon"><use href="#i-shield"/></svg> dry-run</span>
+      </div>
+      <pre class="code-block code-block--output" id="commandOutput"><span class="code-muted">Aguardando execução…</span></pre>
+    </div>
+  </template>
+
+  <template id="tpl-backup">
+    <div class="toolbar">
+      <button class="btn btn--primary btn--sm" type="button" id="createBackupBtn"><svg class="icon"><use href="#i-archive"/></svg> Criar backup agora</button>
+      <span class="toolbar__spacer"></span>
+      <span class="chip chip--mono">Pasta: /var/backups/huawei</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table data-table--modal">
+        <thead><tr><th>Arquivo</th><th>Device</th><th>Data</th><th>Tamanho</th><th class="is-numeric">Ação</th></tr></thead>
+        <tbody id="backupBody">
+          <tr><td class="mono">router-lab_2026-10-28_14-02.txt</td><td>ROTEADOR-LAB</td><td>Hoje, 14:02</td><td>18,4 KB</td><td class="is-numeric"><button class="icon-btn" type="button" data-toast="Download simulado do backup iniciado."><svg class="icon"><use href="#i-download"/></svg></button></td></tr>
+          <tr><td class="mono">switch-acesso_2026-10-28_13-41.txt</td><td>SWITCH-ACESSO</td><td>Hoje, 13:41</td><td>12,1 KB</td><td class="is-numeric"><button class="icon-btn" type="button" data-toast="Download simulado do backup iniciado."><svg class="icon"><use href="#i-download"/></svg></button></td></tr>
+          <tr><td class="mono">router-lab_2026-10-27_18-26.txt</td><td>ROTEADOR-LAB</td><td>Ontem, 18:26</td><td>18,2 KB</td><td class="is-numeric"><button class="icon-btn" type="button" data-toast="Download simulado do backup iniciado."><svg class="icon"><use href="#i-download"/></svg></button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </template>
+
+  <template id="tpl-audit">
+    <div class="toolbar"><span class="chip chip--mono" id="auditCount">6 eventos</span><span class="toolbar__spacer"></span><button class="btn btn--ghost btn--sm" type="button" data-toast="Trilha de auditoria exportada em CSV (simulado)."><svg class="icon"><use href="#i-download"/></svg> Exportar CSV</button></div>
+    <ol class="timeline timeline--roomy" id="auditList"></ol>
+  </template>
+
+  <template id="tpl-maintenance">
+    <p class="modal-lead">Ferramentas de diagnóstico e manutenção do ambiente local. Nenhum comando é enviado ao device real.</p>
+    <div class="button-grid button-grid--3">
+      <button class="btn btn--secondary" type="button" data-maintenance="lint"><svg class="icon"><use href="#i-check"/></svg> Executar lint</button>
+      <button class="btn btn--secondary" type="button" data-maintenance="tests"><svg class="icon"><use href="#i-play"/></svg> Rodar testes</button>
+      <button class="btn btn--secondary" type="button" data-maintenance="types"><svg class="icon"><use href="#i-cpu"/></svg> Checar tipos</button>
+      <button class="btn btn--secondary" type="button" data-maintenance="install"><svg class="icon"><use href="#i-download"/></svg> Verificar dependências</button>
+      <button class="btn btn--secondary" type="button" data-maintenance="reset"><svg class="icon"><use href="#i-refresh"/></svg> Resetar cache</button>
+      <button class="btn btn--danger" type="button" data-maintenance="clear"><svg class="icon"><use href="#i-trash"/></svg> Limpar saída</button>
+    </div>
+    <pre class="code-block code-block--output" id="maintenanceOutput"><span class="code-muted">Selecione uma ferramenta para iniciar o diagnóstico.</span></pre>
+  </template>
+
+  <template id="tpl-settings">
+    <section class="modal-section">
+      <h3>Aparência</h3>
+      <p class="modal-section__hint">O tema é aplicado imediatamente e lembrado entre sessões.</p>
+      <div class="settings-theme-grid">
+        <button class="settings-theme" type="button" data-set-theme="dark" aria-pressed="false">
+          <span class="settings-theme__swatch settings-theme__swatch--dark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span><strong>Black Theme</strong><small>Paleta escura padrão do console</small></span>
+          <span class="radio-indicator" aria-hidden="true"></span>
+        </button>
+        <button class="settings-theme" type="button" data-set-theme="light" aria-pressed="false">
+          <span class="settings-theme__swatch settings-theme__swatch--light" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span><strong>White Theme</strong><small>Cinza, slate e azul aço</small></span>
+          <span class="radio-indicator" aria-hidden="true"></span>
+        </button>
+      </div>
+    </section>
+    <section class="modal-section">
+      <h3>Barra lateral</h3>
+      <p class="modal-section__hint">Ela pode ser recolhida para ganhar área útil. O estado é preservado.</p>
+      <div class="button-grid">
+        <button class="btn btn--secondary" type="button" data-toggle-sidebar><svg class="icon"><use href="#i-panel-collapse"/></svg> Alternar sidebar</button>
+        <button class="btn btn--secondary" type="button" data-reset-sidebar><svg class="icon"><use href="#i-refresh"/></svg> Restaurar expandida</button>
+      </div>
+    </section>
+    <section class="modal-section">
+      <h3>Preferências locais</h3>
+      <div class="toggle-list">
+        <label class="toggle-row"><span class="toggle-row__copy"><strong>Reduzir animações</strong><small>Desativa transições e movimentos não essenciais.</small></span><input type="checkbox" id="prefReducedMotion"><span class="toggle-switch" aria-hidden="true"><span></span></span></label>
+        <label class="toggle-row"><span class="toggle-row__copy"><strong>Confirmar ao fechar o wizard</strong><small>Evita perda acidental de uma configuração em andamento.</small></span><input type="checkbox" id="prefConfirmClose" checked><span class="toggle-switch" aria-hidden="true"><span></span></span></label>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-about">
+    <div class="about-hero">
+      <span class="about-hero__icon"><svg class="icon"><use href="#i-logo"/></svg></span>
+      <div><h3>Huawei Manager <span>2.0.0</span></h3><p>Console desktop de operações para redes Huawei.</p></div>
+    </div>
+    <div class="info-grid info-grid--about">
+      <div class="info-cell"><span>Interface</span><strong>PySide6 · réplica em HTML/CSS/JS</strong></div>
+      <div class="info-cell"><span>Motor</span><strong>Vanilla JS · Web Standards</strong></div>
+      <div class="info-cell"><span>Perfil</span><strong>Administrador</strong></div>
+      <div class="info-cell"><span>Sessão</span><strong class="text-green">Ativa · modo mock</strong></div>
+      <div class="info-cell"><span>Build</span><strong class="mono">2026.10.28-desktop</strong></div>
+      <div class="info-cell"><span>Licença</span><strong>Uso interno</strong></div>
+    </div>
+    <p class="about-note">Esta é uma réplica visual para modelagem de produto. O login ilustrado do WinBox não faz parte desta interface.</p>
+  </template>
+
+  <template id="tpl-shortcuts">
+    <div class="shortcut-grid">
+      <div><kbd>Ctrl</kbd><kbd>B</kbd><span>Recolher / expandir sidebar</span></div>
+      <div><kbd>Ctrl</kbd><kbd>J</kbd><span>Alternar tema</span></div>
+      <div><kbd>Ctrl</kbd><kbd>K</kbd><span>Buscar serviço</span></div>
+      <div><kbd>Ctrl</kbd><kbd>N</kbd><span>Nova regra ACL</span></div>
+      <div><kbd>Esc</kbd><span>Fechar diálogo ou menu</span></div>
+      <div><kbd>F11</kbd><span>Maximizar / restaurar</span></div>
+    </div>
+    <p class="modal-lead modal-lead--tight">Atalhos de navegador (como Ctrl+B em alguns ambientes) podem ser interceptados pelo sistema. Use os controles visíveis como alternativa.</p>
+  </template>
+
+  <script src="script.js" defer></script>
+</body>
+</html>

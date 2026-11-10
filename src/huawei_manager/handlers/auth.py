@@ -1,0 +1,113 @@
+"""Auth mixin — authentication dialogs and access control."""
+
+from __future__ import annotations
+
+import datetime
+from typing import cast
+
+from PySide6.QtWidgets import QMessageBox, QWidget
+
+from huawei_manager._config import log
+from huawei_manager._protocols import AppCoreProtocol
+from huawei_manager.sdn_controller.authz import Role, role_meets
+from huawei_manager.widgets.auth_overlay import AuthOverlay
+
+
+class AuthMixin:
+    """Mixin com metodos de autenticacao (admin / tecnico)."""
+
+    # ══════════════════════════════════════════════════════════════════
+    #  AUTENTICACAO
+    # ══════════════════════════════════════════════════════════════════
+    def _show_auth_dialog(self: AppCoreProtocol) -> None:
+        if self._access_level != "user":
+            resp = QMessageBox.question(
+                None, "Sair da sess\u00e3o",
+                "Deseja realmente sair da sess\u00e3o atual?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if resp != QMessageBox.StandardButton.Yes:
+                return
+            self._access_level = "user"
+            self._session_tracker.set_role(Role.USER)
+            self._sb.set_access_role("user")
+            self._sb.disconnect()
+            self._mock_mode = False
+            self._watcher.stop()
+            self._rebuild_for_access_change()
+            if log is not None:
+                log.info("Acesso: deslogado")
+            return
+
+        try:
+            if self._auth_overlay is not None and self._auth_overlay.isVisible():
+                return
+        except RuntimeError:
+            self._auth_overlay = None  # C++ object já deletado
+
+        now = datetime.datetime.now().timestamp()
+        if now < self._admin_locked_until:
+            remaining = int(self._admin_locked_until - now)
+            QMessageBox.warning(None, "Acesso Bloqueado",
+                f"Tentativas excedidas. Aguarde {remaining}s e tente novamente.")
+            return
+
+        def _on_result(level: str, attempts: int, locked_until: float) -> None:
+            self._auth_overlay = None  # limpa ref p/ evitar crash ao reabrir
+            if level != "user":
+                self._access_level = level
+                self._session_tracker.set_role(Role.from_string(level))
+                self._sb.set_access_role(level)
+                self._admin_attempts = 0
+                self._admin_locked_until = 0
+                self._rebuild_for_access_change()
+                if level == "tecnico":
+                    self._watcher.start()
+                else:
+                    self._watcher.stop()
+                if log is not None:
+                    log.info("Acesso: %s autenticado", level)
+            else:
+                self._admin_attempts = attempts
+                self._admin_locked_until = locked_until
+                if locked_until > 0:
+                    if log is not None:
+                        log.warning("Acesso: lockout por %ds", self.ADMIN_LOCKOUT_SECS)
+
+        overlay = AuthOverlay(
+            parent=cast(QWidget, self.content),
+            on_result=_on_result,
+            admin_locked_until=self._admin_locked_until,
+            admin_max_attempts=self.ADMIN_MAX_ATTEMPTS,
+            admin_lockout_secs=self.ADMIN_LOCKOUT_SECS,
+            attempts_so_far=self._admin_attempts,
+        )
+        self._auth_overlay = overlay
+        overlay.show()
+
+    def _rebuild_for_access_change(self: AppCoreProtocol) -> None:
+        """Reconstrói as páginas após troca de nível de acesso.
+
+        A página ATUAL é reconstruída — sem isso ela mantém a UI do nível
+        anterior (ex.: aba Manutenção presa em "Acesso Restrito" depois do
+        login, e o botão de auth passa a perguntar se quer sair da sessão).
+        A topology é invalidada para rebuild lazy na próxima visita, quando
+        não é a página corrente.
+        """
+        current = self._current_page or "topology"
+        self._rebuild_page(current)
+        if current != "topology":
+            self._rebuild_page("topology")
+
+    def _require_access(self: AppCoreProtocol, level: str = "admin") -> bool:
+        """Verifica se o nivel de acesso atual atende ao requisito.
+
+        Fonte unica da hierarquia: ``authz.role_meets`` (Role.hierarchy).
+        Nivel desconhecido no lado atual cai para ``Role.USER``
+        (fail-closed); nenhum call site real passa nivel de requisito
+        invalido (apenas "user"/"tecnico"/"admin").
+
+        Returns True se permitido, False se bloqueado.
+        """
+        return role_meets(self._access_level, level)

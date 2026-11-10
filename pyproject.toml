@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "huawei-manager"
+dynamic = ["version"]
+dependencies = [
+    "netmiko~=4.4.0",
+    "python-dotenv~=1.0.1",
+    "cryptography~=44.0.0",
+    "pyyaml~=6.0.2",
+    "PySide6~=6.10.1",
+    "argon2-cffi~=23.1.0",
+]
+
+[project.scripts]
+huawei-manager = "huawei_manager:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "huawei_manager.__version__"}
+
+[project.optional-dependencies]
+dev = ["pytest~=8.3.4", "pytest-cov~=6.0.0", "pytest-qt~=4.4.0", "ruff~=0.8.6", "pyright~=1.1.391"]
+vault = ["hvac~=2.2.0"]
+aws = ["boto3~=1.35.0"]
+# `standard-telnetlib` e obrigatorio: o driver importa telnetlib, removido do
+# stdlib a partir do Python 3.13 (o venv do projeto usa 3.14).
+napalm = ["napalm>=5,<6", "napalm-huawei-vrp~=1.2.0", "standard-telnetlib"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+# Stubs parciais locais: napalm/napalm-huawei-vrp nao publicam py.typed.
+stubPath = "typings"
+exclude = ["**/tests", "**/node_modules", "**/__pycache__", "**/.*"]
+reportOptionalMemberAccess = "warning"
+reportAttributeAccessIssue = "error"
+reportMissingTypeStubs = "warning"
+reportUnknownVariableType = "warning"
+reportUnknownMemberType = "warning"
+reportUnknownParameterType = "warning"
+reportMissingParameterType = "warning"
+reportMissingTypeArgument = "warning"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = []
+fixable = ["E", "F", "W", "I"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "setup"]

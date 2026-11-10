@@ -1,0 +1,180 @@
+"""Devices mixin — ponte fina entre AppCore (UI+eventos) e DeviceService (dominio)."""
+from __future__ import annotations
+
+import logging
+
+import huawei_manager.constants as C
+from huawei_manager._protocols import AppCoreProtocol
+from huawei_manager.device_models import Device
+from huawei_manager.sdn_controller.authz import role_meets
+from huawei_manager.sdn_controller.drivers.factory import driver_for
+from huawei_manager.sdn_controller.event_queue import Event, EventType
+from huawei_manager.sdn_controller.events import DeviceDisconnectedPayload
+from huawei_manager.widgets.device_dialog import DeviceDialog
+
+log = logging.getLogger(__name__)
+
+
+class DevicesMixin:
+    def _refresh_devices(self: AppCoreProtocol) -> None:
+        lock = self._devices_lock
+        if lock is not None and not lock.acquire(blocking=False):
+            return
+        try:
+            devices = self._device_service.load_inventory()
+            if not devices:
+                log.warning("_refresh_devices: load_inventory retornou 0 devices")
+        finally:
+            if lock is not None:
+                lock.release()
+        # I/O pesado (probe TCP 5s/device + escrita) FORA do lock para nao
+        # travar o refresh do dashboard nem concorrer com _delete_device.
+        devices = self._device_service.probe_or_simulate(devices, self._mock_mode)
+        try:
+            self._device_service.save_inventory(devices)
+        except Exception as exc:
+            log.error(
+                "_refresh_devices: falha ao salvar inventario (mantendo "
+                "estado em memoria): %s", exc,
+            )
+        self._devices_gen += 1
+        self._dispatch(lambda: self._update_devices_ui(devices))
+
+    def _update_devices_ui(self: AppCoreProtocol, devices: list[Device]) -> None:
+        self._devices = devices
+        self._controller.sync_from_devices(devices, publish_events=False)
+        canvas = self._topo_canvas_widget()
+        if canvas is not None:
+            canvas.set_access(self._access_level)
+            canvas.update_devices(devices)
+        status_lbl = self._device_status_widget()
+        if status_lbl is not None:
+            status_lbl.setText(f"Invent\u00e1rio: {len(devices)} devices")
+
+    def _show_device_dialog(self: AppCoreProtocol, device: Device | None = None) -> None:
+        if not self._require_access("tecnico"):
+            return
+        dialog = DeviceDialog(
+            parent=None,
+            device=device,
+            device_types=["ROUTER", "SWITCH", "FIREWALL", "LOAD-BALANCER",
+                          "WAN-ACCEL", "AP"],
+        )
+        if dialog.exec():
+            data = dialog.get_data()
+            if device is not None:
+                self._device_service.update_device(device, data)
+            else:
+                self._device_service.add_device(data)
+            self._spawn_io(self._refresh_devices)
+
+    def _delete_device(self: AppCoreProtocol, device: Device) -> None:
+        if not self._require_access("tecnico"):
+            return
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            None, "Excluir",
+            f"Confirmar exclusao de {device.name} ({device.host})?",
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        devices = self._device_service.load_inventory()
+        remaining, removed = self._device_service.delete_device(device.id, devices)
+        if removed is not None and self._target_device is not None:
+            if self._target_device.id == removed.id:
+                self._clear_device_target()
+        self._devices_gen += 1
+        self._spawn_io(self._refresh_devices)
+
+    def _on_device_selected(self: AppCoreProtocol, device: Device) -> None:
+        self._target_device = device
+        # Factory (Gap 1): o driver passa a refletir o tipo do dispositivo
+        # selecionado (ROUTER/SWITCH/FIREWALL) — contrato BaseDriver.
+        self._drv = driver_for(device, self._sb, self._event_queue)
+        overrides = self._device_service.set_target(device)
+        if overrides.host:
+            self.session.override_host = overrides.host
+        if overrides.port:
+            self.session.override_port = overrides.port
+        if overrides.username:
+            self.session.override_username = overrides.username
+        if overrides.password:
+            self.session.override_password = overrides.password
+        if overrides.ssh_key:
+            self.session.override_ssh_key = overrides.ssh_key
+        info = f"{device.name} ({device.host})"
+        if role_meets(self._access_level, "tecnico"):
+            info += f":{device.port}"
+        if role_meets(self._access_level, "tecnico") and device.username:
+            info += f"  user:{device.username}"
+        info_lbl = self._device_info_widget()
+        if info_lbl is not None:
+            info_lbl.setText(f"  Selecionado: {info}")
+        if self._device_target_lbl is not None:
+            self._device_target_lbl.setText(info)
+        self._refresh_service_list()
+
+    def _ensure_device_ready(self: AppCoreProtocol, action: str) -> Device | None:
+        """Garante device cadastrado e selecionado antes de acoes que exigem device.
+
+        Retorna o device selecionado, ou None se nao houver device cadastrado
+        (admin e convidado a cadastrar via dialog modal; nao-admin recebe aviso)
+        ou se nenhum device estiver selecionado.
+        """
+        devices = self._devices
+        if not devices:
+            devices = self._device_service.load_inventory()
+        if not devices:
+            self._prompt_no_devices(action)
+            return None
+        device = self._get_selected_device()
+        if device is None:
+            self._set_status(
+                "Selecione um device primeiro — Topologia / Devices",
+                C.NEON_AMBER,
+            )
+            return None
+        return device
+
+    def _prompt_no_devices(self: AppCoreProtocol, action: str) -> None:
+        """Dialog modal (admin) ou aviso (nao-admin) quando nao ha devices."""
+        if role_meets(self._access_level, "admin"):
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                None,
+                "Nenhum device cadastrado",
+                f"Para {action} e necessario cadastrar um device.\n\n"
+                "Deseja cadastrar agora?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._show_device_dialog()
+        else:
+            self._set_status(
+                "Nenhum device cadastrado — solicite ao admin para cadastrar",
+                C.NEON_AMBER,
+            )
+
+    def _clear_device_target(self: AppCoreProtocol) -> None:
+        self._target_device = None
+        self.session.override_host = None
+        self.session.override_port = None
+        self.session.override_username = None
+        self.session.override_password = None
+        self.session.override_ssh_key = None
+        canvas = self._topo_canvas_widget()
+        if canvas is not None:
+            canvas.deselect()
+        self._device_target_lbl.setText("(nenhum device)")
+        info_lbl = self._device_info_widget()
+        if info_lbl is not None:
+            info_lbl.setText("  Nenhum device selecionado")
+        if self._sb.is_alive():
+            self._sb.disconnect()
+            self._set_status("Desconectado", C.NEON_RED)
+            self._set_conn_btn()
+            self._event_queue.put(Event(EventType.DEVICE_DISCONNECTED,
+                                        source="device",
+                                        payload=DeviceDisconnectedPayload(reason="target_cleared")))
+        self._refresh_service_list()
