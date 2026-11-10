@@ -4,6 +4,13 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# Ambientes sandbox/CI onde $HOME pode não ser gravável:
+_home = os.environ.get("HOME")
+if not _home or not os.access(_home, os.W_OK):
+    _tmp_home = os.path.join(os.sep, "tmp", "huawei_manager_test_home")
+    os.makedirs(_tmp_home, exist_ok=True)
+    os.environ["HOME"] = _tmp_home
+
 try:
     import PySide6  # noqa: F401
     HAS_PYSIDE6 = True

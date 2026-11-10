@@ -59,7 +59,7 @@ from huawei_manager.app_state import AppStateMixin
 from huawei_manager.app_threading import ThreadingMixin
 from huawei_manager.command import ConfigCommand
 from huawei_manager.constants import set_theme
-from huawei_manager.db import get_connection, init_database
+from huawei_manager.db import get_connection, get_database_path, init_database
 from huawei_manager.device_models import Device
 from huawei_manager.device_repository import DeviceRepository
 from huawei_manager.handlers import EventHandlers
@@ -82,6 +82,50 @@ from huawei_manager.tabs._contract import TabContext
 from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button, neon_button
 
 log = logging.getLogger("huawei_manager")
+
+
+def _adaptive_polling_flag(resolve_env: Callable[[str], str]) -> bool:
+    """Lê a flag de polling com fail-closed (D15).
+
+    Sem ``VNF_ENCRYPT_KEY`` o inventário não pode ser decriptado; nesse caso
+    o polling é recusado com CRITICAL em vez de rodar pela metade.
+    """
+    if os.environ.get(C.POLL_ENABLED_ENV, "0") != "1":
+        return False
+    if not resolve_env("VNF_ENCRYPT_KEY"):
+        log.critical(
+            "HW_ADAPTIVE_POLLING=1 mas VNF_ENCRYPT_KEY ausente — polling desabilitado"
+        )
+        return False
+    return True
+
+
+def _adaptive_polling_guard(
+    enabled: bool, mock_mode: bool, svc_mode: str
+) -> bool:
+    """Polling só roda com flag ON, fora de mock e em modo CLI.
+
+    ``svc_mode`` é lido ao vivo: ``HW_SVC_MODE=mock`` (default do .env)
+    nunca deve abrir SSH real em segundo plano.
+    """
+    return enabled and not mock_mode and svc_mode != "mock"
+
+
+def _adaptive_rearm_delay_ms(
+    next_due: float | None, now: float, floor_ms: int
+) -> int:
+    """Converte ``next_due`` (epoch absoluto) no delay relativo do QTimer."""
+    if next_due is None:
+        return C.POLL_MIN_INTERVAL * 1000
+    return max(floor_ms, int((next_due - now) * 1000))
+
+
+def _resolve_svc_mode(raw: str) -> str:
+    """Normaliza ``HW_SVC_MODE`` (``real`` documentado no .env vira ``cli``)."""
+    mode = (raw or "").strip().lower()
+    if mode == "real":
+        return "cli"
+    return mode if mode in ("mock", "cli") else "mock"
 
 
 class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
@@ -182,11 +226,12 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # Última mutação de configuração (Editor/Serviços) com snapshot
         # pré-mudança — alimenta o rollback da paleta de comandos.
         self._last_config_command: ConfigCommand | None = None
+        db_path = get_database_path()
         self._controller = ControllerCore(
             event_queue=self._event_queue,
-            dump_path=str(Path.home() / ".huawei_manager" / "sdn_state.json"),
+            dump_path=str(db_path.parent / "sdn_state.json"),
         )
-        db_conn = get_connection()
+        db_conn = get_connection(db_path)
         init_database(db_conn)
 
         # Auto-generate VNF_ENCRYPT_KEY on first boot (fail-closed: if put fails, log and continue)
@@ -214,12 +259,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             repository=DeviceRepository(db_conn),
         )
 
-        self._polling_enabled = os.environ.get(C.POLL_ENABLED_ENV, "0") == "1"
-        if self._polling_enabled and not _s("VNF_ENCRYPT_KEY"):
-            log.critical(
-                "HW_ADAPTIVE_POLLING=1 mas VNF_ENCRYPT_KEY ausente — polling desabilitado"
-            )
-            self._polling_enabled = False
+        self._polling_enabled = _adaptive_polling_flag(_s)
         self._session_factory = SSHSessionFactory(secrets, audit_log)
         self._polling_mgr = PollingManager(
             factory=self._session_factory,
@@ -244,7 +284,11 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._admin_locked_until: float = 0
 
         self._target_device: Device | None = None
-        self._devices: list[Device] = []
+        try:
+            self._devices: list[Device] = self._device_service.load_inventory()
+        except Exception as exc:
+            log.warning("Falha ao carregar inventário inicial: %s", exc)
+            self._devices = []
         io_w = int(os.environ.get("HW_IO_WORKERS", "6"))
         cpu_w = int(os.environ.get("HW_CPU_WORKERS", "2"))
         self._io_executor = ThreadPoolExecutor(max_workers=io_w, thread_name_prefix="hw-io")
@@ -285,6 +329,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._command_palette = None
         self._setup_bindings()
         self._show_page("home")
+        self._spawn_io(self._refresh_devices)
 
     def _init_common_attrs(self) -> None:
         """Garante que todos os atributos dos mixins existem antes do uso."""
@@ -298,10 +343,10 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._mock_mode: bool = False
         self._dry_run: DryRunEngine | None = None
         self._cmd_validator: CommandValidator | None = None
-        self._svc_mode_var: str = os.environ.get("HW_SVC_MODE", "mock")
-        if self._svc_mode_var not in ("mock", "cli"):
-            log.warning("HW_SVC_MODE invalido (%r) — usando mock", self._svc_mode_var)
-            self._svc_mode_var = "mock"
+        raw_svc_mode = os.environ.get("HW_SVC_MODE", "mock")
+        self._svc_mode_var: str = _resolve_svc_mode(raw_svc_mode)
+        if raw_svc_mode.strip().lower() not in ("mock", "cli", "real"):
+            log.warning("HW_SVC_MODE invalido (%r) — usando mock", raw_svc_mode)
         self._shutdown: bool = False
         self._event_drop_count: int = 0
         # Logger de auditoria do app (era inacessível aos mixins; o caminho
@@ -827,6 +872,16 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             btn._activate()
             self._active_btn = btn
         self._current_page = key
+        if key == "home":
+            self._refresh_dashboard()
+        elif key == "topology":
+            canvas = self._topo_canvas_widget()
+            if canvas is not None:
+                canvas.set_access(self._access_level)
+                canvas.update_devices(self._devices)
+            status_lbl = self._device_status_widget()
+            if status_lbl is not None:
+                status_lbl.setText(f"Inventário: {len(self._devices)} devices")
 
     def _rebuild_page(self, key: str) -> None:
         td = tab_by_key(self._tabs, key)
@@ -844,26 +899,39 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self.clock_lbl.setText(
             datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
 
-    def _tick_adaptive_polling(self) -> None:
-        if self._polling_enabled and not self._mock_mode:
-            try:
-                self._spawn_io(self._polling_mgr.tick)
-            except Exception:
-                log.exception("adaptive polling tick falhou ao despachar")
+    def _rearm_adaptive_timer(self) -> None:
+        if getattr(self, "_shutdown", False):
+            return
         try:
             nxt = self._polling_mgr.next_due_min()
-            if nxt is None:
-                delay_ms = C.POLL_MIN_INTERVAL * 1000
-            else:
-                delay_ms = max(
-                    C.POLL_TICK_FLOOR_MS,
-                    int((nxt - time.time()) * 1000),
-                )
+            delay_ms = _adaptive_rearm_delay_ms(
+                nxt, time.time(), C.POLL_TICK_FLOOR_MS
+            )
             self._adaptive_timer.start(delay_ms)
         except Exception:
             # B-1: re-arm nunca deve morrer com o timer — polling continua.
             log.exception("adaptive polling re-arm falhou")
             self._adaptive_timer.start(C.POLL_TICK_FLOOR_MS)
+
+    def _tick_adaptive_polling(self) -> None:
+        if getattr(self, "_shutdown", False):
+            return
+        if _adaptive_polling_guard(
+            self._polling_enabled, self._mock_mode, self._svc_mode_var
+        ):
+            try:
+                fut = self._spawn_io(self._polling_mgr.tick)
+            except Exception:
+                log.exception("adaptive polling tick falhou ao despachar")
+            else:
+                if fut is not None:
+                    # Re-arma só quando o tick concluir: next_due_min() já
+                    # enxerga o estado novo e não há ticks sobrepostos.
+                    fut.add_done_callback(
+                        lambda _f: self._dispatch(self._rearm_adaptive_timer)
+                    )
+                    return
+        self._rearm_adaptive_timer()
 
     # ── Tema ──────────────────────────────────────────────────────────
     def _toggle_theme(self) -> None:

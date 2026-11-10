@@ -6,6 +6,7 @@ Database path: ~/.huawei_manager/inventory.db
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from pathlib import Path
 
@@ -58,8 +59,21 @@ _ALL_DDL = [_DEVICES_DDL, _USERS_DDL, _DB_META_DDL]
 
 def get_database_path() -> Path:
     """Return ~/.huawei_manager/inventory.db, creating the directory if needed."""
-    db_dir = Path.home() / ".huawei_manager"
-    db_dir.mkdir(parents=True, exist_ok=True)
+    custom_dir = os.environ.get("HW_DATA_DIR") or os.environ.get("HUAWEI_MANAGER_DIR")
+    if custom_dir:
+        db_dir = Path(custom_dir)
+    else:
+        db_dir = Path.home() / ".huawei_manager"
+    try:
+        db_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        fallback = Path.cwd() / ".huawei_manager"
+        try:
+            fallback.mkdir(parents=True, exist_ok=True)
+            db_dir = fallback
+        except OSError:
+            db_dir = Path("/tmp/huawei_manager")
+            db_dir.mkdir(parents=True, exist_ok=True)
     return db_dir / "inventory.db"
 
 

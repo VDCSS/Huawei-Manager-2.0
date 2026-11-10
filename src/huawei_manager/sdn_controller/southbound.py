@@ -236,12 +236,17 @@ class SSHSouthbound(SouthboundProtocol):
         """Atualiza o papel de acesso usado pelo validator."""
         self._access_role = role
 
-    def send_command(self, command: str) -> str:
+    def send_command(
+        self, command: str, read_timeout: int | None = None
+    ) -> str:
         """Envia um comando show e retorna o output.
 
         Se um ``validator`` foi configurado, valida o comando antes
         de executar. Comandos negados disparam ``SdnAuthError``;
         falhas de execucao disparam ``SdnCommandError``.
+
+        ``read_timeout`` opcional (segundos); None preserva o default do
+        caminho manual (120s). O polling passa um valor menor por comando.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
@@ -252,7 +257,9 @@ class SSHSouthbound(SouthboundProtocol):
                 log.warning("send_command blocked: %s — %s", command[:60], vr.reason)
                 raise SdnAuthError(msg)
         try:
-            return self._session.run_cli_rpc(command)
+            if read_timeout is None:
+                return self._session.run_cli_rpc(command)
+            return self._session.run_cli_rpc(command, read_timeout=read_timeout)
         except Exception as exc:
             sanitized = _sanitize(str(exc))
             log.error("send_command failed: %s", sanitized)
@@ -291,6 +298,47 @@ class SSHSouthbound(SouthboundProtocol):
             log.error("send_config failed: %s", sanitized)
             return False, sanitized
 
+    def send_service_commands_detailed(
+        self,
+        commands: list[str],
+        config_mode: bool = False,
+        requires_privilege: bool = False,
+        read_timeout: int | None = None,
+    ) -> list[tuple[str, str]]:
+        """Executa comandos de servico e devolve ``(comando, output)``.
+
+        Mesma semantica de ``send_service_commands`` (system-view/quit,
+        validacao, invalidacao da conexao em ``SdnError``), mas preserva a
+        granularidade por comando. O polling adaptativo usa essa granularidade
+        para distinguir um comando nao suportado pelo device (ex.: BGP/OSPF
+        ausente) de uma falha real de conexao.
+        """
+        if not self._connected:
+            raise SdnConnectionError("Not connected")
+        need_sysview = config_mode or requires_privilege
+
+        if need_sysview:
+            self._session.run_cli_rpc("system-view")
+
+        results: list[tuple[str, str]] = []
+        try:
+            for cmd in commands:
+                if config_mode:
+                    _ok, msg = self.send_config([cmd])
+                    results.append((cmd, msg))
+                else:
+                    results.append(
+                        (cmd, self.send_command(cmd, read_timeout=read_timeout))
+                    )
+        except SdnError:
+            self.invalidate_connection()
+            raise
+        finally:
+            if need_sysview:
+                self._session.run_cli_rpc("return")
+
+        return results
+
     def send_service_commands(
         self,
         commands: list[str],
@@ -308,27 +356,12 @@ class SSHSouthbound(SouthboundProtocol):
         Returns:
             Output concatenado dos comandos executados.
         """
-        if not self._connected:
-            raise SdnConnectionError("Not connected")
-        need_sysview = config_mode or requires_privilege
-
-        if need_sysview:
-            self._session.run_cli_rpc("system-view")
-
         parts: list[str] = []
-        try:
-            for cmd in commands:
-                if config_mode:
-                    ok, msg = self.send_config([cmd])
-                    parts.append(f">  Config applied:\n{'─' * 40}\n{msg}")
-                else:
-                    out = self.send_command(cmd)
-                    parts.append(f">  {cmd}\n{'─' * 40}\n{out}")
-        except SdnError:
-            self.invalidate_connection()
-            raise
-        finally:
-            if need_sysview:
-                self._session.run_cli_rpc("return")
-
+        for cmd, out in self.send_service_commands_detailed(
+            commands,
+            config_mode=config_mode,
+            requires_privilege=requires_privilege,
+        ):
+            label = "Config applied" if config_mode else cmd
+            parts.append(f">  {label}\n{'─' * 40}\n{out}")
         return "\n\n".join(parts)

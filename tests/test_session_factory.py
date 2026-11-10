@@ -136,6 +136,35 @@ def test_purge_expired_closes_idle_sessions(audit_logger):
     ssb.disconnect.assert_called()
 
 
+def test_default_ttl_exceeds_max_poll_interval():
+    from huawei_manager.constants import POLL_MAX_INTERVAL
+    from huawei_manager.sdn_controller.session_factory import _DEFAULT_TTL
+
+    assert _DEFAULT_TTL > POLL_MAX_INTERVAL
+
+
+def test_get_after_dispose_returns_none(factory):
+    device = _device()
+    assert factory.factory.get(device) is not None
+    factory.factory.dispose()
+    assert factory.factory.get(device) is None
+
+
+def test_session_recreated_on_device_update(factory):
+    device = _device()
+    s1 = factory.factory.get(device)
+    assert s1 is not None
+
+    updated = _device(host="10.0.0.99")
+    s2 = factory.factory.get(updated)
+
+    assert s2 is not None and s2 is not s1
+    assert len(factory.overrides) == 2
+    assert factory.overrides[1]["override_host"] == "10.0.0.99"
+    assert factory.factory.active_sessions == 1
+    s1.disconnect.assert_called_once()
+
+
 def test_release_and_dispose(factory):
     v1 = _device(id="dev-1-a", name="A", host="10.0.0.1")
     v2 = _device(id="dev-2-b", name="B", host="10.0.0.2")
@@ -147,6 +176,31 @@ def test_release_and_dispose(factory):
     factory.factory.dispose()
     assert factory.factory.active_sessions == 0
     s2.disconnect.assert_called()
+
+
+def test_default_builder_wires_netmiko_session(monkeypatch, audit_logger):
+    """Caminho de produção: NetmikoSession + SSHSouthbound reais (classes mockadas)."""
+    import huawei_manager.sdn_controller.session_factory as sf
+
+    netmiko_cls = MagicMock()
+    ssb_cls = MagicMock()
+    monkeypatch.setattr(sf, "NetmikoSession", netmiko_cls)
+    monkeypatch.setattr(sf, "SSHSouthbound", ssb_cls)
+
+    backend = _FakeBackend()
+    fac = SSHSessionFactory(backend, audit_logger, timeout=42, max_retries=3)
+
+    ssb = fac._default_builder(backend, audit_logger)
+
+    netmiko_cls.assert_called_once_with(backend, audit_logger)
+    ssb_cls.assert_called_once_with(
+        backend,
+        audit_logger,
+        timeout=42,
+        max_retries=3,
+        session=netmiko_cls.return_value,
+    )
+    assert ssb is ssb_cls.return_value
 
 
 def test_ui_session_untouched(factory):
@@ -161,6 +215,13 @@ def test_audit_wrapper_adds_origin(tmp_path):
     wrapper.log_operation("get", user="u", host="h", status="ok")
     entry = inner.tail(1)[0]
     assert entry["extra"]["origin"] == "auto-poll"
+
+
+def test_audit_wrapper_delegates_verify_and_tail(audit_logger):
+    wrapper = _OriginAuditWrapper(audit_logger)
+    assert wrapper.verify() == audit_logger.verify()
+    assert wrapper.tail(1) == audit_logger.tail(1)
+    assert wrapper.format_tail(1) == audit_logger.format_tail(1)
 
 
 def test_audit_wrapper_timed_adds_origin(tmp_path):

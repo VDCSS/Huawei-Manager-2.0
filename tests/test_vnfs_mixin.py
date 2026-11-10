@@ -54,6 +54,7 @@ def _make_mixin(**attrs) -> DevicesMixin:
         _refresh_service_list=MagicMock(),
         _require_access=MagicMock(return_value=True),
         _device_service=_make_device_service(),
+        _refresh_dashboard=MagicMock(),
     )
     for k, v in defaults.items():
         setattr(mixin, k, v)

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from huawei_manager import constants as C
 from huawei_manager.sdn_controller.polling_manager import (
     IntervalDecider,
     PollingManager,
@@ -52,6 +53,9 @@ class _FakeDeviceService:
     def load_inventory(self) -> list[Device]:
         return list(self._devices)
 
+    def clear_inventory(self) -> None:
+        self._devices.clear()
+
 
 class _FakeFactory:
     """Factory fake que registra get/release/purge e entrega MagicMock."""
@@ -81,7 +85,14 @@ def root_svc():
 
 @pytest.fixture
 def make_manager(monkeypatch):
-    def _make(devices, services=None, poll_services=None, enabled=True, ssb_out="stable output"):
+    def _make(
+        devices,
+        services=None,
+        poll_services=None,
+        enabled=True,
+        ssb_out="stable output",
+        max_devices=10,
+    ):
         svc_objs = list(services or [])
         lookup = {s.id: s for s in svc_objs}
         # Patcheia get_service_by_id do MÓDULO polling_manager com o
@@ -90,7 +101,9 @@ def make_manager(monkeypatch):
         import huawei_manager.sdn_controller.polling_manager as pm
         monkeypatch.setattr(pm, "get_service_by_id", lookup.get)
         factory = _FakeFactory()
-        factory._ssb.send_service_commands.return_value = ssb_out
+        factory._ssb.send_service_commands_detailed.side_effect = (
+            lambda cmds, **kw: [(c, ssb_out) for c in cmds]
+        )
         device_service = _FakeDeviceService(devices)
         ids = poll_services if poll_services is not None else [s.id for s in svc_objs]
         mgr = PollingManager(
@@ -98,14 +111,52 @@ def make_manager(monkeypatch):
             device_service=device_service,
             enabled=enabled,
             poll_services=ids,
+            max_devices=max_devices,
         )
         return mgr, factory
     return _make
 
 
 def test_tick_no_exceptions(make_manager):
-    mgr, _ = make_manager([_device_fake("r1")])
+    mgr, factory = make_manager([_device_fake("r1")])
     mgr.tick()  # não lança
+    assert factory.purge_count == 1
+
+
+def test_tick_survives_inventory_exception(make_manager, root_svc):
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
+    mgr._device_service.load_inventory = MagicMock(side_effect=RuntimeError("db"))
+    mgr.tick()  # não lança
+    assert factory.get_calls == []
+
+
+def test_enabled_setter_stops_polling(make_manager, root_svc):
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
+    mgr.enabled = False
+    mgr.tick()
+    assert factory.get_calls == []
+    mgr.enabled = True
+
+
+def test_get_none_backoff(make_manager, root_svc):
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
+    factory.get = MagicMock(return_value=None)
+    mgr.tick()
+    assert mgr._next_due["r1"] > time.time() + 55
+
+
+def test_error_string_detects_percent_prefix():
+    from huawei_manager.sdn_controller.polling_manager import _is_error_string
+
+    assert _is_error_string("% Unrecognized command found") is True
+    assert _is_error_string("normal output") is False
+
+
+def test_normalize_strips_volatile_fields():
+    from huawei_manager.sdn_controller.polling_manager import _normalize_output
+
+    raw = "2026-10-29T10:00:00\n  total 10\nvalue 42\n\n%"
+    assert _normalize_output(raw) == "value 42"
 
 
 def test_tick_noop_when_disabled(make_manager):
@@ -138,8 +189,13 @@ def test_tick_consolidates_services_per_device(make_manager, root_svc):
         services=[root_svc, svc2],
     )
     mgr.tick()
-    factory._ssb.send_service_commands.assert_called_once_with(
-        ["display ip routing-table", "display bgp summary"]
+    calls = factory._ssb.send_service_commands_detailed.call_args_list
+    assert [c.args[0] for c in calls] == [
+        ["display ip routing-table"],
+        ["display bgp summary"],
+    ]
+    assert all(
+        c.kwargs["read_timeout"] == C.POLL_READ_TIMEOUT for c in calls
     )
 
 
@@ -149,12 +205,14 @@ def test_tick_skips_device_without_matching_services(make_manager, root_svc):
     mgr, factory = make_manager([switch], services=[root_svc])
     mgr.tick()
     assert factory.get_calls == []
-    factory._ssb.send_service_commands.assert_not_called()
+    factory._ssb.send_service_commands_detailed.assert_not_called()
+    # Sem serviço casado, o device recebe backoff (não reavalia a cada tick)
+    assert mgr._next_due["sw1"] > time.time() + 55
 
 
 def test_tick_survives_device_exception_and_releases(make_manager, root_svc):
     mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
-    factory._ssb.send_service_commands.side_effect = RuntimeError("boom")
+    factory._ssb.send_service_commands_detailed.side_effect = RuntimeError("boom")
     mgr.tick()  # não lança (D20: try/except por device)
     assert factory.release_calls == ["r1"]
 
@@ -169,15 +227,15 @@ def test_tick_releases_only_on_error(make_manager, root_svc):
 def test_tick_sets_backoff_after_device_error(make_manager, root_svc):
     # D20: next_due = now + POLL_DEFAULT_INTERVAL (anti hot-loop)
     mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
-    factory._ssb.send_service_commands.side_effect = RuntimeError("boom")
+    factory._ssb.send_service_commands_detailed.side_effect = RuntimeError("boom")
     mgr.tick()
     # POLL_DEFAULT_INTERVAL = 60; now não é injetável, então basta o
     # intervalo ser grande o suficiente para não re-poll no próximo tick
     assert mgr._next_due["r1"] > time.time() + 55
 
 
-def test_error_string_marks_unstable(make_manager, root_svc):
-    # D13: output com "ERRO:" → instável, next_due curto (POLL_MIN_INTERVAL)
+def test_all_commands_error_backoff_default(make_manager, root_svc):
+    # D13: erro-como-string em TODOS os comandos → backoff 60s (não 15s)
     mgr, factory = make_manager(
         [_device_fake("r1")],
         services=[root_svc],
@@ -185,8 +243,132 @@ def test_error_string_marks_unstable(make_manager, root_svc):
     )
     mgr.tick()
     assert factory.release_calls == []  # erro-como-string NÃO é exceção
-    assert mgr._next_due["r1"] <= time.time() + 20  # instável → min 15s
+    assert mgr._next_due["r1"] > time.time() + 55
     assert mgr.get_status()["stable"].get("r1") is not True
+
+
+def test_partial_command_error_does_not_pin_min_interval(make_manager, root_svc):
+    # B1: um comando não suportado (BGP ausente) não impede a estabilização
+    bgp = _svc("router-bgp-summary", ["ROUTER"], ["display bgp summary"])
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc, bgp])
+
+    def _detail(cmds, **kw):
+        return [
+            (c, "Error: Unrecognized command" if c == "display bgp summary"
+             else "stable output")
+            for c in cmds
+        ]
+
+    factory._ssb.send_service_commands_detailed.side_effect = _detail
+    for _ in range(5):
+        mgr.force_poll("r1")
+        mgr.tick()
+    # 5 amostras iguais → estável → intervalo dobrou de 15 para 30
+    assert mgr._decider.get_current_interval("r1") == pytest.approx(30)
+    assert mgr._next_due["r1"] > time.time() + 25
+
+
+def test_unsupported_command_cached_and_skipped(make_manager, root_svc):
+    bgp = _svc("router-bgp-summary", ["ROUTER"], ["display bgp summary"])
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc, bgp])
+    factory._ssb.send_service_commands_detailed.side_effect = lambda cmds, **kw: [
+        (c, "Error: Unrecognized command" if c == "display bgp summary"
+         else "stable output")
+        for c in cmds
+    ]
+    mgr.tick()
+    assert mgr.get_status()["unsupported_commands"] == 1
+    factory._ssb.send_service_commands_detailed.reset_mock()
+    mgr.force_poll("r1")
+    mgr.tick()
+    factory._ssb.send_service_commands_detailed.assert_called_once_with(
+        ["display ip routing-table"],
+        read_timeout=C.POLL_READ_TIMEOUT,
+    )
+
+
+def test_all_commands_fail_resets_stability(make_manager, root_svc):
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
+    for _ in range(5):
+        mgr.force_poll("r1")
+        mgr.tick()
+    assert mgr._tracker.is_stable("r1") is True
+    factory._ssb.send_service_commands_detailed.side_effect = (
+        lambda cmds, **kw: [(c, "ERRO: sem resposta") for c in cmds]
+    )
+    mgr.force_poll("r1")
+    mgr.tick()
+    assert mgr._tracker.is_stable("r1") is False
+    assert mgr._next_due["r1"] > time.time() + 55
+
+
+def test_device_budget_exhausted_backs_off(
+    make_manager, root_svc, monkeypatch
+):
+    mgr, factory = make_manager([_device_fake("r1")], services=[root_svc])
+    monkeypatch.setattr(
+        "huawei_manager.sdn_controller.polling_manager.time.monotonic",
+        lambda: 100.0,
+    )
+    monkeypatch.setattr(
+        "huawei_manager.sdn_controller.polling_manager.POLL_DEVICE_BUDGET_SECS",
+        0,
+    )
+    mgr.tick()
+    factory._ssb.send_service_commands_detailed.assert_not_called()
+    assert mgr._next_due["r1"] > time.time() + 55
+
+
+def test_truncation_warns_once(make_manager, root_svc, caplog):
+    devices = [_device_fake(f"d{i}") for i in range(12)]
+    mgr, factory = make_manager(
+        devices, services=[root_svc], max_devices=10
+    )
+    with caplog.at_level("WARNING"):
+        mgr.tick()
+        mgr.tick()
+    msgs = [r.message for r in caplog.records if "limite 10" in r.message]
+    assert len(msgs) == 1
+    assert len(factory.get_calls) == 10
+
+
+def test_offline_device_state_pruned(make_manager, root_svc):
+    online = _device_fake("on")
+    offline = _device_fake("off", status="offline")
+    mgr, _ = make_manager([online, offline], services=[root_svc])
+    mgr.tick()
+    assert "on" in mgr._next_due
+    assert "off" not in mgr._next_due
+    assert "off" not in mgr._tracker.get_all_states()
+
+
+def test_next_due_min_ignores_past(make_manager, root_svc):
+    mgr, _ = make_manager([], services=[root_svc])
+    mgr._next_due["ghost"] = 1.0
+    nxt = mgr.next_due_min()
+    assert nxt is not None
+    assert nxt >= time.time() - 1
+
+
+def test_state_purged_for_removed_device(make_manager, root_svc):
+    mgr, _ = make_manager([_device_fake("r1")], services=[root_svc])
+    mgr.tick()
+    assert "r1" in mgr._next_due
+    ds = mgr._device_service
+    assert isinstance(ds, _FakeDeviceService)
+    ds.clear_inventory()
+    mgr.tick()
+    assert mgr._next_due == {}
+    assert mgr._tracker.get_all_states() == {}
+
+
+def test_empty_output_is_unstable(make_manager, root_svc):
+    mgr, factory = make_manager(
+        [_device_fake("r1")], services=[root_svc], ssb_out=""
+    )
+    mgr.tick()
+    assert mgr._tracker.is_stable("r1") is False
+    assert mgr._next_due["r1"] > time.time() + 55
 
 
 def test_overlapping_ticks_are_skipped(make_manager):

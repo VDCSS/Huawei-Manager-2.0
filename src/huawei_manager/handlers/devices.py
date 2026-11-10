@@ -50,6 +50,7 @@ class DevicesMixin:
         status_lbl = self._device_status_widget()
         if status_lbl is not None:
             status_lbl.setText(f"Invent\u00e1rio: {len(devices)} devices")
+        self._refresh_dashboard()
 
     def _show_device_dialog(self: AppCoreProtocol, device: Device | None = None) -> None:
         if not self._require_access("tecnico"):

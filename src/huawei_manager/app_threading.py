@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from concurrent.futures import Future
 from typing import TYPE_CHECKING
 
 from huawei_manager._protocols import AppCoreProtocol
@@ -67,13 +68,23 @@ class ThreadingMixin:
         if drained > 0:
             _app_log.debug("Drained %d SDN events from queue", drained)
 
-    def _spawn_io(self: AppCoreProtocol, fn: Callable[..., object], *args: object) -> None:
+    def _spawn_io(
+        self: AppCoreProtocol, fn: Callable[..., object], *args: object
+    ) -> Future[object] | None:
+        """Despacha ``fn`` no pool de I/O e devolve o Future (None pós-shutdown)."""
         if getattr(self, "_shutdown", False) or self._io_executor is None:
             _app_log.debug("_spawn_io pós-shutdown: no-op (%s)", getattr(fn, "__name__", fn))
-            return
+            return None
+        name = getattr(fn, "__name__", fn)
         future = self._io_executor.submit(fn, *args)
-        future.add_done_callback(lambda f: f.exception() and
-            _app_log.error("Task %s falhou: %s", getattr(fn, "__name__", fn), f.exception()))
+
+        def _log_failure(f: Future[object]) -> None:
+            exc = f.exception()
+            if exc is not None:
+                _app_log.error("Task %s falhou: %s", name, exc)
+
+        future.add_done_callback(_log_failure)
+        return future
 
     def _spawn_cpu(self: AppCoreProtocol, fn: Callable[..., object], *args: object) -> None:
         future = self._cpu_executor.submit(fn, *args)

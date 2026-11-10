@@ -116,8 +116,10 @@ class TestDisconnectColor:
         from huawei_manager.tabs._contract import TabContext
         from huawei_manager.tabs.home import HomeTab
 
+        sb_mock = MagicMock()
+        sb_mock.is_alive.return_value = False
         ctx = TabContext(
-            sb=MagicMock(), audit=None, event_bus=MagicMock(),
+            sb=sb_mock, audit=None, event_bus=MagicMock(),
             role=lambda: "admin", device=lambda: None,
             dispatch=lambda fn: fn() if callable(fn) else None,
             require_access=lambda level: True,

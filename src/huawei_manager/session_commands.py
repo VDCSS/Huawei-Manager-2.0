@@ -38,11 +38,11 @@ class SessionCommandsMixin:
         def _session_id(self) -> str | None: ...
 
     # ── executa comando CLI ──────────────────────────────────────────
-    def _cmd(self, command: str) -> str:
+    def _cmd(self, command: str, read_timeout: int = 120) -> str:
         if not self._conn:
             raise SdnConnectionError("Sem conexao ativa")
         try:
-            out = self._conn.send_command(command, read_timeout=120)
+            out = self._conn.send_command(command, read_timeout=read_timeout)
             return clean_output(str(out))
         except Exception as e:
             log.exception("Comando falhou: %s", command)
@@ -114,13 +114,13 @@ class SessionCommandsMixin:
                 return True, f"OK Configuracao aplicada{saved}\n{output}"
 
     # ── comando CLI livre ─────────────────────────────────────────────
-    def run_cli_rpc(self, cmd: str) -> str:
+    def run_cli_rpc(self, cmd: str, read_timeout: int = 120) -> str:
         sanitized = sanitize_command(cmd)
         with self._lock:
             with self._audit.timed(
                 "cli-rpc", user=self._user, host=self._host,
                 session_id=self._session_id, cmd=sanitized,
             ) as ctx:
-                result = self._cmd(cmd)
+                result = self._cmd(cmd, read_timeout)
                 ctx.set_status("ok")
                 return result

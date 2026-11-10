@@ -52,7 +52,7 @@ class TabContext:
     dispatch: Callable[..., None]   # agendamento na thread GUI (App._dispatch)
     # Fase 1 (piloto Manutenção) — serviços que a aba real consome:
     require_access: Callable[[str], bool]   # RBAC de ação (App._require_access)
-    spawn_io: Callable[..., None]           # thread de IO (App._spawn_io)
+    spawn_io: Callable[..., object]         # thread de IO (App._spawn_io)
     spawn_cpu: Callable[..., None]          # thread de CPU (App._spawn_cpu)
     watcher: Watcher                        # watcher global (is_active/start/stop)
     is_mock: Callable[[], bool]             # modo probe global (App._mock_mode)

@@ -156,6 +156,7 @@ class HomeTab:
             bar_layout.addSpacing(6)
         bar_layout.addStretch()
 
+        self.refresh()
         return p
 
     def dispose(self) -> None:
