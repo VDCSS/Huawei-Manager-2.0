@@ -93,7 +93,7 @@ def page_title(parent: QWidget, title: str, color: str, subtitle: str = "") -> N
     layout.addSpacing(24)
 
 
-def css_label(color: str, bg: str = "", font_size: int = 12, bold: bool = False) -> str:
+def css_label(color: str, bg: str = "", font_size: float = 12, bold: bool = False) -> str:
     weight = "bold" if bold else "normal"
     bg_css = f" background: {bg};" if bg else ""
     return f"color: {color};{bg_css} font: {weight} {font_size}px {C.FONT_UI_FAMILY};"

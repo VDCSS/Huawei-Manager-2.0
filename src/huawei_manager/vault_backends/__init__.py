@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +89,7 @@ def rotate_ssh_key(
             f"  Deploy no router: {'✔' if deployed else '✘'}\n"
             f"  Backend vault   : {backend.backend_name}\n"
             f"{push_msg}\n"
-            f"  Timestamp       : {datetime.now(UTC).isoformat()}"
+            f"  Timestamp       : {datetime.datetime.now(datetime.UTC).isoformat()}"
         )
 
     except Exception as exc:

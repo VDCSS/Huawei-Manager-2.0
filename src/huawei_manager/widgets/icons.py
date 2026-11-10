@@ -11,7 +11,7 @@ tema muda (o app já reconstrói a UI ao alternar tema).
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QSize, Qt
+from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 
 # ─── Sprite (viewBox 0 0 24 24 salvo indicação) ─────────────────────
@@ -91,7 +91,11 @@ _SPRITE: dict[str, str] = {
         '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>'
         '<polyline points="9 22 9 12 15 12 15 22"/>'
     ),
-    "i-info": '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+    "i-info": (
+        '<circle cx="12" cy="12" r="9"/>'
+        '<line x1="12" y1="11" x2="12" y2="16"/>'
+        '<line x1="12" y1="8" x2="12.01" y2="8"/>'
+    ),
     "i-key": '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m11 12 10-10M16 4l4 4M18 2l4 4"/>',
     "i-layers": (
         '<polygon points="12 2 22 7 12 12 2 7 12 2"/>'
@@ -110,9 +114,17 @@ _SPRITE: dict[str, str] = {
         '<ellipse cx="16" cy="16" rx="9.4" ry="4.1" stroke-width="1.45" transform="rotate(-36 16 16)"/>'
         '<circle cx="16" cy="16" r="2.15" fill="{color}" stroke="none"/>'
     ),
-    "i-menu": '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>',
+    "i-menu": (
+        '<line x1="4" y1="7" x2="20" y2="7"/>'
+        '<line x1="4" y1="12" x2="20" y2="12"/>'
+        '<line x1="4" y1="17" x2="20" y2="17"/>'
+    ),
     "i-minus": '<line x1="5" y1="12" x2="19" y2="12"/>',
-    "i-monitor": '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+    "i-monitor": (
+        '<rect x="2" y="3" width="20" height="14" rx="2"/>'
+        '<line x1="8" y1="21" x2="16" y2="21"/>'
+        '<line x1="12" y1="17" x2="12" y2="21"/>'
+    ),
     "i-moon": '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>',
     "i-panel-collapse": (
         '<rect x="3" y="4" width="18" height="16" rx="2"/>'

@@ -26,6 +26,7 @@ Uso:
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import hmac as hmac_mod
 import json
@@ -36,7 +37,6 @@ from collections import deque
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -119,7 +119,7 @@ class _TimedCtx:
         """Calcula duracao, monta AuditEntry e escreve no log."""
         ms = (time.monotonic() - self._t0) * 1000
         self._logger._write(AuditEntry(
-            timestamp   = datetime.now(UTC).isoformat(),
+            timestamp   = datetime.datetime.now(datetime.UTC).isoformat(),
             op          = self._op,
             user        = self._user,
             host        = self._host,
@@ -281,7 +281,7 @@ class AuditLogger:
     ) -> None:
         """Registra uma operação diretamente (sem medir tempo)."""
         self._write(AuditEntry(
-            timestamp   = datetime.now(UTC).isoformat(),
+            timestamp   = datetime.datetime.now(datetime.UTC).isoformat(),
             op          = op,
             user        = user,
             host        = host,

@@ -5,10 +5,10 @@
 
 from __future__ import annotations
 
+import datetime
 import io
 import logging
 import re
-from datetime import UTC, datetime
 from typing import Any
 
 from huawei_manager.services_data import (
@@ -121,7 +121,7 @@ def _execute_mock(service: ServiceDef) -> str:
     buf.write(mock_data)
     buf.write(f"\n{'─' * 70}\n")
     buf.write("  [MODO MOCK] Dados simulados — sem dispositivo real\n")
-    buf.write(f"  [{datetime.now(UTC).isoformat()}]\n")
+    buf.write(f"  [{datetime.datetime.now(datetime.UTC).isoformat()}]\n")
     return buf.getvalue()
 
 
@@ -129,7 +129,7 @@ def _generate_mock_output(service: ServiceDef) -> str:
     """Gera saída simulada baseada no tipo/categoria do serviço."""
     svc_id = service.id
     name = service.name
-    ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S")
 
     templates = {
         # ── ROUTER ────────────────────────────────────────────────

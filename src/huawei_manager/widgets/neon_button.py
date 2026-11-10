@@ -21,11 +21,11 @@ from PySide6.QtGui import (
     QLinearGradient,
     QPainter,
     QPen,
+    QPixmap,
 )
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
 import huawei_manager.constants as _C
-from huawei_manager.widgets.helpers import _css_font
 from huawei_manager.widgets.icons import icon_pixmap
 
 
@@ -213,7 +213,7 @@ class NeonButton(QPushButton):
         self._active = False
         self._hover = False
         self._badge_text = ""
-        self._icon_cache: object | None = None
+        self._icon_cache: QPixmap | None = None
 
         self.setText(text)
         self.setMinimumHeight(_C.NAV_ITEM_HEIGHT)
@@ -255,15 +255,15 @@ class NeonButton(QPushButton):
         self.setFont(self._font)
         self.update()
 
-    def _icon_pixmap(self):
+    def _icon_pixmap(self) -> QPixmap | None:
         if self._icon_cache is None:
             if self._icon_id:
                 self._icon_cache = icon_pixmap(
                     self._icon_id, self._color, self._ICON_SIZE
                 )
             else:
-                self._icon_cache = False
-        return self._icon_cache or None
+                self._icon_cache = None
+        return self._icon_cache
 
     # ── estado ───────────────────────────────────────────────────────
     def _activate(self) -> None:
