@@ -282,7 +282,7 @@ class NapalmVRPBackend:
             SdnCommandError: Dispositivo rejeitou algum comando (alterações descartadas).
         """
         if self._conn is None:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
 
         started = time.monotonic()
         pre = snapshot if snapshot is not None else self.snapshot()
@@ -295,7 +295,7 @@ class NapalmVRPBackend:
         except Exception as exc:
             self._log(status="error", commands=commands, started=started,
                       error=str(exc))
-            raise SdnCommandError(f"Falha ao aplicar configuracao: {exc}") from exc
+            raise SdnCommandError(f"Falha ao aplicar configuração: {exc}") from exc
 
         self._log(status="ok", commands=commands, started=started)
         return ApplyResult(

@@ -224,7 +224,7 @@ class CmdTab:
         abar_layout.addWidget(sysview_cb)
         abar_layout.addStretch()
 
-        warn_lbl = QLabel("Todas as operacoes sao registradas em huawei_audit_structured.jsonl", right)
+        warn_lbl = QLabel("Todas as operações são registradas em huawei_audit_structured.jsonl", right)
         warn_lbl.setStyleSheet(_ui.css_label(C.NEON_AMBER, "", 11.5))
         right_layout.addWidget(warn_lbl)
 

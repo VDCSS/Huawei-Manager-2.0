@@ -287,7 +287,7 @@ def test_napalm_preview_falha_fail_closed(monkeypatch) -> None:
     executor.apply.assert_not_called()
     # recusa explícita: NUNCA fallback silencioso para Netmiko
     ctx.sb.send_service_commands.assert_not_called()
-    assert any("preview" in t.lower() and "\u2718" in t for t in _writes(st))
+    assert any("preview" in t.lower() and "Erro: NAPALM: preview" in t for t in _writes(st))
     blocked = [e for e in audit.entries if e["status"] == "blocked"]
     assert len(blocked) == 1
     assert "preview falhou" in blocked[0]["reason"]

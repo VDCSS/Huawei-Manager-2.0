@@ -46,12 +46,12 @@ class BackupHandlers:
             raise RuntimeError("_do_backup: fmt must be extracted from UI before calling")
         out = self._state.out
         dispatch = self._ctx.dispatch
-        _ui.loading(out, "Coletando configuracao para backup…", dispatch)
+        _ui.loading(out, "Coletando configuração para backup…", dispatch)
         try:
             conteudo = self._ctx.sb.send_command("display current-configuration")
         except SdnError as exc:
             self._ctx.sb.invalidate_connection()
-            _ui.write(out, f"✘  Falha SSH: {exc}", dispatch)
+            _ui.write(out, f"Erro: Falha SSH: {exc}", dispatch)
             return
         session = self._ctx.session
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -72,7 +72,7 @@ class BackupHandlers:
                 fh.write(header + conteudo)
             linhas = conteudo.count("\n") + 1
             resumo = (
-                f"✔  Backup concluido!\n{'-' * 60}\n"
+                f"Backup concluído!\n{'-' * 60}\n"
                 f"  Arquivo  : {path}\n"
                 f"  Formato  : {fmt}\n"
                 f"  Data     : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -97,4 +97,4 @@ class BackupHandlers:
         except OSError as ex:
             if _config.log is not None:
                 _config.log.error("Backup falhou: %s", ex)
-            _ui.write(out, f"✘  Erro ao salvar:\n  {ex}", dispatch)
+            _ui.write(out, f"Erro: Erro ao salvar:\n  {ex}", dispatch)

@@ -1,8 +1,6 @@
 """Tests for CommandValidator — allow-list and deny-list validation."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────

@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from ._factories import make_device as _make_device
-
 from huawei_manager.handlers.devices import DevicesMixin
 from huawei_manager.sdn_controller.event_queue import EventType
 from huawei_manager.services.device_service import SessionOverrides
+
+from ._factories import make_device as _make_device
 
 
 def _make_device_service(returns=None):

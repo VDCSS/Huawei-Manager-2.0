@@ -61,7 +61,7 @@ class ManutencaoTab:
             p = _ui.page_frame("manutencao")
             _ui.page_title(p, "Acesso Restrito", C.NEON_AMBER)
 
-            lbl = QLabel("Esta pagina e exclusiva para usuarios Tecnico ou Admin.", p)
+            lbl = QLabel("Esta página é exclusiva para usuários Técnico ou Admin.", p)
             lbl.setStyleSheet(_ui.css_label(C.FG_DIM, "", 13))
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lay = _ui.page_layout(p)

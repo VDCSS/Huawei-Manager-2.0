@@ -15,7 +15,6 @@ sys.path.insert(0, str(SETUP_DIR))
 
 import ensure_env  # noqa: E402
 
-
 # ─── Key generation formats ─────────────────────────────────────────
 
 

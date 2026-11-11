@@ -1,1 +1,1 @@
-from ._factories import make_device, make_vnf, make_dispatch
+from ._factories import make_device, make_dispatch, make_vnf

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from huawei_manager.sdn_controller.drivers.base import BaseDriver
-from huawei_manager.sdn_controller.event_queue import Event, EventQueue
+from huawei_manager.sdn_controller.event_queue import EventQueue
 from huawei_manager.sdn_controller.normalizer import (
     ArpEntry,
     InterfaceEntry,

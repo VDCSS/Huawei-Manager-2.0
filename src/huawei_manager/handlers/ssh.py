@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 
 class SshMixin:
-    """Mixin com metodos de conexao SSH."""
+    """Mixin com métodos de conexão SSH."""
 
     def _get_selected_device(self: AppCoreProtocol) -> Device | None:
         canvas = self._topo_canvas_widget()
@@ -71,7 +71,7 @@ class SshMixin:
                 self._set_conn_btn()
             except NetmikoTimeoutException:
                 self._dispatch(lambda: self._set_status(
-                    "Timeout de conexao", C.NEON_AMBER))
+                    "Timeout de conexão", C.NEON_AMBER))
                 self._set_conn_btn()
             except ValueError as exc:
                 msg = f"Config: {exc}"
@@ -101,4 +101,4 @@ class SshMixin:
         self.session.override_ssh_key = device.ssh_key or None
         self._set_status(f"Conectando ao device {device.name}\u2026", C.NEON_AMBER)
         self._set_conn_btn(disabled=True)
-        self._do_connect(f"Device \u2714  {device.name}  {{sid}}", "Erro ao conectar ao device")
+        self._do_connect(f"Device [OK]  {device.name}  {{sid}}", "Erro ao conectar ao device")

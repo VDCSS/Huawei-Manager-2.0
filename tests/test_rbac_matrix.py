@@ -7,9 +7,9 @@ da W2 — inclusive para admin (defesa em profundidade).
 """
 from __future__ import annotations
 
-import pytest
-
 from unittest.mock import MagicMock
+
+import pytest
 
 from huawei_manager.handlers.auth import AuthMixin
 from huawei_manager.services import ServiceDef

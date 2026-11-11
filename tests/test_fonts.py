@@ -6,14 +6,14 @@ JetBrains Mono (código) com fallbacks Segoe UI/Consolas (stacks do MVP).
 from __future__ import annotations
 
 from huawei_manager.constants import (
+    _FALLBACK_MONO,
+    _FALLBACK_UI,
+    _FONT_MONO_FAMILY,
     _FONT_UI_FAMILY,
     _FONT_UI_TITLE_FAMILY,
-    _FONT_MONO_FAMILY,
-    _FALLBACK_UI,
-    _FALLBACK_MONO,
+    FONT_LARGE,
     FONT_UI_MEDIUM,
     FONT_UI_TITLE,
-    FONT_LARGE,
 )
 
 

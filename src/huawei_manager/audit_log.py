@@ -361,6 +361,6 @@ class AuditLogger:
             st  = e.get("status", "?")[:8]
             dt  = e.get("duration_ms", 0)
             hmac_ok = e.get("_hmac_valid", True)
-            prefix = "  " if hmac_ok else "\u26a0"
+            prefix = "  " if hmac_ok else "[AVISO]"
             lines.append(f"{prefix} {ts}  {op:<14}  {st:<8}  {dt:>7.1f}ms")
         return "\n".join(lines)

@@ -8,9 +8,9 @@ from unittest.mock import patch
 import pytest
 from cryptography.fernet import Fernet
 
-from huawei_manager.services.device_service import SessionOverrides, DeviceService
 from huawei_manager.device_crypto import _encrypt_val
 from huawei_manager.device_models import Device
+from huawei_manager.services.device_service import DeviceService, SessionOverrides
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -367,6 +367,7 @@ class TestTarget:
 class TestSaveInventoryWithRepository:
     def test_delete_removes_from_repository(self, monkeypatch):
         from unittest.mock import MagicMock
+
         from huawei_manager.services.device_service import DeviceService
 
         repo = MagicMock()
@@ -384,6 +385,7 @@ class TestSaveInventoryWithRepository:
 
     def test_save_inventory_deletes_removed_devices(self, monkeypatch):
         from unittest.mock import MagicMock
+
         from huawei_manager.services.device_service import DeviceService
 
         repo = MagicMock()

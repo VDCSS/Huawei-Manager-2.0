@@ -76,7 +76,7 @@ class AuthOverlay(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         header.addStretch()
-        self._close_btn = QPushButton("\u2715", self._card)
+        self._close_btn = QPushButton("X", self._card)
         self._close_btn.setFixedSize(28, 28)
         self._close_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; color: {_C.FG_DIM};"
@@ -86,7 +86,7 @@ class AuthOverlay(QWidget):
         header.addWidget(self._close_btn)
         card_layout.addLayout(header)
 
-        eyebrow = QLabel("\U0001f512  ACESSO RESTRITO", self._card)
+        eyebrow = QLabel("ACESSO RESTRITO", self._card)
         eyebrow.setStyleSheet(
             f"color: {_C.NEON_AMBER}; background: transparent; border: none;"
             f" font: 10px '{_C.FONT_MONO_FAMILY}';")

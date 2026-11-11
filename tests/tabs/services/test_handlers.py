@@ -157,7 +157,7 @@ class TestRunService:
         ctx.sb.is_alive.return_value = False
         svc = _make_svc()
         h.run_service(svc)
-        assert "Sem sessao SSH" in _output_texts(st.output)
+        assert "Sem sessão SSH" in _output_texts(st.output)
 
     def test_unknown_mode_writes_message(self):
         h, st, ctx = _make(

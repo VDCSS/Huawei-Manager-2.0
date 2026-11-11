@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from huawei_manager.exceptions import SdnAuthError, SdnValidationError
+from huawei_manager.exceptions import SdnValidationError
 from huawei_manager.sdn_controller.authz import (
     Role,
     SessionTracker,

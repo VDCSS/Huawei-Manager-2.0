@@ -1,11 +1,11 @@
 """Testes para Editor de Comandos - Enter executa comando (B2)."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtWidgets import QApplication, QPlainTextEdit, QWidget
+from PySide6.QtWidgets import QApplication, QPlainTextEdit
 
 from huawei_manager.tabs.cmd.page import _CmdReturnFilter
 

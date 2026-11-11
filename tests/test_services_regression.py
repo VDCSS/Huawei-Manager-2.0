@@ -10,12 +10,12 @@ from __future__ import annotations
 import re
 from unittest.mock import MagicMock
 
+from huawei_manager.services import get_service_by_id, parse_params
+from huawei_manager.services_data import SERVICE_REGISTRY, ServiceDef
 from huawei_manager.tabs.services.handlers import (
     ServicesHandlers,
     _build_service_allow_patterns,
 )
-from huawei_manager.services import get_service_by_id, parse_params
-from huawei_manager.services_data import SERVICE_REGISTRY, ServiceDef
 
 
 def _validate(svc: ServiceDef, cmds: list[str]) -> list[tuple[str, str]]:

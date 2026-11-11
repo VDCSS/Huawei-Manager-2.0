@@ -10,13 +10,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from huawei_manager.audit_log import AuditLogger
+from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.session_factory import (
     SSHSessionFactory,
     _OriginAuditWrapper,
 )
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.vault_backends.base import SecretsBackend
-from huawei_manager.device_models import Device
 
 
 class _FakeBackend(SecretsBackend):

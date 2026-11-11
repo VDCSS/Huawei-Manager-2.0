@@ -68,25 +68,25 @@ def rotate_ssh_key(
             ]
             try:
                 output = netmiko_connection.send_config_set(cmds, read_timeout=60)
-                push_msg = f"  ✔ Enviada ao roteador via CLI\n  {output[:200]}"
+                push_msg = f"  Enviada ao roteador via CLI\n  {output[:200]}"
                 deployed = True
             except Exception as e:
                 log.warning("Falha ao enviar chave SSH via CLI: %s", e)
-                push_msg = f"  ⚠ Falha ao enviar via CLI: {e}"
+                push_msg = f"  [AVISO] Falha ao enviar via CLI: {e}"
 
         if deployed:
             backend.put("ROUTER_SSH_KEY", str(key_path))
-            push_msg += "\n  🔑 Chave ativada para conexões futuras"
+            push_msg += "\n   Chave ativada para conexões futuras"
 
         backend._record_rotation()
         log.info("Chave SSH rotacionada → %s (deployed=%s)", key_path, deployed)
 
         return True, (
-            f"✔  Chave ED25519 rotacionada com sucesso!\n"
+            f"Chave ED25519 rotacionada com sucesso!\n"
             f"{'─' * 50}\n"
             f"  Arquivo privado : {key_path}\n"
             f"  Arquivo público : {key_path.with_suffix('.pub')}\n"
-            f"  Deploy no router: {'✔' if deployed else '✘'}\n"
+            f"  Deploy no router: {'[OK]' if deployed else '[ERRO]'}\n"
             f"  Backend vault   : {backend.backend_name}\n"
             f"{push_msg}\n"
             f"  Timestamp       : {datetime.datetime.now(datetime.UTC).isoformat()}"
@@ -94,7 +94,7 @@ def rotate_ssh_key(
 
     except Exception as exc:
         log.error("Falha na rotação de chave: %s", exc)
-        return False, f"✘  Erro na rotação de chave:\n  {exc}"
+        return False, f"Erro: Erro na rotação de chave:\n  {exc}"
 
 
 __all__ = [

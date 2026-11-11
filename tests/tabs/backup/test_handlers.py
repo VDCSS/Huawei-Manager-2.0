@@ -89,7 +89,7 @@ class TestDoBackup:
              patch("os.makedirs"), \
              patch("os.path.getsize", return_value=100):
             h.do_backup(fmt="txt")
-        assert "Backup concluido" in _output_texts(st.out)
+        assert "Backup concluído" in _output_texts(st.out)
 
     def test_backup_posts_event(self):
         h, st, ctx = _make()

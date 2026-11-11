@@ -328,10 +328,10 @@ class TestSSHSouthboundExceptionPropagation:
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
     def test_sdn_validation_error_propagates_no_retry(self, mock_session_cls):
+        from huawei_manager.exceptions import SdnValidationError
         from huawei_manager.sdn_controller.southbound import (
             SSHSouthbound,
         )
-        from huawei_manager.exceptions import SdnValidationError
 
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
@@ -345,10 +345,11 @@ class TestSSHSouthboundExceptionPropagation:
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
     def test_netmiko_auth_exception_propagates_no_retry(self, mock_session_cls):
+        from netmiko.exceptions import NetmikoAuthenticationException
+
         from huawei_manager.sdn_controller.southbound import (
             SSHSouthbound,
         )
-        from netmiko.exceptions import NetmikoAuthenticationException
 
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
@@ -361,10 +362,11 @@ class TestSSHSouthboundExceptionPropagation:
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
     def test_netmiko_timeout_exception_retries_then_propagates_original(self, mock_session_cls):
+        from netmiko.exceptions import NetmikoTimeoutException
+
         from huawei_manager.sdn_controller.southbound import (
             SSHSouthbound,
         )
-        from netmiko.exceptions import NetmikoTimeoutException
 
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
@@ -378,10 +380,10 @@ class TestSSHSouthboundExceptionPropagation:
 
     @patch("huawei_manager.sdn_controller.southbound.NetmikoSession")
     def test_generic_exception_still_wrapped_in_sdn_connection_error(self, mock_session_cls):
+        from huawei_manager.exceptions import SdnConnectionError
         from huawei_manager.sdn_controller.southbound import (
             SSHSouthbound,
         )
-        from huawei_manager.exceptions import SdnConnectionError
 
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session

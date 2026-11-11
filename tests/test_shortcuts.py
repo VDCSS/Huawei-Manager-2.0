@@ -10,7 +10,6 @@ from PySide6.QtWidgets import QApplication
 
 from huawei_manager.app_shortcuts import ShortcutsMixin
 
-
 PAGE_KEYS = [
     "home", "topology", "config", "route", "arp",
     "info", "cmd", "backup", "manutencao", "services",

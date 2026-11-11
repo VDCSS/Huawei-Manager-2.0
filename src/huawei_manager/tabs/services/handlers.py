@@ -153,7 +153,7 @@ class ServicesHandlers:
             if len(placeholders) != len(entries):
                 _ui.write(
                     self._state.output,
-                    "✘  Servico inconsistente: "
+                    "Erro: Servico inconsistente: "
                     f"{len(placeholders)} placeholder(s) para {len(entries)} "
                     "campo(s). Nada foi executado.",
                     self._ctx.dispatch)
@@ -163,7 +163,7 @@ class ServicesHandlers:
                 if _REJECT_PARAM.search(val):
                     _ui.write(
                         self._state.output,
-                        f"✘  Parametro '{placeholder}' contem caracteres "
+                        f"Erro: Parametro '{placeholder}' contem caracteres "
                         "invalidos (& ; | ` $ ( ) { }).",
                         self._ctx.dispatch)
                     return
@@ -179,7 +179,7 @@ class ServicesHandlers:
         if rejected:
             for cmd, reason in rejected:
                 _ui.write(self._state.output,
-                          f"✘  Comando bloqueado ({reason}): {cmd}",
+                          f"Erro: Comando bloqueado ({reason}): {cmd}",
                           self._ctx.dispatch)
             logger = self._ctx.audit
             if logger is not None:
@@ -218,7 +218,7 @@ class ServicesHandlers:
 
             if not self._ctx.sb.is_alive():
                 _ui.write(self._state.output,
-                          "✘  Sem sessao SSH ativa. Conecte-se primeiro.",
+                          "Erro: Sem sessão SSH ativa. Conecte-se primeiro.",
                           self._ctx.dispatch)
                 return
 
@@ -258,7 +258,7 @@ class ServicesHandlers:
                     except SnapshotError as exc:
                         self._ctx.sb.invalidate_connection()
                         _ui.write(self._state.output,
-                                  f"✘  {exc} — nada foi aplicado.",
+                                  f"Erro: {exc} — nada foi aplicado.",
                                   self._ctx.dispatch)
                         audit_config_op(
                             audit, op="config_apply", user=user, host=host,
@@ -273,7 +273,7 @@ class ServicesHandlers:
                         self._ctx.sb.invalidate_connection()
                         self._ctx.set_last_config_command(service_cmd)
                         _ui.write(self._state.output,
-                                  f"✘  Falha SSH: {exc}",
+                                  f"Erro: Falha SSH: {exc}",
                                   self._ctx.dispatch)
                         audit_config_op(
                             audit, op="config_apply", user=user, host=host,
@@ -351,11 +351,11 @@ class ServicesHandlers:
             # NAPALM: recusa auditada, nunca fallback silencioso para o Netmiko
             # (o usuário optou pela flag — falhar fechado).
             _ui.write(self._state.output,
-                      "✘  NAPALM: sem sessao Netmiko ativa — nada foi aplicado.",
+                      "Erro: NAPALM: sem sessão Netmiko ativa — nada foi aplicado.",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
-                                  reason="sem conexao Netmiko exposta")
+                                  reason="sem conexão Netmiko exposta")
             return True
         executor = NapalmVRPBackend(
             conn,  # sessão Netmiko existente (sem 2º SSH)
@@ -373,7 +373,7 @@ class ServicesHandlers:
             # nunca exceção silenciosa nem fallback para Netmiko.
             err = sanitize_command(str(exc))
             _ui.write(self._state.output,
-                      f"✘  NAPALM: preview (dry-run) falhou — nada foi "
+                      f"Erro: NAPALM: preview (dry-run) falhou — nada foi "
                       f"aplicado.\n{err}",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
@@ -401,11 +401,11 @@ class ServicesHandlers:
                                        message=diff)
         if not approved:
             _ui.write(self._state.output,
-                      "Cancelado pelo usuario — nada foi aplicado.",
+                      "Cancelado pelo usuário — nada foi aplicado.",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
-                                  reason="cancelado pelo usuario")
+                                  reason="cancelado pelo usuário")
             return True
 
         # 4) apply com snapshot pré-mudança (capturado pelo próprio backend).
@@ -414,7 +414,7 @@ class ServicesHandlers:
         except SdnError as exc:
             # o backend já auditou (status blocked/error) — só reporta aqui.
             _ui.write(self._state.output,
-                      f"✘  NAPALM: aplicacao recusada pelo dispositivo — "
+                      f"Erro: NAPALM: aplicacao recusada pelo dispositivo — "
                       f"alteracoes descartadas.\n{sanitize_command(str(exc))}",
                       self._ctx.dispatch)
             return True
@@ -424,7 +424,7 @@ class ServicesHandlers:
             # cru — vira recusa auditada, nunca fallback Netmiko.
             err = sanitize_command(str(exc))
             _ui.write(self._state.output,
-                      f"✘  NAPALM: falha ao aplicar — nada foi "
+                      f"Erro: NAPALM: falha ao aplicar — nada foi "
                       f"confirmado.\n{err}",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,

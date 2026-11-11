@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtCore import QPoint
 
-from huawei_manager.topology import TopologyCanvas
 from huawei_manager.device_models import Device
+from huawei_manager.topology import TopologyCanvas
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("QT_QPA_PLATFORM"),

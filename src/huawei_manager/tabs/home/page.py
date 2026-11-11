@@ -53,7 +53,7 @@ class HomeTab:
 
         p = _ui.page_frame("home")
         _ui.page_title(p, "Dashboard", C.NEON_CYAN,
-                       "Painel de controle — conectividade, Devices, operacoes recentes")
+                       "Painel de controle — conectividade, Devices, operações recentes")
 
         row1 = QWidget(p)
         row1.setStyleSheet("background: transparent;")

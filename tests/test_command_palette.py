@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QListWidgetItem, QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from huawei_manager.tabs import build_registry
 from huawei_manager.widgets.command_palette import Command, CommandPalette, create_default_commands

@@ -71,7 +71,7 @@ class MaintenanceHandlers:
         self.spawn_stream(
             cmd_list,
             timeout_s=_DEV_TIMEOUT_S,
-            done_label="Concluido",
+            done_label="Concluído",
             cwd=str(PROJECT_ROOT),
         )
 
@@ -111,7 +111,7 @@ class MaintenanceHandlers:
         self.spawn_stream(
             [setup_script, "install", mode],
             timeout_s=_SETUP_TIMEOUT_S,
-            done_label=f"install.sh install {mode} concluido",
+            done_label=f"install.sh install {mode} concluído",
             cwd=str(PROJECT_ROOT),
         )
 
@@ -124,7 +124,7 @@ class MaintenanceHandlers:
             def _note_cancel() -> None:
                 out = self._state.output
                 if out is not None:
-                    out.append("\n⚡  Processo cancelado")
+                    out.append("\n  Processo cancelado")
 
             self._ctx.dispatch(_note_cancel)
         else:
@@ -190,12 +190,12 @@ class MaintenanceHandlers:
                     proc.kill()
                     proc.wait(timeout=5)
                     self._ctx.dispatch(lambda: _append(
-                        "\n⚡  Processo cancelado"))
+                        "\n  Processo cancelado"))
                     return
                 proc.wait(timeout=timeout_s)
                 _flush()
                 rc = proc.returncode
-                prefix = "✅" if rc == 0 else f"❌ (exit {rc})"
+                prefix = "[OK]" if rc == 0 else f"[ERRO] (exit {rc})"
                 self._ctx.dispatch(lambda p=prefix: _append(
                     f"\n{p}  {done_label}"))
             except subprocess.TimeoutExpired:
@@ -203,7 +203,7 @@ class MaintenanceHandlers:
                     f"\n⏰  Timeout ({timeout_s}s)"))
             except Exception as e:
                 self._ctx.dispatch(lambda err=str(e): _append(
-                    f"\n❌  Erro: {err}"))
+                    f"\n[ERRO]  Erro: {err}"))
             finally:
                 if proc is not None:
                     try:

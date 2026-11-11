@@ -40,7 +40,7 @@ class SessionCommandsMixin:
     # ── executa comando CLI ──────────────────────────────────────────
     def _cmd(self, command: str) -> str:
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         try:
             out = self._conn.send_command(command, read_timeout=120)
             return clean_output(str(out))
@@ -50,7 +50,7 @@ class SessionCommandsMixin:
 
     def run_cli_timing(self, cmd: str) -> str:
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         sanitized = sanitize_command(cmd)
         with self._lock:
             with self._audit.timed(
@@ -97,7 +97,7 @@ class SessionCommandsMixin:
         save: bool = False,
     ) -> tuple[bool, str]:
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         with self._lock:
             with self._audit.timed(
                 "edit-config", user=self._user, host=self._host,

@@ -1,10 +1,10 @@
 """Testes para _clear_device_target — TypeError fix (B3)."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication
 
 from huawei_manager.handlers.devices import DevicesMixin
 

@@ -45,7 +45,7 @@ class RouteHandlers:
                 entries = self._ctx.drv().get_routing_table()
             except SdnError as exc:
                 self._ctx.sb.invalidate_connection()
-                _ui.write(self._state.out, f"✘ Falha SSH: {exc}",
+                _ui.write(self._state.out, f"Erro: Falha SSH: {exc}",
                           self._ctx.dispatch)
                 return
             buf = io.StringIO()
@@ -69,7 +69,7 @@ class RouteHandlers:
                 route_out = self._ctx.sb.send_command(cmd or "")
             except SdnError as exc:
                 self._ctx.sb.invalidate_connection()
-                _ui.write(self._state.out, f"✘ Falha SSH: {exc}",
+                _ui.write(self._state.out, f"Erro: Falha SSH: {exc}",
                           self._ctx.dispatch)
                 return
             _ui.write(self._state.out, route_out, self._ctx.dispatch)

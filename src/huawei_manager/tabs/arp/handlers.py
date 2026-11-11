@@ -34,7 +34,7 @@ class ArpHandlers:
             entries = self._ctx.drv().get_arp_table()
         except SdnError as exc:
             self._ctx.sb.invalidate_connection()
-            _ui.write(self._state.out, f"✘ Falha SSH: {exc}",
+            _ui.write(self._state.out, f"Erro: Falha SSH: {exc}",
                       self._ctx.dispatch)
             return
         buf = io.StringIO()

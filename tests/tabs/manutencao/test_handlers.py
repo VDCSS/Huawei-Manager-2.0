@@ -122,7 +122,7 @@ class TestRunDevCmd:
         )
         texts = _output_texts(state.output)
         assert any("linha 1" in t and "linha 2" in t for t in texts)
-        assert any("✅  Concluido" in t for t in texts)
+        assert any("[OK]" in t and "Concluído" in t for t in texts)
         assert state.cancel_event is None
 
     def test_unknown_target_runs_true(self):

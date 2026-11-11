@@ -11,7 +11,6 @@ from __future__ import annotations
 from PySide6.QtWidgets import QApplication
 
 import huawei_manager.constants as C
-from huawei_manager.widgets.neon_button import NeonButton
 from huawei_manager.widgets.neon_entry import output_text
 
 

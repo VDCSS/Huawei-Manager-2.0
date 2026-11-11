@@ -115,4 +115,4 @@ class ThreadingMixin:
     def _loading(self: AppCoreProtocol, widget: QTextEdit | None, msg: str) -> None:
         if widget is None:
             return
-        self._dispatch(lambda w=widget, m=msg: (w.clear(), w.setPlainText(f"\u23f3  {m}\n")))
+        self._dispatch(lambda w=widget, m=msg: (w.clear(), w.setPlainText(f"[...]  {m}\n")))

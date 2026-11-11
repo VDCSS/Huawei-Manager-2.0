@@ -355,8 +355,8 @@ class TopologyCanvas(QWidget):
                 background: {C.rgba(C.NEON_CYAN, 0.12)}; color: {C.NEON_CYAN};
             }}
         """)
-        edit_action = menu.addAction("\u270f\ufe0f  Editar Dispositivo")
-        delete_action = menu.addAction("\U0001f5d1  Excluir Dispositivo")
+        edit_action = menu.addAction("Editar Dispositivo")
+        delete_action = menu.addAction("Excluir Dispositivo")
 
         # Converte coordenadas do evento para global (caller único é
         # _TopoView.contextMenuEvent, sempre QContextMenuEvent).

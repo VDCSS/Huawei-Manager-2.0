@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from huawei_manager.device_models import Device
 from huawei_manager.sdn_controller.polling_manager import (
     IntervalDecider,
     PollingManager,
@@ -16,7 +17,6 @@ from huawei_manager.sdn_controller.polling_manager import (
 )
 from huawei_manager.sdn_controller.southbound import SSHSouthbound
 from huawei_manager.services_data import ServiceDef
-from huawei_manager.device_models import Device
 
 
 def _device_fake(device_id: str, status: str = "online", dtype: str = "ROUTER") -> Device:

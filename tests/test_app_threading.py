@@ -13,10 +13,10 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtGui import QCloseEvent
 
+from huawei_manager import app_threading as _ath  # noqa: E402
 from huawei_manager.app_notify import NotifyMixin  # noqa: E402
 from huawei_manager.app_shortcuts import ShortcutsMixin  # noqa: E402
 from huawei_manager.app_threading import ThreadingMixin  # noqa: E402
-from huawei_manager import app_threading as _ath  # noqa: E402
 from huawei_manager.sdn_controller.event_queue import Event, EventType  # noqa: E402
 
 

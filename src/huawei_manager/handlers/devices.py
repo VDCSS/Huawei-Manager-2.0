@@ -74,7 +74,7 @@ class DevicesMixin:
         from PySide6.QtWidgets import QMessageBox
         reply = QMessageBox.question(
             None, "Excluir",
-            f"Confirmar exclusao de {device.name} ({device.host})?",
+            f"Confirmar exclusão de {device.name} ({device.host})?",
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
