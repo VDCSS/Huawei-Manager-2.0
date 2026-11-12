@@ -150,11 +150,13 @@ class ConfigCommand(DeviceCommand):
         dry_run: DryRunEngine | None = None,
         verify_fn: Callable[[], tuple[bool, str]] | None = None,
         rollback_lines: Sequence[str] | None = None,
+        rollback_fn: Callable[[str], Sequence[str]] | None = None,
     ) -> None:
         super().__init__(lines, dry_run=dry_run)
         self._read_state_fn = read_state
         self._apply_fn = apply_fn
         self._verify_fn = verify_fn
+        self._rollback_fn = rollback_fn
         self._rollback_lines = (
             tuple(rollback_lines) if rollback_lines is not None else None
         )
@@ -166,9 +168,16 @@ class ConfigCommand(DeviceCommand):
         persiste na startup-config e retorna ``status="error"``.
         A persistência (commit/save) é tratada em ``session_commands.edit_config``,
         não aqui.
+
+        Quando ``rollback_fn`` é informado, as linhas de rollback são
+        resolvidas **após** o snapshot (o estado anterior é necessário para
+        decidir o que desfazer — ex.: remover a ACL inteira ou apenas as
+        regras adicionadas).
         """
         t0 = time.monotonic()
         self.capture_snapshot()
+        if self._rollback_fn is not None and self._snapshot is not None:
+            self._rollback_lines = tuple(self._rollback_fn(self._snapshot))
         ok, message = self._apply(self._lines)
         duration_ms = (time.monotonic() - t0) * 1000.0
         if not ok:

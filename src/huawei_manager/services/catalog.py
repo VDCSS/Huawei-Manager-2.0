@@ -76,6 +76,11 @@ def parse_params(service: ServiceDef) -> list[tuple[str, str]]:
     if not service.config_mode:
         return params
 
+    # Serviços com formulário composto (ACL, rota estática) têm a própria UI
+    # de campos — não usam o caminho legado de placeholders da descrição.
+    if service.form_kind:
+        return params
+
     if service.params:
         for spec in service.params:
             params.append((spec.label, spec.default))

@@ -81,5 +81,6 @@ class TestServicesSubtitle:
             len([s for s in get_services_for(t) if s.config_mode])
             for t in DEVICE_TYPES
         )
-        # 25 originais + 14 serviços da F3 + novos serviços tipados de ACL (ROUTER+SWITCH)
-        assert total == 61
+        # 25 originais + 14 serviços da F3 + serviços tipados de ACL (ROUTER+SWITCH)
+        # + 2 serviços compostos novos (svc-acl e svc-static-route, ROUTER+SWITCH)
+        assert total == 65

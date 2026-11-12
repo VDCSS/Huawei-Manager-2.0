@@ -62,8 +62,13 @@ def requires_commit(version: VrpVersion) -> bool:
 
     VRP5 não exige commit; as mudanças são aplicadas diretamente no
     running-config ao sair da visão de configuração.
+
+    ``UNKNOWN`` é fail-closed: sem identificar a VRP assume-se a variante
+    mais restritiva (com commit), pois responder ao prompt de commit é
+    inofensivo em VRP5 (que nem o exibe) e omiti-lo em VRP8 deixaria a
+    configuração não-commitada no device.
     """
-    return version == VrpVersion.VRP8
+    return version != VrpVersion.VRP5
 
 
 def save_command(version: VrpVersion) -> str:

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QBoxLayout,
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -33,7 +34,9 @@ from huawei_manager.services import (
     get_services_for,
     parse_params,
 )
+from huawei_manager.services.form_registry import get_form_spec
 from huawei_manager.tabs import _ui
+from huawei_manager.tabs.services.form_widgets import FormWidget
 from huawei_manager.tabs.services.handlers import ServicesHandlers
 from huawei_manager.tabs.services.state import ServicesState
 from huawei_manager.widgets.neon_button import action_button
@@ -79,7 +82,10 @@ class ServicesTab:
         _ui.page_layout(p).addWidget(state.output)
         _ui.page_layout(p).addSpacing(4)
 
-        QTimer.singleShot(500, self.refresh_service_list)
+        # Timer com "context": cancelado quando a página é destruída — evita
+        # callbacks em widgets já deletados (o singleShot sem context mantém
+        # a aba viva e dispara sobre C++ objects destruídos).
+        QTimer.singleShot(500, p, self.refresh_service_list)
 
         return p
 
@@ -97,6 +103,8 @@ class ServicesTab:
         state.param_entries.clear()
         state.services.clear()
         state.current_svc = None
+        state.form_state = None
+        state.save_chk = None
 
     # ── Fachadas (usadas pelo shell: F5, Devices, Ctrl+L) ────────────
     def refresh_service_list(self) -> None:
@@ -143,7 +151,7 @@ class ServicesTab:
         config_cats = [c for c in all_cats if c.startswith("config-")]
         # Tipos sem serviços de configuração (ex.: FIREWALL, AP) passam a listar
         # as categorias de leitura, para não deixar a aba vazia.
-        type_has_config = any(s.config_mode
+        type_has_config = any(s.config_mode and s.visible
                               for s in get_services_for(device_type))
         cats = config_cats if type_has_config else all_cats
         cat_labels = [SERVICE_CAT_LABELS.get(c, c) for c in cats]
@@ -163,6 +171,7 @@ class ServicesTab:
         label_to_cat = dict(zip(cat_labels, cats))
         cat_filter = None if selected_cat == "Todas as Categorias" else label_to_cat.get(selected_cat)
         services = get_services_for(device_type, category=cat_filter)
+        services = [s for s in services if s.visible]
         if type_has_config:
             services = [s for s in services if s.config_mode]
         state.services = services
@@ -335,6 +344,8 @@ class ServicesTab:
                         w.deleteLater()
         self.state.param_entries.clear()
         self.state.current_svc = None
+        self.state.form_state = None
+        self.state.save_chk = None
 
     def _show_service_detail(self, svc: ServiceDef) -> None:
         self._clear_detail_panel()
@@ -369,7 +380,10 @@ class ServicesTab:
         cmd_frame_layout.addWidget(desc_lbl)
 
         if svc.config_mode:
-            self._build_param_fields(p, svc)
+            if svc.form_kind:
+                self._build_composite_form(p, svc)
+            else:
+                self._build_param_fields(p, svc)
 
         abar = QWidget(p)
         abar_layout = QHBoxLayout(abar)
@@ -381,11 +395,73 @@ class ServicesTab:
                                      lambda s=svc: self._h().run_service(s),
                                      C.NEON_CYAN)
         abar_layout.addWidget(btn_svc_exec)
+        if svc.form_kind:
+            btn_preview = action_button(
+                abar, "👁  Pré-visualizar",
+                lambda s=svc: self._h().preview_form(s),
+                C.NEON_AMBER,
+            )
+            abar_layout.addWidget(btn_preview)
+            abar_layout.addSpacing(6)
+            btn_consult = action_button(
+                abar, "🔎  Consultar",
+                lambda s=svc: self._h().consult_form(s),
+                C.NEON_CYAN,
+            )
+            abar_layout.addWidget(btn_consult)
+            abar_layout.addSpacing(6)
+            btn_rollback = action_button(
+                abar, "↩  Reverter (rollback)",
+                self._h().rollback_last,
+                C.NEON_RED,
+            )
+            abar_layout.addWidget(btn_rollback)
+            abar_layout.addSpacing(12)
+            state = self.state
+            state.save_chk = QCheckBox(
+                "Salvar na startup-config (save)", abar)
+            state.save_chk.setChecked(False)
+            state.save_chk.setToolTip(
+                "Desmarcado: a configuração fica apenas no running-config. "
+                "Marcado: também é persistida (save all virtual-systems na "
+                "VRP8, save nas demais)."
+            )
+            state.save_chk.setStyleSheet(
+                _ui.css_label(C.FG_DIM, C.BG_INPUT, 10))
+            abar_layout.addWidget(state.save_chk)
         abar_layout.addSpacing(6)
+        abar_layout.addStretch()
         btn_svc_clr = action_button(abar, "✖  Limpar output",
                                     self._clear_output,
                                     C.NEON_PURP)
         abar_layout.addWidget(btn_svc_clr)
+
+    def _build_composite_form(self, parent: QWidget, svc: ServiceDef) -> None:
+        """Constrói o formulário composto (ACL, rota estática) do serviço."""
+        if not svc.form_kind:
+            return
+        spec = get_form_spec(svc.form_kind)
+
+        pf = QFrame(parent)
+        pf.setStyleSheet(
+            f"background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM}; "
+            "border-radius: 4px;"
+        )
+        pf_layout = QVBoxLayout(pf)
+        pf_layout.setContentsMargins(8, 4, 8, 6)
+        parent_layout = parent.layout()
+        if not isinstance(parent_layout, QBoxLayout):
+            raise TypeError("parent layout must be a QBoxLayout")
+        parent_layout.addWidget(pf)
+        parent_layout.addSpacing(8)
+
+        header = QLabel(spec.title.upper(), pf)
+        header.setStyleSheet(_ui.css_label(C.FG_DIM, C.BG_INPUT, 10, True))
+        pf_layout.addWidget(header)
+
+        form = FormWidget(spec, pf)
+        pf_layout.addWidget(form)
+        self.state.form_state = form
 
     def _build_param_fields(self, parent: QWidget, svc: ServiceDef) -> None:
         params = parse_params(svc)

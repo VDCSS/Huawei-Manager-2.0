@@ -326,6 +326,47 @@ class SessionCommandsMixin:
                         )
                     raise
 
+    def save_config(
+        self, vrp_version: VrpVersion | None = None
+    ) -> tuple[bool, str]:
+        """Persiste a running-config na startup-config (visão exec).
+
+        Usado pelo fluxo que **verifica antes de persistir**: a configuração
+        é aplicada (e commitada no VRP8) primeiro; só depois de confirmada
+        no ``running-config`` a persistência é solicitada.
+
+        O comando é ``save all virtual-systems`` (VRP8) ou ``save`` (demais
+        VRP), executado **fora** do system-view, com resposta ``y`` ao
+        prompt de confirmação ``[Y/N]``.
+        """
+        if not self._conn:
+            raise SdnConnectionError("Sem conexao ativa")
+        cmd = save_command(vrp_version) if vrp_version is not None else "save"
+        with self._lock:
+            try:
+                raw = self._conn.send_command_timing(cmd, read_timeout=120)
+            except Exception as exc:
+                sanitized = sanitize_command(str(exc)) or str(exc)
+                log.warning("save falhou: %s", sanitized)
+                return False, f"Falha ao salvar a configuração: {sanitized}"
+            output = clean_output(str(raw))
+            if _INTERACTIVE_PROMPT_RE.search(output):
+                try:
+                    answer = self._conn.send_command_timing("y\n", read_timeout=120)
+                    output += "\n" + clean_output(str(answer))
+                except Exception as exc:
+                    sanitized = sanitize_command(str(exc)) or str(exc)
+                    log.warning("confirmacao de save falhou: %s", sanitized)
+                    return False, (
+                        f"Falha ao confirmar o save: {sanitized}"
+                    )
+            errors = detect_vrp_errors(output)
+            if errors:
+                return False, (
+                    "Save recusado pela VRP: " + "; ".join(errors[:5])
+                )
+            return True, f"Configuração salva na startup-config ({cmd})."
+
     def _exit_config_best_effort(self) -> None:
         """Tenta sair do system-view após uma exceção de envio."""
         try:

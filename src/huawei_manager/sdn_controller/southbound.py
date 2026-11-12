@@ -21,7 +21,7 @@ from netmiko.exceptions import (  # pyright: ignore[reportMissingTypeStubs]
 )
 
 from huawei_manager.audit_log import AuditLogger
-from huawei_manager.basic_config.vrp_version import VrpVersion
+from huawei_manager.basic_config.vrp_version import VrpVersion, detect_vrp_version
 from huawei_manager.exceptions import (
     SdnAuthError,
     SdnCommandError,
@@ -79,6 +79,17 @@ class SouthboundProtocol(ABC):
         validação admin-only, ``cmd_verify=False`` e detecção de erros VRP.
         """
         return self.send_config(commands)
+
+    def save_running_config(
+        self, vrp_version: VrpVersion | None = None
+    ) -> tuple[bool, str]:
+        """Persiste a running-config na startup-config (visão exec).
+
+        Separado de ``send_config_block`` para permitir o fluxo
+        *aplica → verifica → persiste*: a persistência só deve ocorrer
+        depois que a configuração foi confirmada no ``running-config``.
+        """
+        return False, "Backend não suporta persistência na startup-config."
 
     @abstractmethod
     def is_alive(self) -> bool:
@@ -152,6 +163,30 @@ class SSHSouthbound(SouthboundProtocol):
         self._lock = threading.Lock()
         self._validator = validator
         self._access_role = access_role
+        # Versão VRP detectada (cache por conexão) — usada para decidir
+        # commit/save automático quando o chamador não informa.
+        self._vrp_version: VrpVersion | None = None
+
+    def detect_vrp_version(self) -> VrpVersion:
+        """Detecta a versão VRP do device (cacheado até reconectar).
+
+        Sem versão identificada assume-se ``UNKNOWN``, que
+        :func:`requires_commit` trata como *commit obrigatório*
+        (fail-closed) — melhor commitar do que deixar a configuração
+        pendente no device.
+        """
+        if self._vrp_version is not None:
+            return self._vrp_version
+        try:
+            output = self.send_command("display version")
+        except Exception:
+            # justificativa: a detecção é best-effort; falha aqui não pode
+            # impedir a operação — o commit será assumido (fail-closed).
+            output = ""
+        text = output if isinstance(output, str) else ""
+        version = detect_vrp_version(text)
+        self._vrp_version = version
+        return version
 
     def connect(self) -> None:
         """Tenta conectar com retry em caso de falha transiente.
@@ -212,6 +247,7 @@ class SSHSouthbound(SouthboundProtocol):
         with self._lock:
             self._connected = False
             self._alive_cache = (False, time.time())
+        self._vrp_version = None
 
     def is_alive(self) -> bool:
         """Retorna True se a sessao esta conectada (com cache de 2s).
@@ -240,6 +276,7 @@ class SSHSouthbound(SouthboundProtocol):
         with self._lock:
             self._alive_cache = (False, time.time())
             self._connected = False
+        self._vrp_version = None
 
     @property
     def connection(self) -> NetmikoConnection | None:
@@ -352,6 +389,10 @@ class SSHSouthbound(SouthboundProtocol):
                 msg = f"Config block denied by policy: {vr.reason}"
                 log.warning("send_config_block blocked: %s", vr.reason)
                 raise SdnAuthError(msg)
+        if vrp_version is None:
+            # Sem versão informada: detecta (cacheado) — o commit/save é
+            # decidido automaticamente conforme a VRP do device.
+            vrp_version = self.detect_vrp_version()
         config_text = "\n".join(commands)
         try:
             ok, msg = self._session.edit_config(
@@ -370,6 +411,26 @@ class SSHSouthbound(SouthboundProtocol):
             sanitized = redact_secrets(str(exc), secrets)
             log.error("send_config_block failed: %s", sanitized)
             return False, sanitized
+
+    def save_running_config(
+        self, vrp_version: VrpVersion | None = None
+    ) -> tuple[bool, str]:
+        """Persiste a running-config na startup-config (visão exec).
+
+        Executa ``save all virtual-systems`` (VRP8) ou ``save`` (demais VRP)
+        fora do system-view e responde ``y`` ao prompt de confirmação.
+        """
+        if not self._connected:
+            raise SdnConnectionError("Not connected")
+        try:
+            ok, msg = self._session.save_config(vrp_version)
+        except SdnError:
+            raise
+        except Exception as exc:
+            sanitized = _sanitize(str(exc))
+            log.error("save_running_config failed: %s", sanitized)
+            return False, sanitized
+        return ok, msg
 
     def send_service_commands_detailed(
         self,

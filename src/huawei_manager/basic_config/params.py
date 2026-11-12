@@ -39,6 +39,10 @@ _INTERFACE_RE = re.compile(
     r")\d+(?:/\d+){0,3}(?:\.\d+)?$",
     re.IGNORECASE,
 )
+# "NULL0" (interface nula) não casa com _INTERFACE_RE — é literal na VRP.
+_NULL0 = "NULL0"
+# Nome de ACL nomeada VRP: 1–32 caracteres, sem espaços nem separadores.
+_ACL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 _HOSTNAME_RE = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,62}[A-Za-z0-9])?$"
 )
@@ -63,6 +67,7 @@ class ParamKind(StrEnum):
     WILDCARD = "wildcard"
     INTERFACE = "interface"
     ACL_ID = "acl_id"
+    ACL_NAME = "acl_name"
     RULE_ID = "rule_id"
     VLAN_ID = "vlan_id"
     PORT = "port"
@@ -165,6 +170,8 @@ def validate_value(spec: ParamSpec, raw: str | None) -> str:
             except ValueError as exc:
                 raise _fail(spec.label, "endereço IPv4 inválido") from exc
         case ParamKind.WILDCARD:
+            if value.lower() == "any":
+                return "any"
             try:
                 return str(ipaddress.IPv4Address(value))
             except ValueError as exc:
@@ -172,10 +179,25 @@ def validate_value(spec: ParamSpec, raw: str | None) -> str:
         case ParamKind.MASK:
             return _normalize_mask(spec, value)
         case ParamKind.INTERFACE:
-            if not _INTERFACE_RE.fullmatch(value):
+            if value != _NULL0 and not _INTERFACE_RE.fullmatch(value):
                 raise _fail(
                     spec.label,
-                    "interface inválida (ex.: GigabitEthernet0/0/0, Vlanif10)",
+                    "interface inválida (ex.: GigabitEthernet0/0/0, Vlanif10, NULL0)",
+                )
+            return value
+        case ParamKind.ACL_NAME:
+            if not _ACL_NAME_RE.fullmatch(value):
+                raise _fail(
+                    spec.label,
+                    "nome de ACL inválido (1–32 caracteres: letras, números, '-' e '_')",
+                )
+            if value.isdigit():
+                # Colidiria com a ACL numérica (ex.: nome "3000" vs. número
+                # 3000) — a referência da aplicação ficaria ambígua.
+                raise _fail(
+                    spec.label,
+                    "nome de ACL não pode ser apenas numérico "
+                    "(colide com a ACL numérica)",
                 )
             return value
         case ParamKind.ACL_ID:
