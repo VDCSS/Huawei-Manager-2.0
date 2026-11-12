@@ -148,10 +148,47 @@ class ConfigCommand(DeviceCommand):
         read_state: Callable[[], str],
         apply_fn: Callable[[list[str]], tuple[bool, str]],
         dry_run: DryRunEngine | None = None,
+        verify_fn: Callable[[], tuple[bool, str]] | None = None,
+        rollback_lines: Sequence[str] | None = None,
     ) -> None:
         super().__init__(lines, dry_run=dry_run)
         self._read_state_fn = read_state
         self._apply_fn = apply_fn
+        self._verify_fn = verify_fn
+        self._rollback_lines = (
+            tuple(rollback_lines) if rollback_lines is not None else None
+        )
+
+    def execute(self) -> CommandResult:
+        """Snapshot → apply → verify (nesta ordem, sem atalhos).
+
+        Falha de verificação deixa a running-config alterada, mas **não**
+        persiste na startup-config e retorna ``status="error"``.
+        A persistência (commit/save) é tratada em ``session_commands.edit_config``,
+        não aqui.
+        """
+        t0 = time.monotonic()
+        self.capture_snapshot()
+        ok, message = self._apply(self._lines)
+        duration_ms = (time.monotonic() - t0) * 1000.0
+        if not ok:
+            return CommandResult(
+                ok=False, status="error", message=message,
+                duration_ms=duration_ms,
+            )
+        if self._verify_fn is not None:
+            verified, verify_msg = self._verify_fn()
+            if not verified:
+                return CommandResult(
+                    ok=False,
+                    status="error",
+                    message=f"Verificação pós-aplicação falhou: {verify_msg}",
+                    duration_ms=(time.monotonic() - t0) * 1000.0,
+                )
+        return CommandResult(
+            ok=True, status="ok", message=message,
+            duration_ms=(time.monotonic() - t0) * 1000.0,
+        )
 
     def _read_state(self) -> str:
         return self._read_state_fn()
@@ -192,14 +229,19 @@ class ConfigCommand(DeviceCommand):
                 message="Config já está no estado original do snapshot.",
                 duration_ms=(time.monotonic() - t0) * 1000.0,
             )
-        # added = linhas do snapshot ausentes no estado atual → restauráveis.
-        restore: list[str] = []
-        for line in diff.added:
-            if line.rstrip("\n") in _DIFF_HEADERS:
-                continue
-            text = line[1:].rstrip("\n")  # remove o prefixo '+'
-            if text.strip():
-                restore.append(text)
+        # Se linhas inversas explicitas foram fornecidas, usamos preferencialmente
+        # para reverter criacoes (ex: undo acl, undo interface, etc.).
+        if self._rollback_lines is not None:
+            restore: list[str] = list(self._rollback_lines)
+        else:
+            # added = linhas do snapshot ausentes no estado atual → restauráveis.
+            restore = []
+            for line in diff.added:
+                if line.rstrip("\n") in _DIFF_HEADERS:
+                    continue
+                text = line[1:].rstrip("\n")  # remove o prefixo '+'
+                if text.strip():
+                    restore.append(text)
         error: str | None = None
         restored = 0
         if restore:

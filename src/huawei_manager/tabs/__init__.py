@@ -53,6 +53,12 @@ def _config_module() -> TabModule:
     return ConfigTab()
 
 
+def _basic_config_module() -> TabModule:
+    from huawei_manager.tabs.basic_config.page import BasicConfigTab
+
+    return BasicConfigTab()
+
+
 def _route_module() -> TabModule:
     from huawei_manager.tabs.route import RouteTab
 
@@ -102,6 +108,9 @@ _TAB_META: tuple[_TabMeta, ...] = (
              "Visualizar e gerenciar dispositivos", "Ctrl+2", module_factory=_topology_module),
     _TabMeta("config", "Config Atual", "\U0001f4cb", C.NEON_CYAN, "DISPOSITIVOS",
              "Exibir configuração atual do roteador", "Ctrl+3", module_factory=_config_module),
+    _TabMeta("basic-config", "Config Básica", "⚙", C.NEON_AMBER, "DISPOSITIVOS",
+             "Configuração básica do dispositivo (admin)", "Ctrl+Shift+3",
+             module_factory=_basic_config_module, min_role="admin"),
     _TabMeta("route", "Roteamento", "\U0001f310", C.NEON_CYAN, "DISPOSITIVOS",
              "Tabela de roteamento", "Ctrl+4", module_factory=_route_module),
     _TabMeta("arp", "Tabela ARP", "\U0001f4e1", C.NEON_CYAN, "DISPOSITIVOS",

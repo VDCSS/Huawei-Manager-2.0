@@ -3,7 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from huawei_manager.basic_config.builders import (
+    ACL_ADVANCED_RULE_SPECS,
+    ACL_ADVANCED_RULE_TEMPLATE,
+    ACL_BASIC_RULE_SPECS,
+    ACL_BASIC_RULE_TEMPLATE,
+    ACL_NUMBER_SPECS,
+    ACL_NUMBER_TEMPLATE,
+    TRAFFIC_FILTER_SPECS,
+    TRAFFIC_FILTER_TEMPLATE,
+    VTY_ACL_SPECS,
+    VTY_ACL_TEMPLATE,
+)
+
+if TYPE_CHECKING:
+    from huawei_manager.basic_config.params import ConfigTemplate, ParamSpec
 
 # ── Tipos suportados ──────────────────────────────────────────────────
 DEVICE_TYPES = {
@@ -58,6 +74,8 @@ class ServiceDef:
     output_format: str = "text"
     requires_privilege: bool = False
     config_mode: bool = False
+    params: tuple[ParamSpec, ...] = ()
+    config_template: ConfigTemplate | None = None
 
     def cli(self) -> str:
         """Retorna os comandos CLI concatenados por ponto-e-vírgula."""
@@ -74,6 +92,8 @@ class _SvcSpec:
     types: list[str]
     cmds: list[str] | None = None
     config: bool = False
+    params: tuple[ParamSpec, ...] = ()
+    template: ConfigTemplate | None = None
 
 
 def _svc(*args: Any, **kw: Any) -> ServiceDef:
@@ -85,11 +105,15 @@ def _svc(*args: Any, **kw: Any) -> ServiceDef:
         id_, name, desc, cat, types, *rest = args
         cmds = kw.pop("cmds", rest[0] if rest else None)
         config = kw.pop("config", rest[1] if len(rest) > 1 else False)
+        params = kw.pop("params", ())
+        template = kw.pop("template", None)
         return ServiceDef(
             id=id_, name=name, description=desc,
             category=cat, device_types=types,
             cli_commands=cmds or [desc],
             config_mode=config,
+            params=params,
+            config_template=template,
         )
     spec = _SvcSpec(**kw)
     return ServiceDef(
@@ -97,6 +121,8 @@ def _svc(*args: Any, **kw: Any) -> ServiceDef:
         category=spec.cat, device_types=spec.types,
         cli_commands=spec.cmds or [spec.desc],
         config_mode=spec.config,
+        params=spec.params,
+        config_template=spec.template,
     )
 
 
@@ -194,6 +220,26 @@ SERVICE_REGISTRY: list[ServiceDef] = [
          'rule <id> <permit|deny> ip source <ip> <wildcard>', 'config-acl', ['ROUTER'],
          cmds=['rule 5 permit ip source 10.0.0.0 0.0.0.255'],
          config=True),
+    _svc('router-config-acl-create', 'Criar ACL (Numérica)',
+         'acl number <acl>', 'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['acl number 2000'],
+         params=ACL_NUMBER_SPECS,
+         template=ACL_NUMBER_TEMPLATE,
+         config=True),
+    _svc('router-config-acl-rule-basic', 'Regra ACL Básica (2000-2999)',
+         'rule <rule> <permit|deny> source <source> <wildcard>', 'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['rule 5 permit source 10.0.0.0 0.0.0.255'],
+         params=ACL_BASIC_RULE_SPECS,
+         template=ACL_BASIC_RULE_TEMPLATE,
+         config=True),
+    _svc('router-config-acl-rule-advanced', 'Regra ACL Avançada (3000-3999)',
+         'rule <rule> <permit|deny> <protocol> source <source> <wildcard> '
+         'destination <destination> <destination_wildcard>',
+         'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['rule 5 permit ip source 10.0.0.0 0.0.0.255'],
+         params=ACL_ADVANCED_RULE_SPECS,
+         template=ACL_ADVANCED_RULE_TEMPLATE,
+         config=True),
     _svc('router-config-bgp', 'BGP', 'bgp <asn>', 'config-bgp', ['ROUTER'],
          cmds=['bgp 65000'],
          config=True),
@@ -257,8 +303,16 @@ SERVICE_REGISTRY: list[ServiceDef] = [
          config=True),
     # ── Cadeia ACL/traffic-filter + MQC (classifier → behavior → policy → interface) ──
     _svc('router-config-traffic-filter', 'Traffic Filter',
-         'traffic-filter <inbound|outbound> acl <acl-id>', 'config-acl', ['ROUTER', 'SWITCH'],
+         'traffic-filter <direction> acl <acl>', 'config-acl', ['ROUTER', 'SWITCH'],
          cmds=['traffic-filter outbound acl 3000'],
+         params=TRAFFIC_FILTER_SPECS,
+         template=TRAFFIC_FILTER_TEMPLATE,
+         config=True),
+    _svc('router-config-vty-acl', 'ACL em VTY (Proteção de Acesso)',
+         'user-interface vty <vty_range> / acl <acl> inbound', 'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['acl 2000 inbound'],
+         params=VTY_ACL_SPECS,
+         template=VTY_ACL_TEMPLATE,
          config=True),
     _svc('router-config-mqc-classifier', 'MQC Classifier',
          'traffic classifier <name>', 'config-qos', ['ROUTER', 'SWITCH'],

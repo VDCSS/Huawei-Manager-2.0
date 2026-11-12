@@ -407,6 +407,10 @@ class ServicesTab:
         pf_layout.addWidget(param_header)
 
         self.state.param_entries.clear()
+        # Mapeia segredos por label se o serviço definir params tipados
+        secret_labels = {
+            spec.label for spec in svc.params if getattr(spec, "secret", False)
+        }
         for label, default in params:
             row = QWidget(pf)
             row_layout = QHBoxLayout(row)
@@ -419,6 +423,8 @@ class ServicesTab:
             row_layout.addWidget(lbl)
 
             entry = QLineEdit(row)
+            if label in secret_labels:
+                entry.setEchoMode(QLineEdit.EchoMode.Password)
             entry.setText(default)
             entry.setStyleSheet(f"""
                 QLineEdit {{

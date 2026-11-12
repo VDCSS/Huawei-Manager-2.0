@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from huawei_manager.security_redaction import redact_vrp_config
+
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _CTRL = re.compile(r"[\x08\x0d]")
 _MORE = re.compile(r"----\s*More\s*----")
@@ -22,5 +24,10 @@ def clean_output(text: str) -> str:
 
 
 def sanitize_command(cmd: str) -> str:
-    """Ofusca valores de password/secret/key/token em comandos para log seguro."""
-    return SANITIZE_PATTERNS.sub(r"\1=***", cmd)
+    """Ofusca valores de password/secret/key/token em comandos para log seguro.
+
+    Primeiro cobre as formas VRP ``password irreversible-cipher|cipher|simple``
+    (que o padrão genérico ``password=`` não alcança) e depois o formato
+    legado ``password=valor``.
+    """
+    return SANITIZE_PATTERNS.sub(r"\1=***", redact_vrp_config(cmd))

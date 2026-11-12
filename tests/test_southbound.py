@@ -556,7 +556,10 @@ class TestSSHSouthboundServiceCommands:
             ["vlan 10", "name test"], config_mode=True
         )
         assert "Config applied" in out
-        assert mock_session.run_cli_rpc.call_count == 2  # system-view + quit
+        # Bloco hierárquico: uma única chamada de edit_config, sem
+        # system-view/return por fora (o send_config_set cuida da sessão).
+        mock_session.edit_config.assert_called_once()
+        assert mock_session.run_cli_rpc.call_count == 0
 
     def test_multiple_commands(self):
         from huawei_manager.sdn_controller.southbound import SSHSouthbound

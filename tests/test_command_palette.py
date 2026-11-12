@@ -150,7 +150,7 @@ class TestCreateDefaultCommands:
         mock_app._tabs = build_registry()
         cmds = create_default_commands(mock_app)
         nav_cmds = [c for c in cmds if c.category == "Navegação"]
-        assert len(nav_cmds) == 10
+        assert len(nav_cmds) == 11
         assert any(c.id == "nav:home" for c in nav_cmds)
         assert any(c.id == "nav:services" for c in nav_cmds)
 

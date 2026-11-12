@@ -21,6 +21,7 @@ from netmiko.exceptions import (  # pyright: ignore[reportMissingTypeStubs]
 )
 
 from huawei_manager.audit_log import AuditLogger
+from huawei_manager.basic_config.vrp_version import VrpVersion
 from huawei_manager.exceptions import (
     SdnAuthError,
     SdnCommandError,
@@ -29,6 +30,7 @@ from huawei_manager.exceptions import (
     SdnValidationError,
 )
 from huawei_manager.sdn_controller.validator import CommandValidator, ValidationResult
+from huawei_manager.security_redaction import redact_config_text, redact_secrets
 from huawei_manager.session import NetmikoSession
 from huawei_manager.vault import SecretsBackend
 
@@ -60,6 +62,23 @@ class SouthboundProtocol(ABC):
         self, commands: list[str]
     ) -> tuple[bool, str]:
         """Envia comandos de configuracao. Retorna (sucesso, mensagem)."""
+
+    def send_config_block(
+        self,
+        commands: list[str],
+        *,
+        save: bool = False,
+        allow_patterns: list[str] | None = None,
+        secrets: list[str] | None = None,
+        vrp_version: VrpVersion | None = None,
+    ) -> tuple[bool, str]:
+        """Aplica um bloco hierárquico em uma única sessão system-view.
+
+        Implementação padrão conservadora para protocolos alternativos:
+        delega ao ``send_config`` legado. ``SSHSouthbound`` sobrescreve com
+        validação admin-only, ``cmd_verify=False`` e detecção de erros VRP.
+        """
+        return self.send_config(commands)
 
     @abstractmethod
     def is_alive(self) -> bool:
@@ -292,10 +311,64 @@ class SSHSouthbound(SouthboundProtocol):
         config_text = "\n".join(commands)
         try:
             ok, msg = self._session.edit_config(config_text, target="running", save=save)
-            return ok, _sanitize(msg) if not ok else msg
+            # Sanitizar TAMBÉM o sucesso: a saída do device pode ecoar uma
+            # senha configurada em outra etapa.
+            return ok, redact_config_text(msg)
         except Exception as exc:
             sanitized = _sanitize(str(exc))
             log.error("send_config failed: %s", sanitized)
+            return False, sanitized
+
+    def send_config_block(
+        self,
+        commands: list[str],
+        *,
+        save: bool = False,
+        allow_patterns: list[str] | None = None,
+        secrets: list[str] | None = None,
+        vrp_version: VrpVersion | None = None,
+    ) -> tuple[bool, str]:
+        """Aplica um bloco de configuração admin-only em uma sessão única.
+
+        Diferenças deliberadas em relação a ``send_config`` legado:
+
+        * ``validate_config_block`` exige admin e rejeita separadores
+          escondidos (``;``/``\\r``/``\\n`` dentro de uma linha);
+        * o bloco inteiro vai para um único ``send_config_set``
+          (``cmd_verify=False``), preservando a hierarquia VRP;
+        * erros de sintaxe VRP são detectados e retornados como falha;
+        * o commit/save é tratado automaticamente conforme a versão VRP
+          detectada (VRP8: commit automático + save all virtual-systems;
+          outras: save genérico);
+        * segredos são redigidos na mensagem e no session log.
+        """
+        if not self._connected:
+            raise SdnConnectionError("Not connected")
+        if self._validator is not None:
+            vr = self._validator.validate_config_block(
+                commands, self._access_role, allow_patterns=allow_patterns
+            )
+            if not vr.allowed:
+                msg = f"Config block denied by policy: {vr.reason}"
+                log.warning("send_config_block blocked: %s", vr.reason)
+                raise SdnAuthError(msg)
+        config_text = "\n".join(commands)
+        try:
+            ok, msg = self._session.edit_config(
+                config_text,
+                target="running",
+                save=save,
+                cmd_verify=False,
+                detect_errors=True,
+                secrets=secrets,
+                vrp_version=vrp_version,
+            )
+            return ok, redact_secrets(msg, secrets)
+        except SdnError:
+            raise
+        except Exception as exc:
+            sanitized = redact_secrets(str(exc), secrets)
+            log.error("send_config_block failed: %s", sanitized)
             return False, sanitized
 
     def send_service_commands_detailed(
@@ -315,21 +388,25 @@ class SSHSouthbound(SouthboundProtocol):
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
-        need_sysview = config_mode or requires_privilege
+        # Configuração é um bloco hierárquico: um único send_config_set em
+        # uma única sessão system-view. O caminho antigo enviava cada linha
+        # separadamente e perdia o contexto (ex.: IP fora da interface).
+        if config_mode:
+            if not commands:
+                return []
+            _ok, msg = self.send_config_block(commands)
+            return [(commands[0], msg)]
 
+        need_sysview = requires_privilege
         if need_sysview:
             self._session.run_cli_rpc("system-view")
 
         results: list[tuple[str, str]] = []
         try:
             for cmd in commands:
-                if config_mode:
-                    _ok, msg = self.send_config([cmd])
-                    results.append((cmd, msg))
-                else:
-                    results.append(
-                        (cmd, self.send_command(cmd, read_timeout=read_timeout))
-                    )
+                results.append(
+                    (cmd, self.send_command(cmd, read_timeout=read_timeout))
+                )
         except SdnError:
             self.invalidate_connection()
             raise

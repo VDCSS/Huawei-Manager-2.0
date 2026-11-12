@@ -13,12 +13,12 @@ from huawei_manager.tabs import build_registry, tab_by_key, visible_tabs
 from huawei_manager.widgets.command_palette import Command, CommandRegistry
 
 _EXPECTED_KEYS = [
-    "home", "topology", "config", "route", "arp",
+    "home", "topology", "config", "basic-config", "route", "arp",
     "info", "cmd", "backup", "services", "manutencao",
 ]
 _EXPECTED_GROUPS = [
     "DASHBOARD",
-    "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS",
+    "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS",
     "FERRAMENTAS", "FERRAMENTAS", "FERRAMENTAS",
     "ADMINISTRACAO",
 ]
@@ -31,7 +31,7 @@ class TestBuildRegistry:
 
     def test_keys_are_unique(self) -> None:
         keys = [td.key for td in build_registry()]
-        assert len(set(keys)) == len(keys) == 10
+        assert len(set(keys)) == len(keys) == 11
 
     def test_min_role_valid(self) -> None:
         for td in build_registry():
@@ -67,13 +67,14 @@ class TestTabByKey:
 class TestVisibleTabs:
     def test_all_visible_when_everyone_can(self) -> None:
         tabs = build_registry()
+        # basic-config é admin-only por padrão no registry:
         assert len(visible_tabs(tabs, "user")) == 10
-        assert len(visible_tabs(tabs, "admin")) == 10
+        assert len(visible_tabs(tabs, "admin")) == 11
 
     def test_admin_only_hidden_for_user(self) -> None:
         restricted = [replace(td, min_role="admin") for td in build_registry()]
         assert visible_tabs(restricted, "user") == []
-        assert len(visible_tabs(restricted, "admin")) == 10
+        assert len(visible_tabs(restricted, "admin")) == 11
 
     def test_unknown_role_fails_closed_to_user(self) -> None:
         restricted = [replace(td, min_role="admin") for td in build_registry()]

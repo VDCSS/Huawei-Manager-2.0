@@ -66,14 +66,21 @@ def get_all_show_commands() -> list[tuple[str, str]]:
 
 
 def parse_params(service: ServiceDef) -> list[tuple[str, str]]:
-    """Extrai pares (nome_param, valor_default) da description de um serviço config.
+    """Extrai pares (nome_param, valor_default) de um serviço config.
 
-    Examina placeholders <nome> na description e mapeia para os valores
-    correspondentes em cli_commands[0] pela posição.
+    Se o serviço definir ``params`` tipados (:class:`ParamSpec`), usa os rótulos
+    e defaults explicitamente especificados. Caso contrário, recorre à lógica
+    legada de examinar placeholders ``<nome>`` na ``description``.
     """
     params: list[tuple[str, str]] = []
     if not service.config_mode:
         return params
+
+    if service.params:
+        for spec in service.params:
+            params.append((spec.label, spec.default))
+        return params
+
     desc = service.description
     default_cmd = service.cli_commands[0] if service.cli_commands else desc
     names = re.findall(r"<([^>]+)>", desc)

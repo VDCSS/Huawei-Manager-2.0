@@ -262,3 +262,54 @@ class TestSeparatorInvariants:
             "display version;some-random-command", role="user"
         )
         assert result.allowed is False
+
+
+class TestConfigBlockPolicy:
+    """Política de bloco de configuração: admin-only, sem bypass destrutivo."""
+
+    def test_admin_can_apply_config_lines(self, validator):
+        result = validator.validate_config_block(
+            ["interface GigabitEthernet0/0/0", "ip address 10.0.0.1 255.255.255.0",
+             "quit"],
+            role="admin",
+        )
+        assert result.allowed is True
+
+    def test_tecnico_cannot_apply_config(self, validator):
+        result = validator.validate_config_block(["interface GE0/0/0"], role="tecnico")
+        assert result.allowed is False
+        assert "admin" in (result.reason or "").lower()
+
+    def test_user_cannot_apply_config(self, validator):
+        result = validator.validate_config_block(["interface GE0/0/0"], role="user")
+        assert result.allowed is False
+
+    @pytest.mark.parametrize("line", [
+        "interface GE0/0/0\rshutdown",
+        "interface GE0/0/0\nshutdown",
+        "interface GE0/0/0;shutdown",
+    ])
+    def test_hidden_separator_rejected(self, validator, line):
+        result = validator.validate_config_block([line], role="admin")
+        assert result.allowed is False
+        assert "separador" in (result.reason or "").lower()
+
+    def test_destructive_command_denied_even_for_admin(self, validator):
+        result = validator.validate_config_block(["format flash:"], role="admin")
+        assert result.allowed is False
+
+    def test_empty_block_rejected(self, validator):
+        assert validator.validate_config_block([], role="admin").allowed is False
+
+    def test_blank_line_rejected(self, validator):
+        assert validator.validate_config_block(["interface GE0/0/0", "  "],
+                                               role="admin").allowed is False
+
+    def test_allowlist_restricts_block(self, validator):
+        result = validator.validate_config_block(
+            ["interface GE0/0/0", "shutdown"],
+            role="admin",
+            allow_patterns=[r"^interface\s+\S+$"],
+        )
+        assert result.allowed is False
+        assert "template" in (result.reason or "").lower()

@@ -183,6 +183,8 @@ class TestEditConfig:
 
     def test_save_config_not_called_by_default(self, session):
         mock_conn = MagicMock()
+        mock_conn.send_config_set.return_value = "ok"
+        mock_conn.send_command.return_value = "<HUAWEI>"
         session._conn = mock_conn
         with (
             patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
@@ -193,13 +195,21 @@ class TestEditConfig:
 
     def test_save_config_called_when_save_true(self, session):
         mock_conn = MagicMock()
+        mock_conn.send_config_set.return_value = "ok"
+        mock_conn.send_command.return_value = "<HUAWEI>"
+        mock_conn.send_command_timing.return_value = "save ok"
         session._conn = mock_conn
         with (
             patch.object(type(session), "_host", new_callable=PropertyMock, return_value="10.0.0.1"),
             patch.object(type(session), "_user", new_callable=PropertyMock, return_value="admin"),
         ):
             session.edit_config("config text", save=True)
-            mock_conn.save_config.assert_called_once()
+            # save=True dispara save all via send_command_timing na visão exec,
+            # não o método legado save_config().
+            mock_conn.send_command_timing.assert_called_once()
+            args = mock_conn.send_command_timing.call_args.args
+            assert args[0] == "save"
+            mock_conn.save_config.assert_not_called()
 
 
 class TestRunCliRpc:

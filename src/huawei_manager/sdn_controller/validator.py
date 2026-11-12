@@ -117,6 +117,64 @@ class CommandValidator:
                 return result
         return ValidationResult(allowed=True)
 
+    def validate_config_block(
+        self,
+        commands: list[str] | tuple[str, ...],
+        role: str,
+        *,
+        allow_patterns: list[str] | None = None,
+    ) -> ValidationResult:
+        """Valida um bloco de configuração para aplicação no device.
+
+        Política distinta do ``validate`` de show commands:
+
+        * **admin-only** — ``user``/``tecnico`` nunca aplicam configuração;
+        * cada item é uma linha (não um buffer): ``;``/``\\r``/``\\n`` dentro
+          da linha são separadores escondidos e são negados;
+        * deny-list vale para todos, inclusive admin (sem bypass);
+        * ``allow_patterns`` opcional restringe o bloco ao template gerado.
+
+        O chamador deve passar linhas já renderizadas por
+        :class:`~huawei_manager.basic_config.params.ConfigTemplate`.
+        """
+        if role != "admin":
+            return ValidationResult(
+                allowed=False,
+                reason="Configuração de device exige papel admin",
+            )
+        if not commands:
+            return ValidationResult(allowed=False, reason="Bloco vazio")
+        allow = (
+            [re.compile(p, re.IGNORECASE) for p in allow_patterns]
+            if allow_patterns is not None
+            else None
+        )
+        for raw in commands:
+            command = str(raw).strip()
+            if not command:
+                return ValidationResult(
+                    allowed=False, reason="Bloco contém linha vazia"
+                )
+            if any(sep in command for sep in (";", "\r", "\n")):
+                return ValidationResult(
+                    allowed=False,
+                    reason=f"Separador de comando escondido: {command}",
+                )
+            for pattern in self._deny:
+                if pattern.search(command):
+                    return ValidationResult(
+                        allowed=False,
+                        reason=f"Command denied by policy: {command}",
+                    )
+            if allow is not None and not any(
+                pattern.search(command) for pattern in allow
+            ):
+                return ValidationResult(
+                    allowed=False,
+                    reason=f"Command outside generated template: {command}",
+                )
+        return ValidationResult(allowed=True)
+
     def _validate_one(self, command: str, role: str) -> ValidationResult:
         """Valida um comando logico unico (sem separadores)."""
         # Deny-list primeiro: deny vence allow (invariante de seguranca)

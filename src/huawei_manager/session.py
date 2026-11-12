@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ from huawei_manager._config import PROJECT_ROOT
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.exceptions import SdnConnectionError, SdnValidationError
 from huawei_manager.session_commands import SessionCommandsMixin
+from huawei_manager.utils import clean_output
 from huawei_manager.vault import SecretsBackend
 
 log = logging.getLogger("huawei.session")
@@ -264,6 +266,46 @@ class NetmikoSession(SessionCommandsMixin):
         if self._closing:
             return False
         return self._conn is not None and self._conn.is_alive()
+
+    # ── canal SSH bruto (Ctrl+Z / bytes cruos) ─────────────────────
+    def _write_raw(self, data: str) -> None:
+        """Escreve dados brutos no canal SSH (usa Netmiko write_channel).
+
+        Usado para enviar Ctrl+Z (\\x1a) sem depender de prompt matching do
+        Netmiko, que falha quando o device responde com prompt interativo
+        (ex.: commit do VRP8) em vez do prompt de exec view.
+        """
+        if not self._conn:
+            raise SdnConnectionError("Sem conexao ativa")
+        self._conn.write_channel(data)
+
+    def _read_raw_timing(self) -> str:
+        """Lê output disponível no canal SSH (usa Netmiko read_channel_timing).
+
+        Não bloqueia: retorna o que estiver no buffer do canal no momento.
+        """
+        if not self._conn:
+            raise SdnConnectionError("Sem conexao ativa")
+        out = self._conn.read_channel_timing()
+        return clean_output(str(out))
+
+    # ── protege segredos no session log do Netmiko ─────────────────
+    def _protect_session_log(self, secrets: Iterable[str] | None = None) -> None:
+        """Adiciona segredos ao ``no_log`` do SessionLog do Netmiko.
+
+        O session log registra leituras do device; sem isso, o eco de um
+        comando ``local-user ... password`` poderia gravar a senha em
+        ``sessions/<host>_<port>_<ts>.log``.
+        """
+        if not secrets:
+            return
+        session_log = getattr(self._conn, "session_log", None)
+        no_log = getattr(session_log, "no_log", None)
+        if not isinstance(no_log, dict):
+            return
+        for index, value in enumerate(secrets):
+            if value:
+                no_log[f"config-secret-{index}"] = str(value)
 
     # ── resolve filter (delega para session_helpers) ───────────────
     @staticmethod

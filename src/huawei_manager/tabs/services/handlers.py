@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.command import ConfigCommand, audit_config_op
-from huawei_manager.exceptions import SdnError, SnapshotError
+from huawei_manager.exceptions import SdnError, SdnValidationError, SnapshotError
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import CommandExecutedPayload
 from huawei_manager.sdn_controller.napalm_backend import (
@@ -132,6 +132,25 @@ class ServicesHandlers:
 
         mode = self._ctx.svc_mode()
         device = self._ctx.device()
+
+        # Gate de permissão estrito: configuração de dispositivo exige papel admin
+        if svc.config_mode and not self._ctx.require_access("admin"):
+            _ui.write(
+                self._state.output,
+                "✘  Permissão negada: configuração de dispositivo exige papel admin.",
+                self._ctx.dispatch,
+            )
+            return
+
+        # Aviso e bloqueio explícito para modo NAPALM em serviços de configuração
+        if mode == "napalm" and svc.config_mode:
+            _ui.write(
+                self._state.output,
+                "✘  Modo NAPALM não suporta aplicação de blocos VRP neste serviço. Alterne para o modo CLI/SSH padrão.",
+                self._ctx.dispatch,
+            )
+            return
+
         label = f"Servico: {svc.name}  |  Modo: {mode}"
         if device:
             label += f"  |  Alvo: {device.name} ({device.host})"
@@ -143,37 +162,64 @@ class ServicesHandlers:
 
         final_svc = svc
         if svc.config_mode and self._state.param_entries:
-            cmd = svc.description
-            # Substituição posicional: usa o texto REAL do placeholder (ex.:
-            # `<permit|deny>`, que o label de UI exibe como `permit/deny`) e
-            # substitui apenas a 1ª ocorrência de cada um, preservando
-            # placeholders repetidos (ex.: dois `<ip>` em NAT server).
-            placeholders = re.findall(r"<[^>]+>", cmd)
-            entries = list(self._state.param_entries.values())
-            if len(placeholders) != len(entries):
-                _ui.write(
-                    self._state.output,
-                    "✘  Servico inconsistente: "
-                    f"{len(placeholders)} placeholder(s) para {len(entries)} "
-                    "campo(s). Nada foi executado.",
-                    self._ctx.dispatch)
-                return
-            for placeholder, entry in zip(placeholders, entries):
-                val = entry.text().strip()
-                if _REJECT_PARAM.search(val):
+            if svc.config_template is not None and svc.params:
+                # Caminho tipado F1: valida cada ParamSpec e renderiza o ConfigTemplate
+                val_map: dict[str, str] = {}
+                for spec in svc.params:
+                    entry = self._state.param_entries.get(spec.label)
+                    val_map[spec.key] = entry.text().strip() if entry is not None else ""
+                try:
+                    rendered_lines = svc.config_template.render(svc.params, val_map)
+                except SdnValidationError as err:
                     _ui.write(
                         self._state.output,
-                        f"✘  Parametro '{placeholder}' contem caracteres "
-                        "invalidos (& ; | ` $ ( ) { }).",
+                        f"✘  Parâmetro inválido: {err}",
+                        self._ctx.dispatch,
+                    )
+                    return
+                final_svc = ServiceDef(
+                    id=svc.id,
+                    name=svc.name,
+                    description=svc.description,
+                    category=svc.category,
+                    device_types=svc.device_types,
+                    cli_commands=rendered_lines,
+                    config_mode=svc.config_mode,
+                    params=svc.params,
+                    config_template=svc.config_template,
+                )
+            else:
+                cmd = svc.description
+                # Substituição posicional: usa o texto REAL do placeholder (ex.:
+                # `<permit|deny>`, que o label de UI exibe como `permit/deny`) e
+                # substitui apenas a 1ª ocorrência de cada um, preservando
+                # placeholders repetidos (ex.: dois `<ip>` em NAT server).
+                placeholders = re.findall(r"<[^>]+>", cmd)
+                entries = list(self._state.param_entries.values())
+                if len(placeholders) != len(entries):
+                    _ui.write(
+                        self._state.output,
+                        "✘  Servico inconsistente: "
+                        f"{len(placeholders)} placeholder(s) para {len(entries)} "
+                        "campo(s). Nada foi executado.",
                         self._ctx.dispatch)
                     return
-                cmd = cmd.replace(placeholder, val, 1)
-            final_svc = ServiceDef(
-                id=svc.id, name=svc.name, description=svc.description,
-                category=svc.category, device_types=svc.device_types,
-                cli_commands=[cmd],
-                config_mode=svc.config_mode,
-            )
+                for placeholder, entry in zip(placeholders, entries):
+                    val = entry.text().strip()
+                    if _REJECT_PARAM.search(val):
+                        _ui.write(
+                            self._state.output,
+                            f"✘  Parametro '{placeholder}' contem caracteres "
+                            "invalidos (& ; | ` $ ( ) { }).",
+                            self._ctx.dispatch)
+                        return
+                    cmd = cmd.replace(placeholder, val, 1)
+                final_svc = ServiceDef(
+                    id=svc.id, name=svc.name, description=svc.description,
+                    category=svc.category, device_types=svc.device_types,
+                    cli_commands=[cmd],
+                    config_mode=svc.config_mode,
+                )
 
         rejected = self.validate_service(svc, final_svc.cli_commands)
         if rejected:
@@ -238,19 +284,32 @@ class ServicesHandlers:
                     host = getattr(session, "_host", "unknown")
                     session_id = getattr(session, "_session_id", None)
                     audit: AuditLogger | None = self._ctx.audit
-                    service_cmd = ConfigCommand(
-                        final_svc.cli_commands,
-                        read_state=lambda: self._ctx.sb.send_command(
-                            "display current-configuration"),
-                        apply_fn=lambda lines: (
+                    allow_patterns = [
+                        re.escape(c) for c in final_svc.cli_commands
+                    ] if final_svc.config_template else None
+
+                    def _apply_lines(lines: list[str]) -> tuple[bool, str]:
+                        if final_svc.config_template is not None:
+                            return self._ctx.sb.send_config_block(
+                                lines,
+                                save=False,
+                                allow_patterns=allow_patterns,
+                            )
+                        return (
                             True,
                             self._ctx.sb.send_service_commands(
                                 lines,
                                 config_mode=final_svc.config_mode,
-                                requires_privilege=(
-                                    final_svc.requires_privilege),
+                                requires_privilege=final_svc.requires_privilege,
                             ),
+                        )
+
+                    service_cmd = ConfigCommand(
+                        final_svc.cli_commands,
+                        read_state=lambda: self._ctx.sb.send_command(
+                            "display current-configuration"
                         ),
+                        apply_fn=_apply_lines,
                         dry_run=self._ctx.dry_run,
                     )
                     try:
@@ -459,6 +518,16 @@ class ServicesHandlers:
         Returns:
             Lista de ``(cmd, reason)`` rejeitados; vazia = todos ok.
         """
+        if svc.config_template is not None:
+            # Em serviços com template tipado, a validação de formato e tipagem
+            # já foi concluída pelo ConfigTemplate; checamos deny patterns e allow
+            deny_patterns = [re.compile(p, re.IGNORECASE) for p in _DEFAULT_DENY_PATTERNS]
+            rejected: list[tuple[str, str]] = []
+            for c in final_cmds:
+                if any(p.search(c) for p in deny_patterns):
+                    rejected.append((c, "destrutivo"))
+            return rejected
+
         allow_patterns = _build_service_allow_patterns(svc)
         deny_patterns = [re.compile(p, re.IGNORECASE)
                          for p in _DEFAULT_DENY_PATTERNS]
