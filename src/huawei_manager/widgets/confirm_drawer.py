@@ -35,12 +35,13 @@ class ConfirmDrawer(QWidget):
         self._on_confirm: Callable[[], None] | None = None
         self._on_cancel: Callable[[], None] | None = None
         self._drawer_width = 440
+        self._is_danger = True
 
         # Scrim / backdrop (fundo escurecido clicável para fechar)
         self.scrim = QFrame(self)
         self.scrim.setObjectName("drawerScrim")
         self.scrim.setStyleSheet("background: rgba(5, 5, 13, 0.55);")
-        self.scrim.mousePressEvent = lambda _e: self.close_drawer()
+        self.scrim.mousePressEvent = self._on_scrim_press
 
         # Painel lateral deslizante
         self.panel = QFrame(self)
@@ -107,6 +108,8 @@ class ConfirmDrawer(QWidget):
         close_btn.setIcon(icon("i-x", C.FG_DIM, 16))
         close_btn.setIconSize(QSize(16, 16))
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setToolTip("Fechar")
+        close_btn.setAccessibleName("Fechar")
         close_btn.setStyleSheet(f"""
             #drawerCloseBtn {{
                 background: transparent;
@@ -116,12 +119,20 @@ class ConfirmDrawer(QWidget):
             }}
             #drawerCloseBtn:hover {{
                 background: {C.BG_HOVER};
-                color: {C.FG_MAIN};
+                color: {C.NEON_RED};
                 border-color: {C.BORDER_SOFT};
+            }}
+            #drawerCloseBtn:focus {{
+                outline: 2px solid {C.NEON_RED};
             }}
         """)
         close_btn.clicked.connect(self.close_drawer)
         head_layout.addWidget(close_btn)
+        # Aliases para compatibilidade com testes/automacao
+        self.close_btn = close_btn
+        self._close_btn = close_btn
+        self.close_button = close_btn
+        self._close_button = close_btn
 
         layout.addWidget(head_widget)
 
@@ -235,6 +246,7 @@ class ConfirmDrawer(QWidget):
         """Abre o drawer lateral sobre o parentWidget."""
         self._on_confirm = on_confirm
         self._on_cancel = on_cancel
+        self._is_danger = is_danger
 
         self.title_lbl.setText(title)
         if message:
@@ -272,6 +284,22 @@ class ConfirmDrawer(QWidget):
         self.setVisible(True)
         self.raise_()
         self.cancel_btn.setFocus()
+
+    def keyPressEvent(self, event) -> None:
+        from PySide6.QtCore import Qt
+
+        if event.key() == Qt.Key.Key_Escape:
+            self.close_drawer()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _on_scrim_press(self, event) -> None:
+        # Confirmações destrutivas não fecham com clique fora.
+        if getattr(self, "_is_danger", False):
+            event.accept()
+            return
+        self.close_drawer()
 
     def close_drawer(self) -> None:
         """Fecha o drawer e aciona o callback de cancelamento, se houver."""

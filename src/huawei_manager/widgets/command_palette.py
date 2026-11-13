@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, QSize, Qt
 from PySide6.QtGui import QKeyEvent, QKeySequence, QShortcut, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -24,12 +24,14 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 import huawei_manager.constants as C
 from huawei_manager.widgets.helpers import _css_font
+from huawei_manager.widgets.icons import icon
 
 if TYPE_CHECKING:
     from huawei_manager._protocols import AppCoreProtocol
@@ -113,6 +115,10 @@ class CommandPalette(QFrame):
         card_layout.setSpacing(0)
 
         # Search input
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(0, 0, 0, 0)
+        search_row.setSpacing(8)
+
         self._search = QLineEdit(self._card)
         self._search.setObjectName("CommandPaletteSearch")
         self._search.setPlaceholderText("Digite para filtrar comandos… (Ctrl+K para fechar)")
@@ -120,7 +126,66 @@ class CommandPalette(QFrame):
         self._search.setMinimumHeight(46)
         self._search.textChanged.connect(self._on_search_changed)
         self._search.installEventFilter(self)
-        card_layout.addWidget(self._search)
+        search_row.addWidget(self._search, stretch=1)
+
+        self._close_text_btn = QPushButton("Fechar", self._card)
+        self._close_text_btn.setObjectName("paletteCloseTextBtn")
+        self._close_text_btn.setMinimumHeight(46)
+        self._close_text_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_text_btn.setToolTip("Fechar")
+        self._close_text_btn.setAccessibleName("Fechar")
+        self._close_text_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {C.FG_DIM};
+                border: 1px solid {C.BORDER_NRM};
+                border-radius: 6px;
+                padding: 0 14px;
+                font: 500 13px '{C.FONT_UI_FAMILY}';
+            }}
+            QPushButton:hover {{
+                background: {C.BG_HOVER};
+                color: {C.FG_MAIN};
+                border-color: {C.BORDER_STRONG};
+            }}
+        """)
+        self._close_text_btn.clicked.connect(self.hide)
+        search_row.addWidget(self._close_text_btn)
+
+        self._close_btn = QPushButton(self._card)
+        self._close_btn.setObjectName("paletteCloseBtn")
+        self._close_btn.setFixedSize(46, 46)
+        self._close_btn.setIcon(icon("i-x", C.FG_DIM, 16))
+        self._close_btn.setIconSize(QSize(16, 16))
+        self._close_btn.setToolTip("Fechar")
+        self._close_btn.setAccessibleName("Fechar")
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {C.FG_DIM};
+                border: 1px solid {C.BORDER_NRM};
+                border-radius: 6px;
+            }}
+            QPushButton:hover {{
+                background: {C.BG_HOVER};
+                color: {C.NEON_RED};
+                border-color: {C.BORDER_STRONG};
+            }}
+            QPushButton:focus {{
+                outline: 2px solid {C.NEON_RED};
+            }}
+        """)
+        self._close_btn.clicked.connect(self.hide)
+        search_row.addWidget(self._close_btn)
+        # Aliases
+        self.close_btn = self._close_btn
+        self._close_button = self._close_btn
+        self.close_button = self._close_btn
+        self.close_text_button = self._close_text_btn
+        self._close_text_button = self._close_text_btn
+
+        card_layout.addLayout(search_row)
 
         # Separador
         sep = QFrame(self._card)
@@ -317,12 +382,39 @@ class CommandPalette(QFrame):
                 (geo.width() - self._card.width()) // 2,
                 40
             )
+        # Guarda o widget com foco para devolver ao fechar
+        self._previous_focus = QApplication.focusWidget()
         self._search.clear()
         self._search.setFocus()
         self._filtered_commands = [c for c in self._all_commands if c.enabled]
         self._refresh_list()
         if self._filtered_commands:
             self._list.setCurrentRow(0)
+
+    def hide(self) -> None:
+        # Limpa estado de busca ao fechar
+        try:
+            self._search.clear()
+        except Exception:
+            pass
+        prev = getattr(self, "_previous_focus", None)
+        super().hide()
+        # Devolve o foco ao elemento que abriu o modal
+        try:
+            if prev is not None and prev.isVisible():
+                prev.setFocus()
+        except Exception:
+            pass
+
+    def mousePressEvent(self, event) -> None:
+        try:
+            if not self._card.geometry().contains(event.pos()):
+                self.hide()
+                event.accept()
+                return
+        except Exception:
+            pass
+        super().mousePressEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()

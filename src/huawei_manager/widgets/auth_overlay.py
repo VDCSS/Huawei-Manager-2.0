@@ -1,7 +1,7 @@
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QKeyEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as _C
+from huawei_manager.widgets.icons import icon, icon_pixmap
 
 _ENTRY_STYLE = f"""QLineEdit {{
     background: {_C.BG_INPUT};
@@ -76,15 +77,26 @@ class AuthOverlay(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         header.addStretch()
-        self._close_btn = QPushButton("X", self._card)
+        self._close_btn = QPushButton(self._card)
+        self._close_btn.setObjectName("authCloseBtn")
         self._close_btn.setFixedSize(28, 28)
+        self._close_btn.setIcon(icon("i-x", _C.FG_DIM, 16))
+        self._close_btn.setIconSize(QSize(16, 16))
+        self._close_btn.setToolTip("Fechar")
+        self._close_btn.setAccessibleName("Fechar")
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; color: {_C.FG_DIM};"
-            f" border: none; font: 14px {_C.FONT_UI_FAMILY}; }}"
-            f"QPushButton:hover {{ color: {_C.NEON_RED}; }}")
+            f" border: 1px solid transparent; border-radius: 6px; }}"
+            f"QPushButton:hover {{ color: {_C.NEON_RED}; background: {_C.BG_HOVER}; }}"
+            f"QPushButton:focus {{ outline: 2px solid {_C.NEON_RED}; }}")
         self._close_btn.clicked.connect(self.close_)
         header.addWidget(self._close_btn)
         card_layout.addLayout(header)
+        # Aliases
+        self.close_btn = self._close_btn
+        self.close_button = self._close_btn
+        self._close_button = self._close_btn
 
         eyebrow = QLabel("ACESSO RESTRITO", self._card)
         eyebrow.setStyleSheet(
@@ -129,6 +141,22 @@ class AuthOverlay(QWidget):
 
         card_layout.addSpacing(14)
 
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(10)
+
+        self._cancel_btn = QPushButton("Cancelar", self._card)
+        self._cancel_btn.setMinimumHeight(36)
+        self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cancel_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {_C.FG_DIM}; "
+            f"border: 1px solid {_C.BORDER_NRM}; border-radius: 6px; "
+            f"padding: 8px 24px; font: 500 13px {_C.FONT_UI_FAMILY}; }}"
+            f"QPushButton:hover {{ color: {_C.FG_MAIN}; "
+            f"border-color: {_C.BORDER_STRONG}; background: {_C.BG_HOVER}; }}")
+        self._cancel_btn.clicked.connect(self.close_)
+        btn_row.addWidget(self._cancel_btn, stretch=1)
+
         self._auth_btn = QPushButton("Autenticar", self._card)
         self._auth_btn.setMinimumHeight(36)
         self._auth_btn.setStyleSheet(
@@ -139,7 +167,9 @@ class AuthOverlay(QWidget):
             f"border-color: {_C.NEON_CYAN_STRONG}; }}")
         self._auth_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._auth_btn.clicked.connect(self._verify)
-        card_layout.addWidget(self._auth_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        btn_row.addWidget(self._auth_btn, stretch=1)
+
+        card_layout.addLayout(btn_row)
 
         h_layout.addWidget(self._card)
         h_layout.addStretch()
@@ -151,7 +181,19 @@ class AuthOverlay(QWidget):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key.Key_Escape:
             self.close_()
+            event.accept()
+            return
         super().keyPressEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        try:
+            if not self._card.geometry().contains(event.pos()):
+                self.close_()
+                event.accept()
+                return
+        except Exception:
+            pass
+        super().mousePressEvent(event)
 
     def show(self) -> None:
         parent = self.parent()

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as C
+from huawei_manager.widgets.icons import icon
 
 if TYPE_CHECKING:
     from huawei_manager.device_models import Device
@@ -104,6 +105,31 @@ class DeviceDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 20)
         layout.setSpacing(4)
+
+        # ── Botão fechar (X) no canto superior direito ─────────────
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.addStretch()
+        close_btn = QPushButton(self)
+        close_btn.setObjectName("deviceDialogCloseBtn")
+        close_btn.setFixedSize(28, 28)
+        close_btn.setIcon(icon("i-x", C.FG_DIM, 16))
+        close_btn.setIconSize(QSize(16, 16))
+        close_btn.setToolTip("Fechar")
+        close_btn.setAccessibleName("Fechar")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {C.FG_DIM}; "
+            f"border: 1px solid transparent; border-radius: 6px; }}"
+            f"QPushButton:hover {{ color: {C.NEON_RED}; background: {C.BG_HOVER}; }}"
+            f"QPushButton:focus {{ outline: 2px solid {C.NEON_RED}; }}")
+        close_btn.clicked.connect(self.reject)
+        top_row.addWidget(close_btn)
+        layout.addLayout(top_row)
+        self.close_btn = close_btn
+        self._close_btn = close_btn
+        self.close_button = close_btn
+        self._close_button = close_btn
 
         # ── Cabeçalho ──────────────────────────────────────────────
         eyebrow = QLabel("DISPOSITIVO", self)
