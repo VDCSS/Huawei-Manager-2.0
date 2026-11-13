@@ -69,7 +69,7 @@ class ManutencaoTab:
             lay.addWidget(lbl)
             lay.addSpacing(10)
 
-            btn = action_button(p, "Autenticar como Tecnico / Admin",
+            btn = action_button(p, "Autenticar como Técnico / Admin",
                                 ctx.show_auth_dialog, C.NEON_PURP,
                                 variant="outline")
             btn.setIcon(icon("i-key", C.NEON_PURP, 16))
@@ -79,7 +79,7 @@ class ManutencaoTab:
 
         p = _ui.page_frame("manutencao")
         lay = _ui.page_layout(p)
-        _ui.page_title(p, "Manutencao e Diagnostico", C.NEON_MAG,
+        _ui.page_title(p, "Manutenção e Diagnóstico", C.NEON_MAG,
                        "Testes + Agentes + Setup")
 
         top = QWidget(p)
@@ -324,7 +324,7 @@ class ManutencaoTab:
             _ui.loading(out, "Pronto. Clique em 'Agora' para varrer o projeto.",
                         ctx.dispatch)
             if ctx.watcher.is_active:
-                _ui.loading(out, "Watcher ativo — resultados em ate 60s...",
+                _ui.loading(out, "Watcher ativo — resultados em até 60s...",
                             ctx.dispatch)
         return p
 

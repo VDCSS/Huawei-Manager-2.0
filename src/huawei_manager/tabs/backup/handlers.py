@@ -78,7 +78,7 @@ class BackupHandlers:
                 f"  Data     : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"  Linhas   : {linhas}\n"
                 f"  Tamanho  : {os.path.getsize(path):,} bytes\n"
-                f"{'-' * 60}\n\nPrevia (40 linhas):\n\n"
+                f"{'-' * 60}\n\nPrévia (40 linhas):\n\n"
                 + "\n".join(conteudo.splitlines()[:40])
             )
             _ui.write(out, resumo, dispatch)

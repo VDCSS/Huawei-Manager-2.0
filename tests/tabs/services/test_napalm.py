@@ -308,7 +308,7 @@ def test_napalm_diff_vazio_sem_apply(monkeypatch) -> None:
     executor.apply.assert_not_called()
     ctx.sb.send_service_commands.assert_not_called()
     assert bridge.payloads == []            # nenhum diálogo para diff vazio
-    assert any("Sem mudancas a aplicar" in t for t in _writes(st))
+    assert any("Sem mudanças a aplicar" in t for t in _writes(st))
 
 
 # ══════════════════════════════════════════════════════════════════════

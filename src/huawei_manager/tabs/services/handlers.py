@@ -132,7 +132,7 @@ class ServicesHandlers:
 
         mode = self._ctx.svc_mode()
         device = self._ctx.device()
-        label = f"Servico: {svc.name}  |  Modo: {mode}"
+        label = f"Serviço: {svc.name}  |  Modo: {mode}"
         if device:
             label += f"  |  Alvo: {device.name} ({device.host})"
         device_lbl = self._state.device_lbl
@@ -153,7 +153,7 @@ class ServicesHandlers:
             if len(placeholders) != len(entries):
                 _ui.write(
                     self._state.output,
-                    "Erro: Servico inconsistente: "
+                    "ERRO: Serviço inconsistente: "
                     f"{len(placeholders)} placeholder(s) para {len(entries)} "
                     "campo(s). Nada foi executado.",
                     self._ctx.dispatch)
@@ -163,8 +163,8 @@ class ServicesHandlers:
                 if _REJECT_PARAM.search(val):
                     _ui.write(
                         self._state.output,
-                        f"Erro: Parametro '{placeholder}' contem caracteres "
-                        "invalidos (& ; | ` $ ( ) { }).",
+                        f"ERRO: Parâmetro '{placeholder}' contém caracteres "
+                        "inválidos (& ; | ` $ ( ) { }).",
                         self._ctx.dispatch)
                     return
                 cmd = cmd.replace(placeholder, val, 1)
@@ -196,7 +196,7 @@ class ServicesHandlers:
 
         if mode == "cli":
             if self._ctx.ensure_device_ready(
-                    f"executar o servico '{svc.name}'") is None:
+                    f"executar o serviço '{svc.name}'") is None:
                 return
 
         def _do():
@@ -218,7 +218,7 @@ class ServicesHandlers:
 
             if not self._ctx.sb.is_alive():
                 _ui.write(self._state.output,
-                          "Erro: Sem sessão SSH ativa. Conecte-se primeiro.",
+                          "ERRO: Sem sessão SSH ativa. Conecte-se primeiro.",
                           self._ctx.dispatch)
                 return
 
@@ -351,7 +351,7 @@ class ServicesHandlers:
             # NAPALM: recusa auditada, nunca fallback silencioso para o Netmiko
             # (o usuário optou pela flag — falhar fechado).
             _ui.write(self._state.output,
-                      "Erro: NAPALM: sem sessão Netmiko ativa — nada foi aplicado.",
+                      "ERRO: NAPALM: sem sessão Netmiko ativa — nada foi aplicado.",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
@@ -383,7 +383,7 @@ class ServicesHandlers:
 
         # 2) diff vazio: nada mudaria — encerra sem apply e sem diálogo.
         if not diff.strip():
-            _ui.write(self._state.output, "Sem mudancas a aplicar.",
+            _ui.write(self._state.output, "Sem mudanças a aplicar.",
                       self._ctx.dispatch)
             return True
 
@@ -392,7 +392,7 @@ class ServicesHandlers:
         #    confirmação: comportamento nunca pior que hoje (hoje não há diff).
         bridge = self._ctx.ui_bridge()
         if bridge is None:
-            log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmacao",
+            log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmação",
                         svc.name)
             approved = True
         else:
@@ -414,8 +414,8 @@ class ServicesHandlers:
         except SdnError as exc:
             # o backend já auditou (status blocked/error) — só reporta aqui.
             _ui.write(self._state.output,
-                      f"Erro: NAPALM: aplicacao recusada pelo dispositivo — "
-                      f"alteracoes descartadas.\n{sanitize_command(str(exc))}",
+                      f"Erro: NAPALM: aplicação recusada pelo dispositivo — "
+                      f"alterações descartadas.\n{sanitize_command(str(exc))}",
                       self._ctx.dispatch)
             return True
         except Exception as exc:
@@ -435,7 +435,7 @@ class ServicesHandlers:
         _ui.write(self._state.output,
                   f">  NAPALM: {len(final_svc.cli_commands)} comando(s) "
                   f"aplicado(s) em {result.duration_ms:.0f} ms  |  "
-                  f"snapshot pre-mudanca: "
+                  f"snapshot pré-mudança: "
                   f"{len(result.snapshot.splitlines())} linha(s)\n"
                   f"{'─' * 40}\n{result.output}",
                   self._ctx.dispatch)

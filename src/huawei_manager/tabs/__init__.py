@@ -115,9 +115,9 @@ _TAB_META: tuple[_TabMeta, ...] = (
              "Executar comandos personalizados", "Ctrl+7", module_factory=_cmd_module),
     _TabMeta("backup", "Backup", "i-archive", C.NEON_PURP, "FERRAMENTAS",
              "Gerenciar backups de configuração", "Ctrl+8", module_factory=_backup_module),
-    _TabMeta("services", "Servicos", "i-gauge", C.NEON_PURP, "FERRAMENTAS",
+    _TabMeta("services", "Serviços", "i-gauge", C.NEON_PURP, "FERRAMENTAS",
              "Gerenciar serviços do roteador", "Ctrl+9", module_factory=_services_module),
-    _TabMeta("manutencao", "Manutencao", "i-wrench", C.NEON_MAG, "ADMINISTRACAO",
+    _TabMeta("manutencao", "Manutenção", "i-wrench", C.NEON_MAG, "ADMINISTRAÇÃO",
              "Ferramentas de manutenção", "Ctrl+0",
              module_factory=_manutencao_module),
 )

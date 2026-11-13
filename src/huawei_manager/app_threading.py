@@ -82,7 +82,7 @@ class ThreadingMixin:
 
     def _run(self: AppCoreProtocol, func: Callable[[], object]) -> None:
         try:
-            if self._ensure_device_ready("executar esta acao") is None:
+            if self._ensure_device_ready("executar esta ação") is None:
                 return
             if self._sb is None or not self._sb.is_alive():
                 from PySide6.QtWidgets import QMessageBox
@@ -93,7 +93,7 @@ class ThreadingMixin:
             from PySide6.QtWidgets import QMessageBox
 
             _app_log.exception("_run: is_alive() falhou")
-            QMessageBox.warning(None, "Aviso", "Conexao indisponivel. Reconecte.")
+            QMessageBox.warning(None, "Aviso", "Conexão indisponível. Reconecte.")
             return
         self._spawn_io(func)
 

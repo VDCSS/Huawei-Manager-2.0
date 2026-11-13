@@ -59,7 +59,7 @@ class BackupTab:
         state = self.state
 
         p = _ui.page_frame("backup")
-        _ui.page_title(p, "Backup de Configuracao", C.NEON_PURP,
+        _ui.page_title(p, "Backup de Configuração", C.NEON_PURP,
                        "display current-configuration → arquivo")
 
         ctrl = QFrame(p)
@@ -160,7 +160,7 @@ class BackupTab:
     def _choose_backup_dir(self) -> None:
         """Abre QFileDialog e atualiza o caminho de destino do backup."""
         d = QFileDialog.getExistingDirectory(
-            None, "Escolha o diretorio", self.state.backup_path)
+            None, "Escolha o diretório", self.state.backup_path)
         if d:
             self.state.backup_path = d
             if self.state.backup_entry is not None:

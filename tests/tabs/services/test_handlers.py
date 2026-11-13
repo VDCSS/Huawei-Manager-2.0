@@ -129,7 +129,7 @@ class TestRunService:
         svc = _make_svc(config_mode=True)
         h.run_service(svc)
         written = _output_texts(st.output)
-        assert "caracteres invalidos" in written
+        assert "caracteres inválidos" in written
 
     def test_param_substitutes_value(self):
         entry = MagicMock()
@@ -177,7 +177,7 @@ class TestRunService:
             text=MagicMock(return_value=f"value{dangerous_char}injection"))
         svc = _make_svc(config_mode=True)
         h.run_service(svc)
-        assert "caracteres invalidos" in _output_texts(st.output)
+        assert "caracteres inválidos" in _output_texts(st.output)
 
 
 class TestDestructiveConfirmation:

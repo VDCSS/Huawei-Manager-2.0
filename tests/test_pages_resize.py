@@ -235,7 +235,7 @@ class TestTopologyBarResize:
         builder._page_container.resize(800, 600)
         _show_page(builder)
 
-        labels = ("Tecnico", "Cadastrar Dispositivo", "Atualizar", "Voltar")
+        labels = ("Técnico", "Cadastrar Dispositivo", "Atualizar", "Voltar")
         buttons = [
             b for b in page.findChildren(ActionButton)
             if any(lbl in b.text() for lbl in labels)

@@ -111,7 +111,7 @@ class SessionCommandsMixin:
                     self._conn.save_config()
                 ctx.set_status("ok")
                 saved = " e salva" if save else " (running-config; use save=True para persistir)"
-                return True, f"OK Configuracao aplicada{saved}\n{output}"
+                return True, f"OK Configuração aplicada{saved}\n{output}"
 
     # ── comando CLI livre ─────────────────────────────────────────────
     def run_cli_rpc(self, cmd: str) -> str:

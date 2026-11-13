@@ -128,7 +128,7 @@ class CmdTab:
         left.setStyleSheet("background: transparent;")
         split_layout.addWidget(left)
 
-        tpl_header = QLabel("COMANDOS DISPONIVEIS", left)
+        tpl_header = QLabel("COMANDOS DISPONÍVEIS", left)
         tpl_header.setStyleSheet(_ui.css_label(C.FG_FAINT, "", 11, True))
         left_layout.addWidget(tpl_header)
 

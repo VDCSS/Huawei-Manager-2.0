@@ -109,13 +109,13 @@ def resolve_backend(env: Mapping[str, str] | None = None) -> tuple[str, str]:
     source = os.environ if env is None else env
     raw = (source.get(BACKEND_ENV, DEFAULT_BACKEND) or "").strip().lower()
     if raw not in _VALID_BACKENDS:
-        return DEFAULT_BACKEND, f"{BACKEND_ENV} invalido ({raw!r}); usando '{DEFAULT_BACKEND}'"
+        return DEFAULT_BACKEND, f"{BACKEND_ENV} inválido ({raw!r}); usando '{DEFAULT_BACKEND}'"
     if raw == BACKEND_NAPALM:
         ok, reason = napalm_status()
         if not ok:
             return (
                 DEFAULT_BACKEND,
-                f"backend '{BACKEND_NAPALM}' solicitado, porem {reason}; usando '{DEFAULT_BACKEND}'",
+                f"backend '{BACKEND_NAPALM}' solicitado, porém {reason}; usando '{DEFAULT_BACKEND}'",
             )
     return raw, ""
 
@@ -239,7 +239,7 @@ class NapalmVRPBackend:
         if errors:
             out += self._discard_and_exit()
             raise SdnCommandError(
-                "Comandos rejeitados pelo dispositivo (alteracoes descartadas): "
+                "Comandos rejeitados pelo dispositivo (alterações descartadas): "
                 + "; ".join(errors[:5])
                 + f"\n{out}"
             )

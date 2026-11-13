@@ -143,7 +143,7 @@ class DevicesMixin:
             reply = QMessageBox.question(
                 None,
                 "Nenhum device cadastrado",
-                f"Para {action} e necessario cadastrar um device.\n\n"
+                f"Para {action} é necessário cadastrar um device.\n\n"
                 "Deseja cadastrar agora?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,

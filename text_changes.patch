@@ -1,0 +1,694 @@
+diff --git a/src/huawei_manager/app_state.py b/src/huawei_manager/app_state.py
+index ea26ccf..c2ab065 100644
+--- a/src/huawei_manager/app_state.py
++++ b/src/huawei_manager/app_state.py
+@@ -59,7 +59,7 @@ class AppStateMixin:
+             self._watcher.stop()
+             self._rebuild_page("topology")
+             self._set_status("Sessão expirada — acesso user", C.NEON_AMBER)
+-            log.info("Acesso: timeout de sessão — resetado para user")
++            log.info("Acesso: timeout de sessao — resetado para user")
+ 
+     def _set_status(self: AppCoreProtocol, text: str, color: str) -> None:
+         # Dot de 6 px: ``color`` mantém a leitura usada pelo toggle de tema;
+diff --git a/src/huawei_manager/app_threading.py b/src/huawei_manager/app_threading.py
+index 7814a29..bb1e1de 100644
+--- a/src/huawei_manager/app_threading.py
++++ b/src/huawei_manager/app_threading.py
+@@ -82,7 +82,7 @@ class ThreadingMixin:
+ 
+     def _run(self: AppCoreProtocol, func: Callable[[], object]) -> None:
+         try:
+-            if self._ensure_device_ready("executar esta acao") is None:
++            if self._ensure_device_ready("executar esta ação") is None:
+                 return
+             if self._sb is None or not self._sb.is_alive():
+                 from PySide6.QtWidgets import QMessageBox
+@@ -93,7 +93,7 @@ class ThreadingMixin:
+             from PySide6.QtWidgets import QMessageBox
+ 
+             _app_log.exception("_run: is_alive() falhou")
+-            QMessageBox.warning(None, "Aviso", "Conexao indisponivel. Reconecte.")
++            QMessageBox.warning(None, "Aviso", "Conexão indisponível. Reconecte.")
+             return
+         self._spawn_io(func)
+ 
+diff --git a/src/huawei_manager/handlers/devices.py b/src/huawei_manager/handlers/devices.py
+index 946a473..333b482 100644
+--- a/src/huawei_manager/handlers/devices.py
++++ b/src/huawei_manager/handlers/devices.py
+@@ -143,7 +143,7 @@ class DevicesMixin:
+             reply = QMessageBox.question(
+                 None,
+                 "Nenhum device cadastrado",
+-                f"Para {action} e necessario cadastrar um device.\n\n"
++                f"Para {action} é necessário cadastrar um device.\n\n"
+                 "Deseja cadastrar agora?",
+                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                 QMessageBox.StandardButton.Yes,
+diff --git a/src/huawei_manager/handlers/ssh.py b/src/huawei_manager/handlers/ssh.py
+index 50f723c..0d62761 100644
+--- a/src/huawei_manager/handlers/ssh.py
++++ b/src/huawei_manager/handlers/ssh.py
+@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
+ 
+ 
+ class SshMixin:
+-    """Mixin com métodos de conexão SSH."""
++    """Mixin com metodos de conexao SSH."""
+ 
+     def _get_selected_device(self: AppCoreProtocol) -> Device | None:
+         canvas = self._topo_canvas_widget()
+@@ -67,7 +67,7 @@ class SshMixin:
+                                             )))
+             except NetmikoAuthenticationException:
+                 self._dispatch(lambda: self._set_status(
+-                    "Falha de autenticacao", C.NEON_AMBER))
++                    "Falha de autenticação", C.NEON_AMBER))
+                 self._set_conn_btn()
+             except NetmikoTimeoutException:
+                 self._dispatch(lambda: self._set_status(
+diff --git a/src/huawei_manager/sdn_controller/napalm_backend.py b/src/huawei_manager/sdn_controller/napalm_backend.py
+index 6f722d2..1ffc928 100644
+--- a/src/huawei_manager/sdn_controller/napalm_backend.py
++++ b/src/huawei_manager/sdn_controller/napalm_backend.py
+@@ -109,13 +109,13 @@ def resolve_backend(env: Mapping[str, str] | None = None) -> tuple[str, str]:
+     source = os.environ if env is None else env
+     raw = (source.get(BACKEND_ENV, DEFAULT_BACKEND) or "").strip().lower()
+     if raw not in _VALID_BACKENDS:
+-        return DEFAULT_BACKEND, f"{BACKEND_ENV} invalido ({raw!r}); usando '{DEFAULT_BACKEND}'"
++        return DEFAULT_BACKEND, f"{BACKEND_ENV} inválido ({raw!r}); usando '{DEFAULT_BACKEND}'"
+     if raw == BACKEND_NAPALM:
+         ok, reason = napalm_status()
+         if not ok:
+             return (
+                 DEFAULT_BACKEND,
+-                f"backend '{BACKEND_NAPALM}' solicitado, porem {reason}; usando '{DEFAULT_BACKEND}'",
++                f"backend '{BACKEND_NAPALM}' solicitado, porém {reason}; usando '{DEFAULT_BACKEND}'",
+             )
+     return raw, ""
+ 
+@@ -239,7 +239,7 @@ class NapalmVRPBackend:
+         if errors:
+             out += self._discard_and_exit()
+             raise SdnCommandError(
+-                "Comandos rejeitados pelo dispositivo (alteracoes descartadas): "
++                "Comandos rejeitados pelo dispositivo (alterações descartadas): "
+                 + "; ".join(errors[:5])
+                 + f"\n{out}"
+             )
+diff --git a/src/huawei_manager/session_commands.py b/src/huawei_manager/session_commands.py
+index 5b08aaa..3ecebf7 100644
+--- a/src/huawei_manager/session_commands.py
++++ b/src/huawei_manager/session_commands.py
+@@ -111,7 +111,7 @@ class SessionCommandsMixin:
+                     self._conn.save_config()
+                 ctx.set_status("ok")
+                 saved = " e salva" if save else " (running-config; use save=True para persistir)"
+-                return True, f"OK Configuracao aplicada{saved}\n{output}"
++                return True, f"OK Configuração aplicada{saved}\n{output}"
+ 
+     # ── comando CLI livre ─────────────────────────────────────────────
+     def run_cli_rpc(self, cmd: str) -> str:
+diff --git a/src/huawei_manager/tabs/__init__.py b/src/huawei_manager/tabs/__init__.py
+index d598537..9160556 100644
+--- a/src/huawei_manager/tabs/__init__.py
++++ b/src/huawei_manager/tabs/__init__.py
+@@ -115,9 +115,9 @@ _TAB_META: tuple[_TabMeta, ...] = (
+              "Executar comandos personalizados", "Ctrl+7", module_factory=_cmd_module),
+     _TabMeta("backup", "Backup", "i-archive", C.NEON_PURP, "FERRAMENTAS",
+              "Gerenciar backups de configuração", "Ctrl+8", module_factory=_backup_module),
+-    _TabMeta("services", "Servicos", "i-gauge", C.NEON_PURP, "FERRAMENTAS",
++    _TabMeta("services", "Serviços", "i-gauge", C.NEON_PURP, "FERRAMENTAS",
+              "Gerenciar serviços do roteador", "Ctrl+9", module_factory=_services_module),
+-    _TabMeta("manutencao", "Manutencao", "i-wrench", C.NEON_MAG, "ADMINISTRACAO",
++    _TabMeta("manutencao", "Manutenção", "i-wrench", C.NEON_MAG, "ADMINISTRAÇÃO",
+              "Ferramentas de manutenção", "Ctrl+0",
+              module_factory=_manutencao_module),
+ )
+diff --git a/src/huawei_manager/tabs/backup/handlers.py b/src/huawei_manager/tabs/backup/handlers.py
+index b52e829..8200865 100644
+--- a/src/huawei_manager/tabs/backup/handlers.py
++++ b/src/huawei_manager/tabs/backup/handlers.py
+@@ -78,7 +78,7 @@ class BackupHandlers:
+                 f"  Data     : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                 f"  Linhas   : {linhas}\n"
+                 f"  Tamanho  : {os.path.getsize(path):,} bytes\n"
+-                f"{'-' * 60}\n\nPrevia (40 linhas):\n\n"
++                f"{'-' * 60}\n\nPrévia (40 linhas):\n\n"
+                 + "\n".join(conteudo.splitlines()[:40])
+             )
+             _ui.write(out, resumo, dispatch)
+diff --git a/src/huawei_manager/tabs/backup/page.py b/src/huawei_manager/tabs/backup/page.py
+index 7298c6e..b719050 100644
+--- a/src/huawei_manager/tabs/backup/page.py
++++ b/src/huawei_manager/tabs/backup/page.py
+@@ -59,7 +59,7 @@ class BackupTab:
+         state = self.state
+ 
+         p = _ui.page_frame("backup")
+-        _ui.page_title(p, "Backup de Configuracao", C.NEON_PURP,
++        _ui.page_title(p, "Backup de Configuração", C.NEON_PURP,
+                        "display current-configuration → arquivo")
+ 
+         ctrl = QFrame(p)
+@@ -160,7 +160,7 @@ class BackupTab:
+     def _choose_backup_dir(self) -> None:
+         """Abre QFileDialog e atualiza o caminho de destino do backup."""
+         d = QFileDialog.getExistingDirectory(
+-            None, "Escolha o diretorio", self.state.backup_path)
++            None, "Escolha o diretório", self.state.backup_path)
+         if d:
+             self.state.backup_path = d
+             if self.state.backup_entry is not None:
+diff --git a/src/huawei_manager/tabs/cmd/handlers.py b/src/huawei_manager/tabs/cmd/handlers.py
+index d45aa0c..81b283f 100644
+--- a/src/huawei_manager/tabs/cmd/handlers.py
++++ b/src/huawei_manager/tabs/cmd/handlers.py
+@@ -58,7 +58,7 @@ class CmdHandlers:
+             from PySide6.QtWidgets import QMessageBox
+             reply = QMessageBox.question(
+                 None, "Confirmar comando destrutivo",
+-                f"O comando abaixo e destrutivo e foi liberado por privilegio elevado:\n\n"
++                f"O comando abaixo e destrutivo e foi liberado por privilégio elevado:\n\n"
+                 f"{cmd}\n\nExecutar mesmo assim?",
+             )
+             if reply != QMessageBox.StandardButton.Yes:
+@@ -93,7 +93,7 @@ class CmdHandlers:
+         out = self._state.out
+         dispatch = self._ctx.dispatch
+         if not cmd:
+-            _ui.write(out, "Erro: Editor vazio — digite um comando", dispatch)
++            _ui.write(out, "ERRO: Editor vazio — digite um comando", dispatch)
+             return
+         validator = self._ctx.cmd_validator
+         if validator is not None:
+@@ -126,7 +126,7 @@ class CmdHandlers:
+                                           command=cmd.splitlines()[0])))
+ 
+     def exec_config(self, cmd: str = "") -> None:
+-        """Envia comandos de configuração do editor via send_config.
++        """Envia comandos de configuracao do editor via send_config.
+ 
+         cmd deve ser extraido do editor ANTES de chamar este metodo
+         (roda na IO thread).
+@@ -135,7 +135,7 @@ class CmdHandlers:
+         out = self._state.out
+         dispatch = self._ctx.dispatch
+         if not cmd:
+-            _ui.write(out, "Erro: Editor vazio — digite os comandos de configuração",
++            _ui.write(out, "ERRO: Editor vazio — digite os comandos de configuração",
+                       dispatch)
+             return
+         validator = self._ctx.cmd_validator
+@@ -158,17 +158,17 @@ class CmdHandlers:
+                         preview += line
+                     _ui.loading(out, f"Dry-run: {diff_report.summary}", dispatch)
+                 else:
+-                    _ui.write(out, "ℹ  Nenhuma alteracao detectada em relacao a config atual.",
++                    _ui.write(out, "ℹ  Nenhuma alteração detectada em relacao a config atual.",
+                               dispatch)
+                     return
+             except Exception:
+                 # Protecao falhou -> NAO aplicar: seguir sem preview violaria
+                 # o contrato de dry-run (mudanca de estado sem visibilidade).
+                 if _config.log is not None:
+-                    _config.log.exception("Dry-run falhou — abortando aplicacao de config")
++                    _config.log.exception("Dry-run falhou — abortando aplicação de config")
+                 _ui.write(
+                     out,
+-                    "Erro: Dry-run falhou — configuração NÃO aplicada. Verifique o log.",
++                    "ERRO: Dry-run falhou — configuração NÃO aplicada. Verifique o log.",
+                     dispatch,
+                 )
+                 return
+diff --git a/src/huawei_manager/tabs/cmd/page.py b/src/huawei_manager/tabs/cmd/page.py
+index 96e31a8..04a5edd 100644
+--- a/src/huawei_manager/tabs/cmd/page.py
++++ b/src/huawei_manager/tabs/cmd/page.py
+@@ -128,7 +128,7 @@ class CmdTab:
+         left.setStyleSheet("background: transparent;")
+         split_layout.addWidget(left)
+ 
+-        tpl_header = QLabel("COMANDOS DISPONIVEIS", left)
++        tpl_header = QLabel("COMANDOS DISPONÍVEIS", left)
+         tpl_header.setStyleSheet(_ui.css_label(C.FG_FAINT, "", 11, True))
+         left_layout.addWidget(tpl_header)
+ 
+diff --git a/src/huawei_manager/tabs/config/page.py b/src/huawei_manager/tabs/config/page.py
+index 8c02abc..5069d20 100644
+--- a/src/huawei_manager/tabs/config/page.py
++++ b/src/huawei_manager/tabs/config/page.py
+@@ -51,13 +51,13 @@ class ConfigTab:
+         state = self.state
+ 
+         p = _ui.page_frame("config")
+-        _ui.page_title(p, "Configuracao Atual", C.NEON_CYAN, "")
++        _ui.page_title(p, "Configuração Atual", C.NEON_CYAN, "")
+ 
+         state.out = output_text(p)
+         _ui.page_layout(p).addWidget(state.out, stretch=1)
+         _ui.page_layout(p).addSpacing(10)
+ 
+-        btn = action_button(p, "Carregar Configuracao Atual",
++        btn = action_button(p, "Carregar Configuração Atual",
+                             lambda: self.fetch_config(), C.NEON_CYAN)
+         btn.setIcon(icon("i-refresh", C.NEON_CYAN, 16))
+         btn.setIconSize(QSize(16, 16))
+diff --git a/src/huawei_manager/tabs/home/page.py b/src/huawei_manager/tabs/home/page.py
+index 24288f7..908a1c1 100644
+--- a/src/huawei_manager/tabs/home/page.py
++++ b/src/huawei_manager/tabs/home/page.py
+@@ -99,7 +99,7 @@ class HomeTab:
+         card1, card1_layout = _ui.card_frame(row1, accent=C.NEON_CYAN)
+         card1.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+         row1_layout.addWidget(card1)
+-        _card_title(card1, card1_layout, "Conexão", C.NEON_CYAN, "i-link")
++        _card_title(card1, card1_layout, "CONEXÃO", C.NEON_CYAN, "i-link")
+ 
+         state.conn_status = _ui.stat_label(card1, "Desconectado", C.NEON_RED)
+         card1_layout.addWidget(state.conn_status)
+@@ -132,7 +132,7 @@ class HomeTab:
+         card3, card3_layout = _ui.card_frame(row1, accent=C.NEON_AMBER)
+         card3.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+         row1_layout.addWidget(card3)
+-        _card_title(card3, card3_layout, "Últimas operações", C.NEON_AMBER, "i-audit")
++        _card_title(card3, card3_layout, "ÚLTIMAS OPERAÇÕES", C.NEON_AMBER, "i-audit")
+ 
+         state.audit_text = QTextEdit(card3)
+         state.audit_text.setReadOnly(True)
+@@ -151,7 +151,7 @@ class HomeTab:
+         card4_layout.setContentsMargins(20, 18, 20, 18)
+         _ui.page_layout(p).addWidget(card4, stretch=2)
+ 
+-        _card_title(card4, card4_layout, "Atalhos rápidos", C.NEON_PURP, "i-grid")
++        _card_title(card4, card4_layout, "ATALHOS RÁPIDOS", C.NEON_PURP, "i-grid")
+ 
+         bar = QWidget(card4)
+         bar.setStyleSheet("background: transparent;")
+diff --git a/src/huawei_manager/tabs/info/handlers.py b/src/huawei_manager/tabs/info/handlers.py
+index 4ba68d5..d1a0c15 100644
+--- a/src/huawei_manager/tabs/info/handlers.py
++++ b/src/huawei_manager/tabs/info/handlers.py
+@@ -36,11 +36,11 @@ class InfoHandlers:
+         _ui.loading(out, "Coletando informações do sistema…", dispatch)
+         buf = io.StringIO()
+         commands = [
+-            ("Versao / Sistema", "display version"),
++            ("Versão / Sistema", "display version"),
+             ("Dispositivo", "display device"),
+-            ("Licenca", "display license"),
++            ("Licença", "display license"),
+             ("CPU", "display cpu-usage"),
+-            ("Memoria", "display memory-usage"),
++            ("Memória", "display memory-usage"),
+             ("LLDP", "display lldp neighbor brief"),
+         ]
+         try:
+diff --git a/src/huawei_manager/tabs/info/page.py b/src/huawei_manager/tabs/info/page.py
+index 1c96964..c58ac20 100644
+--- a/src/huawei_manager/tabs/info/page.py
++++ b/src/huawei_manager/tabs/info/page.py
+@@ -51,7 +51,7 @@ class InfoTab:
+         state = self.state
+ 
+         p = _ui.page_frame("info")
+-        _ui.page_title(p, "Informacoes do Sistema", C.NEON_MAG,
++        _ui.page_title(p, "Informações do Sistema", C.NEON_MAG,
+                        "CLI: display version / cpu-usage / memory-usage")
+ 
+         state.out = output_text(p)
+diff --git a/src/huawei_manager/tabs/manutencao/page.py b/src/huawei_manager/tabs/manutencao/page.py
+index 5c4cb0a..916a9b8 100644
+--- a/src/huawei_manager/tabs/manutencao/page.py
++++ b/src/huawei_manager/tabs/manutencao/page.py
+@@ -69,7 +69,7 @@ class ManutencaoTab:
+             lay.addWidget(lbl)
+             lay.addSpacing(10)
+ 
+-            btn = action_button(p, "Autenticar como Tecnico / Admin",
++            btn = action_button(p, "Autenticar como Técnico / Admin",
+                                 ctx.show_auth_dialog, C.NEON_PURP,
+                                 variant="outline")
+             btn.setIcon(icon("i-key", C.NEON_PURP, 16))
+@@ -79,7 +79,7 @@ class ManutencaoTab:
+ 
+         p = _ui.page_frame("manutencao")
+         lay = _ui.page_layout(p)
+-        _ui.page_title(p, "Manutencao e Diagnostico", C.NEON_MAG,
++        _ui.page_title(p, "Manutenção e Diagnóstico", C.NEON_MAG,
+                        "Testes + Agentes + Setup")
+ 
+         top = QWidget(p)
+@@ -324,7 +324,7 @@ class ManutencaoTab:
+             _ui.loading(out, "Pronto. Clique em 'Agora' para varrer o projeto.",
+                         ctx.dispatch)
+             if ctx.watcher.is_active:
+-                _ui.loading(out, "Watcher ativo — resultados em ate 60s...",
++                _ui.loading(out, "Watcher ativo — resultados em até 60s...",
+                             ctx.dispatch)
+         return p
+ 
+diff --git a/src/huawei_manager/tabs/route/page.py b/src/huawei_manager/tabs/route/page.py
+index e972bf3..490112a 100644
+--- a/src/huawei_manager/tabs/route/page.py
++++ b/src/huawei_manager/tabs/route/page.py
+@@ -52,7 +52,7 @@ class RouteTab:
+ 
+         p = _ui.page_frame("route")
+         _ui.page_title(p, "Tabelas e Status do Roteador", C.NEON_CYAN,
+-                       "Visualizacao de tabelas, vizinhos e metricas do dispositivo")
++                       "Visualização de tabelas, vizinhos e métricas do dispositivo")
+         row = QFrame(p)
+         row.setObjectName("routeFilterBar")
+         row.setStyleSheet(
+diff --git a/src/huawei_manager/tabs/services/handlers.py b/src/huawei_manager/tabs/services/handlers.py
+index 0917088..1a0609f 100644
+--- a/src/huawei_manager/tabs/services/handlers.py
++++ b/src/huawei_manager/tabs/services/handlers.py
+@@ -132,7 +132,7 @@ class ServicesHandlers:
+ 
+         mode = self._ctx.svc_mode()
+         device = self._ctx.device()
+-        label = f"Servico: {svc.name}  |  Modo: {mode}"
++        label = f"Serviço: {svc.name}  |  Modo: {mode}"
+         if device:
+             label += f"  |  Alvo: {device.name} ({device.host})"
+         device_lbl = self._state.device_lbl
+@@ -153,7 +153,7 @@ class ServicesHandlers:
+             if len(placeholders) != len(entries):
+                 _ui.write(
+                     self._state.output,
+-                    "Erro: Servico inconsistente: "
++                    "ERRO: Serviço inconsistente: "
+                     f"{len(placeholders)} placeholder(s) para {len(entries)} "
+                     "campo(s). Nada foi executado.",
+                     self._ctx.dispatch)
+@@ -163,8 +163,8 @@ class ServicesHandlers:
+                 if _REJECT_PARAM.search(val):
+                     _ui.write(
+                         self._state.output,
+-                        f"Erro: Parametro '{placeholder}' contem caracteres "
+-                        "invalidos (& ; | ` $ ( ) { }).",
++                        f"ERRO: Parâmetro '{placeholder}' contém caracteres "
++                        "inválidos (& ; | ` $ ( ) { }).",
+                         self._ctx.dispatch)
+                     return
+                 cmd = cmd.replace(placeholder, val, 1)
+@@ -196,7 +196,7 @@ class ServicesHandlers:
+ 
+         if mode == "cli":
+             if self._ctx.ensure_device_ready(
+-                    f"executar o servico '{svc.name}'") is None:
++                    f"executar o serviço '{svc.name}'") is None:
+                 return
+ 
+         def _do():
+@@ -218,7 +218,7 @@ class ServicesHandlers:
+ 
+             if not self._ctx.sb.is_alive():
+                 _ui.write(self._state.output,
+-                          "Erro: Sem sessão SSH ativa. Conecte-se primeiro.",
++                          "ERRO: Sem sessão SSH ativa. Conecte-se primeiro.",
+                           self._ctx.dispatch)
+                 return
+ 
+@@ -351,7 +351,7 @@ class ServicesHandlers:
+             # NAPALM: recusa auditada, nunca fallback silencioso para o Netmiko
+             # (o usuário optou pela flag — falhar fechado).
+             _ui.write(self._state.output,
+-                      "Erro: NAPALM: sem sessão Netmiko ativa — nada foi aplicado.",
++                      "ERRO: NAPALM: sem sessão Netmiko ativa — nada foi aplicado.",
+                       self._ctx.dispatch)
+             _audit_napalm_blocked(audit, user=user, host=host,
+                                   session_id=session_id, service=svc.name,
+@@ -383,7 +383,7 @@ class ServicesHandlers:
+ 
+         # 2) diff vazio: nada mudaria — encerra sem apply e sem diálogo.
+         if not diff.strip():
+-            _ui.write(self._state.output, "Sem mudancas a aplicar.",
++            _ui.write(self._state.output, "Sem mudanças a aplicar.",
+                       self._ctx.dispatch)
+             return True
+ 
+@@ -392,7 +392,7 @@ class ServicesHandlers:
+         #    confirmação: comportamento nunca pior que hoje (hoje não há diff).
+         bridge = self._ctx.ui_bridge()
+         if bridge is None:
+-            log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmacao",
++            log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmação",
+                         svc.name)
+             approved = True
+         else:
+@@ -414,8 +414,8 @@ class ServicesHandlers:
+         except SdnError as exc:
+             # o backend já auditou (status blocked/error) — só reporta aqui.
+             _ui.write(self._state.output,
+-                      f"Erro: NAPALM: aplicacao recusada pelo dispositivo — "
+-                      f"alteracoes descartadas.\n{sanitize_command(str(exc))}",
++                      f"Erro: NAPALM: aplicação recusada pelo dispositivo — "
++                      f"alterações descartadas.\n{sanitize_command(str(exc))}",
+                       self._ctx.dispatch)
+             return True
+         except Exception as exc:
+@@ -435,7 +435,7 @@ class ServicesHandlers:
+         _ui.write(self._state.output,
+                   f">  NAPALM: {len(final_svc.cli_commands)} comando(s) "
+                   f"aplicado(s) em {result.duration_ms:.0f} ms  |  "
+-                  f"snapshot pre-mudanca: "
++                  f"snapshot pré-mudança: "
+                   f"{len(result.snapshot.splitlines())} linha(s)\n"
+                   f"{'─' * 40}\n{result.output}",
+                   self._ctx.dispatch)
+diff --git a/src/huawei_manager/tabs/services/page.py b/src/huawei_manager/tabs/services/page.py
+index c496310..0e97473 100644
+--- a/src/huawei_manager/tabs/services/page.py
++++ b/src/huawei_manager/tabs/services/page.py
+@@ -68,7 +68,7 @@ class ServicesTab:
+         state = self.state
+ 
+         p = _ui.page_frame("services")
+-        _ui.page_title(p, "Catalogo de Servicos", C.NEON_AMBER,
++        _ui.page_title(p, "Catálogo de Serviços", C.NEON_AMBER,
+                        "Serviços de configuração por tipo de device "
+                        "(ROUTER | SWITCH | …) — comandos show e consultas: "
+                        "use o Editor de Comandos")
+@@ -121,7 +121,7 @@ class ServicesTab:
+         device = ctx.device()
+         if not device:
+             device_lbl.setText("Device: (nenhum selecionado)")
+-            type_lbl.setText("Tipo: —")
++            type_lbl.setText("Tipo: ")
+             cat_cb.blockSignals(True)
+             cat_cb.clear()
+             cat_cb.addItems(["Todas as Categorias"])
+@@ -172,7 +172,7 @@ class ServicesTab:
+         state.services = services
+ 
+         if not services:
+-            listbox.addItem("  Nenhum servico disponivel para este tipo de Device")
++            listbox.addItem("  Nenhum serviço disponível para este tipo de Device")
+             self._clear_detail_panel()
+             return
+ 
+@@ -212,7 +212,7 @@ class ServicesTab:
+         info_layout.addWidget(state.device_lbl)
+         info_layout.addSpacing(18)
+ 
+-        state.type_lbl = QLabel("Tipo: —", info_row)
++        state.type_lbl = QLabel("Tipo: ", info_row)
+         state.type_lbl.setStyleSheet(_ui.css_label(C.FG_DIM, "", 11))
+         info_layout.addWidget(state.type_lbl)
+         info_layout.addSpacing(18)
+diff --git a/src/huawei_manager/tabs/topology/page.py b/src/huawei_manager/tabs/topology/page.py
+index ae1b157..323e2cb 100644
+--- a/src/huawei_manager/tabs/topology/page.py
++++ b/src/huawei_manager/tabs/topology/page.py
+@@ -46,7 +46,7 @@ class TopologyTab:
+ 
+         p = _ui.page_frame("topology")
+         _ui.page_title(p, "Topologia / Devices", C.NEON_AMBER,
+-                       "Cadastro manual + alvo SSH clicavel")
++                       "Cadastro manual + alvo SSH clicável")
+ 
+         ctrl = QFrame(p)
+         ctrl.setObjectName("topoControlBar")
+@@ -63,7 +63,7 @@ class TopologyTab:
+         admin_label = "Acesso"
+         if role_meets(access, "tecnico"):
+             admin_label = ("Sair (Admin)" if access == "admin"
+-                           else "Sair (Tecnico)")
++                           else "Sair (Técnico)")
+         admin_btn = action_button(ctrl, admin_label,
+                                   ctx.show_auth_dialog, C.NEON_PURP,
+                                   variant="ghost")
+diff --git a/src/huawei_manager/vault_backends/backends_sops.py b/src/huawei_manager/vault_backends/backends_sops.py
+index b4bc99d..5aa78a8 100644
+--- a/src/huawei_manager/vault_backends/backends_sops.py
++++ b/src/huawei_manager/vault_backends/backends_sops.py
+@@ -25,7 +25,7 @@ class SopsBackend(SecretsBackend):
+         self._secret_file = secret_file or _default_secret_file()
+         if not self._secret_file.exists():
+             raise RuntimeError(
+-                f"Arquivo {self._secret_file.name} nao encontrado em "
++                f"Arquivo {self._secret_file.name} não encontrado em "
+                 f"{self._secret_file.parent}.\n"
+                 "Crie com: make encrypt-sops\n"
+                 "  (sops --encrypt --input-type dotenv --output-type yaml "
+@@ -50,7 +50,7 @@ class SopsBackend(SecretsBackend):
+             import yaml
+             self._cache = yaml.safe_load(result.stdout) or {}
+         except ImportError:
+-            raise RuntimeError("PyYAML necessario para SopsBackend: pip install pyyaml")
++            raise RuntimeError("PyYAML necessário para SopsBackend: pip install pyyaml")
+ 
+     def get(self, key: str, default: str = "") -> str:
+         return self._cache.get(key, default)
+@@ -63,7 +63,7 @@ class SopsBackend(SecretsBackend):
+         try:
+             import yaml
+         except ImportError:
+-            raise RuntimeError("PyYAML necessario para SopsBackend: pip install pyyaml")
++            raise RuntimeError("PyYAML necessário para SopsBackend: pip install pyyaml")
+         plain = yaml.dump(self._cache, default_flow_style=False)
+         result = subprocess.run(
+             ["sops", "--encrypt", "/dev/stdin"],
+diff --git a/src/huawei_manager/widgets/device_dialog.py b/src/huawei_manager/widgets/device_dialog.py
+index 06de3b8..1397b93 100644
+--- a/src/huawei_manager/widgets/device_dialog.py
++++ b/src/huawei_manager/widgets/device_dialog.py
+@@ -31,10 +31,10 @@ if TYPE_CHECKING:
+ FIELD_DEFINITIONS: list[tuple[str, str, bool]] = [
+     ("host",     "IP / Host",      False),
+     ("port",     "Porta SSH",      False),
+-    ("username", "Usuario SSH",    False),
++    ("username", "Usuário SSH",    False),
+     ("password", "Senha SSH",      True),
+     ("ssh_key",  "Chave SSH",      False),
+-    ("location", "Localizacao",    False),
++    ("location", "Localização",    False),
+ ]
+ 
+ 
+diff --git a/tests/tabs/services/test_handlers.py b/tests/tabs/services/test_handlers.py
+index 0fdba6a..5054ca6 100644
+--- a/tests/tabs/services/test_handlers.py
++++ b/tests/tabs/services/test_handlers.py
+@@ -129,7 +129,7 @@ class TestRunService:
+         svc = _make_svc(config_mode=True)
+         h.run_service(svc)
+         written = _output_texts(st.output)
+-        assert "caracteres invalidos" in written
++        assert "caracteres inválidos" in written
+ 
+     def test_param_substitutes_value(self):
+         entry = MagicMock()
+@@ -177,7 +177,7 @@ class TestRunService:
+             text=MagicMock(return_value=f"value{dangerous_char}injection"))
+         svc = _make_svc(config_mode=True)
+         h.run_service(svc)
+-        assert "caracteres invalidos" in _output_texts(st.output)
++        assert "caracteres inválidos" in _output_texts(st.output)
+ 
+ 
+ class TestDestructiveConfirmation:
+diff --git a/tests/tabs/services/test_napalm.py b/tests/tabs/services/test_napalm.py
+index 2062bc4..cd4d30e 100644
+--- a/tests/tabs/services/test_napalm.py
++++ b/tests/tabs/services/test_napalm.py
+@@ -308,7 +308,7 @@ def test_napalm_diff_vazio_sem_apply(monkeypatch) -> None:
+     executor.apply.assert_not_called()
+     ctx.sb.send_service_commands.assert_not_called()
+     assert bridge.payloads == []            # nenhum diálogo para diff vazio
+-    assert any("Sem mudancas a aplicar" in t for t in _writes(st))
++    assert any("Sem mudanças a aplicar" in t for t in _writes(st))
+ 
+ 
+ # ══════════════════════════════════════════════════════════════════════
+diff --git a/tests/test_app_threading.py b/tests/test_app_threading.py
+index 99116ef..b823653 100644
+--- a/tests/test_app_threading.py
++++ b/tests/test_app_threading.py
+@@ -305,7 +305,7 @@ class TestRun:
+         app._run(fn)
+         app._io_executor.shutdown(wait=True)
+         assert results == []
+-        app._ensure_device_ready.assert_called_once_with("executar esta acao")
++        app._ensure_device_ready.assert_called_once_with("executar esta ação")
+ 
+ 
+ # ═══════════════════════════════════════════════════════════════════
+diff --git a/tests/test_napalm_backend.py b/tests/test_napalm_backend.py
+index 0cb8faa..cd0f6a1 100644
+--- a/tests/test_napalm_backend.py
++++ b/tests/test_napalm_backend.py
+@@ -76,7 +76,7 @@ def test_resolve_backend_padrao_e_netmiko() -> None:
+ def test_resolve_backend_invalido_cai_para_netmiko_com_aviso() -> None:
+     backend, warning = resolve_backend({BACKEND_ENV: "banana"})
+     assert backend == BACKEND_NETMIKO
+-    assert "invalido" in warning
++    assert "inválido" in warning
+ 
+ 
+ def test_resolve_backend_napalm_disponivel(
+@@ -167,7 +167,7 @@ def test_apply_rejeicao_descarta_e_levera_sdn_command_error() -> None:
+         engine.apply(["acl number 3000"])
+ 
+     assert "Unrecognized" in str(excinfo.value)
+-    assert "alteracoes descartadas" in str(excinfo.value)
++    assert "alterações descartadas" in str(excinfo.value)
+     # saiu do config mode mesmo com erro (rollback imediato)
+     assert conn.commands[-1] == "return"
+     assert "commit" not in conn.commands
+diff --git a/tests/test_pages_resize.py b/tests/test_pages_resize.py
+index 65afcf0..c6f5bae 100644
+--- a/tests/test_pages_resize.py
++++ b/tests/test_pages_resize.py
+@@ -235,7 +235,7 @@ class TestTopologyBarResize:
+         builder._page_container.resize(800, 600)
+         _show_page(builder)
+ 
+-        labels = ("Tecnico", "Cadastrar Dispositivo", "Atualizar", "Voltar")
++        labels = ("Técnico", "Cadastrar Dispositivo", "Atualizar", "Voltar")
+         buttons = [
+             b for b in page.findChildren(ActionButton)
+             if any(lbl in b.text() for lbl in labels)
+diff --git a/tests/test_ssh_mixin.py b/tests/test_ssh_mixin.py
+index 8713df4..28c1cb8 100644
+--- a/tests/test_ssh_mixin.py
++++ b/tests/test_ssh_mixin.py
+@@ -90,7 +90,7 @@ class TestDoConnect:
+ 
+         mixin._spawn_io = _capture_spawn_io
+         mixin._do_connect("OK {sid}", "Erro")
+-        mixin._set_status.assert_called_with("Falha de autenticacao", ANY)
++        mixin._set_status.assert_called_with("Falha de autenticação", ANY)
+ 
+     def test_timeout_error_sets_status(self):
+         from netmiko.exceptions import NetmikoTimeoutException
+diff --git a/tests/test_tabs_registry.py b/tests/test_tabs_registry.py
+index 46cba07..7a78604 100644
+--- a/tests/test_tabs_registry.py
++++ b/tests/test_tabs_registry.py
+@@ -20,7 +20,7 @@ _EXPECTED_GROUPS = [
+     "DASHBOARD",
+     "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS", "DISPOSITIVOS",
+     "FERRAMENTAS", "FERRAMENTAS", "FERRAMENTAS",
+-    "ADMINISTRACAO",
++    "ADMINISTRAÇÃO",
+ ]
+ 
+ 
+diff --git a/tests/test_vault.py b/tests/test_vault.py
+index 4890155..cfbe089 100644
+--- a/tests/test_vault.py
++++ b/tests/test_vault.py
+@@ -143,7 +143,7 @@ class TestCryptoEnvBackend:
+ class TestSopsBackend:
+     def test_no_secret_file_raises(self, tmp_path):
+         """Arquivo inexistente (path explícito) → RuntimeError antes do subprocess."""
+-        with pytest.raises(RuntimeError, match="nao encontrado"):
++        with pytest.raises(RuntimeError, match="não encontrado"):
+             SopsBackend(secret_file=tmp_path / "nao_existe.yaml")
+ 
+     def test_default_path_is_repo_root_not_cwd(self, tmp_path, monkeypatch):

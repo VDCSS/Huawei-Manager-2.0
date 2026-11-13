@@ -305,7 +305,7 @@ class TestRun:
         app._run(fn)
         app._io_executor.shutdown(wait=True)
         assert results == []
-        app._ensure_device_ready.assert_called_once_with("executar esta acao")
+        app._ensure_device_ready.assert_called_once_with("executar esta ação")
 
 
 # ═══════════════════════════════════════════════════════════════════

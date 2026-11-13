@@ -58,7 +58,7 @@ class CmdHandlers:
             from PySide6.QtWidgets import QMessageBox
             reply = QMessageBox.question(
                 None, "Confirmar comando destrutivo",
-                f"O comando abaixo e destrutivo e foi liberado por privilegio elevado:\n\n"
+                f"O comando abaixo e destrutivo e foi liberado por privilégio elevado:\n\n"
                 f"{cmd}\n\nExecutar mesmo assim?",
             )
             if reply != QMessageBox.StandardButton.Yes:
@@ -93,7 +93,7 @@ class CmdHandlers:
         out = self._state.out
         dispatch = self._ctx.dispatch
         if not cmd:
-            _ui.write(out, "Erro: Editor vazio — digite um comando", dispatch)
+            _ui.write(out, "ERRO: Editor vazio — digite um comando", dispatch)
             return
         validator = self._ctx.cmd_validator
         if validator is not None:
@@ -126,7 +126,7 @@ class CmdHandlers:
                                           command=cmd.splitlines()[0])))
 
     def exec_config(self, cmd: str = "") -> None:
-        """Envia comandos de configuração do editor via send_config.
+        """Envia comandos de configuracao do editor via send_config.
 
         cmd deve ser extraido do editor ANTES de chamar este metodo
         (roda na IO thread).
@@ -135,7 +135,7 @@ class CmdHandlers:
         out = self._state.out
         dispatch = self._ctx.dispatch
         if not cmd:
-            _ui.write(out, "Erro: Editor vazio — digite os comandos de configuração",
+            _ui.write(out, "ERRO: Editor vazio — digite os comandos de configuração",
                       dispatch)
             return
         validator = self._ctx.cmd_validator
@@ -158,17 +158,17 @@ class CmdHandlers:
                         preview += line
                     _ui.loading(out, f"Dry-run: {diff_report.summary}", dispatch)
                 else:
-                    _ui.write(out, "ℹ  Nenhuma alteracao detectada em relacao a config atual.",
+                    _ui.write(out, "ℹ  Nenhuma alteração detectada em relacao a config atual.",
                               dispatch)
                     return
             except Exception:
                 # Protecao falhou -> NAO aplicar: seguir sem preview violaria
                 # o contrato de dry-run (mudanca de estado sem visibilidade).
                 if _config.log is not None:
-                    _config.log.exception("Dry-run falhou — abortando aplicacao de config")
+                    _config.log.exception("Dry-run falhou — abortando aplicação de config")
                 _ui.write(
                     out,
-                    "Erro: Dry-run falhou — configuração NÃO aplicada. Verifique o log.",
+                    "ERRO: Dry-run falhou — configuração NÃO aplicada. Verifique o log.",
                     dispatch,
                 )
                 return

@@ -76,7 +76,7 @@ def test_resolve_backend_padrao_e_netmiko() -> None:
 def test_resolve_backend_invalido_cai_para_netmiko_com_aviso() -> None:
     backend, warning = resolve_backend({BACKEND_ENV: "banana"})
     assert backend == BACKEND_NETMIKO
-    assert "invalido" in warning
+    assert "inválido" in warning
 
 
 def test_resolve_backend_napalm_disponivel(
@@ -167,7 +167,7 @@ def test_apply_rejeicao_descarta_e_levera_sdn_command_error() -> None:
         engine.apply(["acl number 3000"])
 
     assert "Unrecognized" in str(excinfo.value)
-    assert "alteracoes descartadas" in str(excinfo.value)
+    assert "alterações descartadas" in str(excinfo.value)
     # saiu do config mode mesmo com erro (rollback imediato)
     assert conn.commands[-1] == "return"
     assert "commit" not in conn.commands

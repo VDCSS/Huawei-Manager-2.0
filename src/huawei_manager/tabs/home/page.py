@@ -99,7 +99,7 @@ class HomeTab:
         card1, card1_layout = _ui.card_frame(row1, accent=C.NEON_CYAN)
         card1.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         row1_layout.addWidget(card1)
-        _card_title(card1, card1_layout, "Conexão", C.NEON_CYAN, "i-link")
+        _card_title(card1, card1_layout, "CONEXÃO", C.NEON_CYAN, "i-link")
 
         state.conn_status = _ui.stat_label(card1, "Desconectado", C.NEON_RED)
         card1_layout.addWidget(state.conn_status)
@@ -132,7 +132,7 @@ class HomeTab:
         card3, card3_layout = _ui.card_frame(row1, accent=C.NEON_AMBER)
         card3.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         row1_layout.addWidget(card3)
-        _card_title(card3, card3_layout, "Últimas operações", C.NEON_AMBER, "i-audit")
+        _card_title(card3, card3_layout, "ÚLTIMAS OPERAÇÕES", C.NEON_AMBER, "i-audit")
 
         state.audit_text = QTextEdit(card3)
         state.audit_text.setReadOnly(True)
@@ -151,7 +151,7 @@ class HomeTab:
         card4_layout.setContentsMargins(20, 18, 20, 18)
         _ui.page_layout(p).addWidget(card4, stretch=2)
 
-        _card_title(card4, card4_layout, "Atalhos rápidos", C.NEON_PURP, "i-grid")
+        _card_title(card4, card4_layout, "ATALHOS RÁPIDOS", C.NEON_PURP, "i-grid")
 
         bar = QWidget(card4)
         bar.setStyleSheet("background: transparent;")

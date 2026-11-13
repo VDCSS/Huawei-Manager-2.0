@@ -90,7 +90,7 @@ class TestDoConnect:
 
         mixin._spawn_io = _capture_spawn_io
         mixin._do_connect("OK {sid}", "Erro")
-        mixin._set_status.assert_called_with("Falha de autenticacao", ANY)
+        mixin._set_status.assert_called_with("Falha de autenticação", ANY)
 
     def test_timeout_error_sets_status(self):
         from netmiko.exceptions import NetmikoTimeoutException

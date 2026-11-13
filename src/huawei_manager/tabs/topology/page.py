@@ -46,7 +46,7 @@ class TopologyTab:
 
         p = _ui.page_frame("topology")
         _ui.page_title(p, "Topologia / Devices", C.NEON_AMBER,
-                       "Cadastro manual + alvo SSH clicavel")
+                       "Cadastro manual + alvo SSH clicável")
 
         ctrl = QFrame(p)
         ctrl.setObjectName("topoControlBar")
@@ -63,7 +63,7 @@ class TopologyTab:
         admin_label = "Acesso"
         if role_meets(access, "tecnico"):
             admin_label = ("Sair (Admin)" if access == "admin"
-                           else "Sair (Tecnico)")
+                           else "Sair (Técnico)")
         admin_btn = action_button(ctrl, admin_label,
                                   ctx.show_auth_dialog, C.NEON_PURP,
                                   variant="ghost")

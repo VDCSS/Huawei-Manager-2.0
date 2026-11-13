@@ -51,7 +51,7 @@ class InfoTab:
         state = self.state
 
         p = _ui.page_frame("info")
-        _ui.page_title(p, "Informacoes do Sistema", C.NEON_MAG,
+        _ui.page_title(p, "Informações do Sistema", C.NEON_MAG,
                        "CLI: display version / cpu-usage / memory-usage")
 
         state.out = output_text(p)

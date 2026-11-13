@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 
 class SshMixin:
-    """Mixin com métodos de conexão SSH."""
+    """Mixin com metodos de conexao SSH."""
 
     def _get_selected_device(self: AppCoreProtocol) -> Device | None:
         canvas = self._topo_canvas_widget()
@@ -67,7 +67,7 @@ class SshMixin:
                                             )))
             except NetmikoAuthenticationException:
                 self._dispatch(lambda: self._set_status(
-                    "Falha de autenticacao", C.NEON_AMBER))
+                    "Falha de autenticação", C.NEON_AMBER))
                 self._set_conn_btn()
             except NetmikoTimeoutException:
                 self._dispatch(lambda: self._set_status(

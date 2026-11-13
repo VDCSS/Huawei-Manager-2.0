@@ -36,11 +36,11 @@ class InfoHandlers:
         _ui.loading(out, "Coletando informações do sistema…", dispatch)
         buf = io.StringIO()
         commands = [
-            ("Versao / Sistema", "display version"),
+            ("Versão / Sistema", "display version"),
             ("Dispositivo", "display device"),
-            ("Licenca", "display license"),
+            ("Licença", "display license"),
             ("CPU", "display cpu-usage"),
-            ("Memoria", "display memory-usage"),
+            ("Memória", "display memory-usage"),
             ("LLDP", "display lldp neighbor brief"),
         ]
         try:

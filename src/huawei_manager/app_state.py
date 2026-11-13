@@ -59,7 +59,7 @@ class AppStateMixin:
             self._watcher.stop()
             self._rebuild_page("topology")
             self._set_status("Sessão expirada — acesso user", C.NEON_AMBER)
-            log.info("Acesso: timeout de sessão — resetado para user")
+            log.info("Acesso: timeout de sessao — resetado para user")
 
     def _set_status(self: AppCoreProtocol, text: str, color: str) -> None:
         # Dot de 6 px: ``color`` mantém a leitura usada pelo toggle de tema;

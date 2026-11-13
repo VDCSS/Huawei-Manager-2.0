@@ -31,10 +31,10 @@ if TYPE_CHECKING:
 FIELD_DEFINITIONS: list[tuple[str, str, bool]] = [
     ("host",     "IP / Host",      False),
     ("port",     "Porta SSH",      False),
-    ("username", "Usuario SSH",    False),
+    ("username", "Usuário SSH",    False),
     ("password", "Senha SSH",      True),
     ("ssh_key",  "Chave SSH",      False),
-    ("location", "Localizacao",    False),
+    ("location", "Localização",    False),
 ]
 
 

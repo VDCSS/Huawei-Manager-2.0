@@ -25,7 +25,7 @@ class SopsBackend(SecretsBackend):
         self._secret_file = secret_file or _default_secret_file()
         if not self._secret_file.exists():
             raise RuntimeError(
-                f"Arquivo {self._secret_file.name} nao encontrado em "
+                f"Arquivo {self._secret_file.name} não encontrado em "
                 f"{self._secret_file.parent}.\n"
                 "Crie com: make encrypt-sops\n"
                 "  (sops --encrypt --input-type dotenv --output-type yaml "
@@ -50,7 +50,7 @@ class SopsBackend(SecretsBackend):
             import yaml
             self._cache = yaml.safe_load(result.stdout) or {}
         except ImportError:
-            raise RuntimeError("PyYAML necessario para SopsBackend: pip install pyyaml")
+            raise RuntimeError("PyYAML necessário para SopsBackend: pip install pyyaml")
 
     def get(self, key: str, default: str = "") -> str:
         return self._cache.get(key, default)
@@ -63,7 +63,7 @@ class SopsBackend(SecretsBackend):
         try:
             import yaml
         except ImportError:
-            raise RuntimeError("PyYAML necessario para SopsBackend: pip install pyyaml")
+            raise RuntimeError("PyYAML necessário para SopsBackend: pip install pyyaml")
         plain = yaml.dump(self._cache, default_flow_style=False)
         result = subprocess.run(
             ["sops", "--encrypt", "/dev/stdin"],

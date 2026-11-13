@@ -68,7 +68,7 @@ class ServicesTab:
         state = self.state
 
         p = _ui.page_frame("services")
-        _ui.page_title(p, "Catalogo de Servicos", C.NEON_AMBER,
+        _ui.page_title(p, "Catálogo de Serviços", C.NEON_AMBER,
                        "Serviços de configuração por tipo de device "
                        "(ROUTER | SWITCH | …) — comandos show e consultas: "
                        "use o Editor de Comandos")
@@ -121,7 +121,7 @@ class ServicesTab:
         device = ctx.device()
         if not device:
             device_lbl.setText("Device: (nenhum selecionado)")
-            type_lbl.setText("Tipo: —")
+            type_lbl.setText("Tipo: ")
             cat_cb.blockSignals(True)
             cat_cb.clear()
             cat_cb.addItems(["Todas as Categorias"])
@@ -172,7 +172,7 @@ class ServicesTab:
         state.services = services
 
         if not services:
-            listbox.addItem("  Nenhum servico disponivel para este tipo de Device")
+            listbox.addItem("  Nenhum serviço disponível para este tipo de Device")
             self._clear_detail_panel()
             return
 
@@ -212,7 +212,7 @@ class ServicesTab:
         info_layout.addWidget(state.device_lbl)
         info_layout.addSpacing(18)
 
-        state.type_lbl = QLabel("Tipo: —", info_row)
+        state.type_lbl = QLabel("Tipo: ", info_row)
         state.type_lbl.setStyleSheet(_ui.css_label(C.FG_DIM, "", 11))
         info_layout.addWidget(state.type_lbl)
         info_layout.addSpacing(18)
