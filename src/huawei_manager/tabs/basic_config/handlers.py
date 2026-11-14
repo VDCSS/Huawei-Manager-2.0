@@ -29,6 +29,11 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Serviços válidos para ``local-user ... service-type`` no VRP.
+_VALID_ADMIN_SERVICES = frozenset({
+    "stelnet", "telnet", "ssh", "http", "https", "ftp", "terminal",
+})
+
 
 class BasicConfigHandlers:
     """Controlador de ações da aba Config Básica."""
@@ -121,6 +126,11 @@ class BasicConfigHandlers:
                 else ""
             )
             priv = state.admin_priv.text().strip() if state.admin_priv else "15"
+            svc = (
+                state.admin_services.text().strip()
+                if state.admin_services
+                else "ssh terminal"
+            )
             if not u or not p:
                 raise SdnValidationError(
                     "Usuário administrativo: nome e senha são obrigatórios."
@@ -129,8 +139,16 @@ class BasicConfigHandlers:
                 raise SdnValidationError(
                     "Usuário administrativo: confirmação de senha não confere."
                 )
+            # Valida cada token de serviço contra o conjunto permitido pelo VRP.
+            bad = [t for t in svc.split() if t not in _VALID_ADMIN_SERVICES]
+            if bad:
+                raise SdnValidationError(
+                    "Usuário administrativo: serviço(s) inválido(s): "
+                    f"{', '.join(bad)}. Válidos: "
+                    f"{', '.join(sorted(_VALID_ADMIN_SERVICES))}."
+                )
             admin_cfg = AdminUserConfig(
-                username=u, password=p, privilege=priv or "15"
+                username=u, password=p, privilege=priv or "15", services=svc
             )
 
         plan = BasicConfigPlan(
@@ -190,7 +208,10 @@ class BasicConfigHandlers:
             plan_preview = ""
             try:
                 p = self.build_plan_from_ui()
-                plan_preview = "\n" + "\n".join(p.build_lines())
+                secrets = p.collect_secrets()
+                plan_preview = "\n" + redact_secrets(
+                    "\n".join(p.build_lines()), secrets
+                )
             except SdnValidationError:
                 pass
             _ui.write(
@@ -240,7 +261,19 @@ class BasicConfigHandlers:
             return
 
         secrets = plan.collect_secrets()
-        rollback_lines = plan.build_rollback_lines(vrp_version=vrp_version)
+
+        def _rollback_fn(snapshot: str) -> list[str]:
+            """Resolve as linhas de rollback após o snapshot ser capturado.
+
+            Delega a ``BasicConfigPlan.build_rollback_lines``, que para o
+            usuário administrativo local só gera ``undo local-user`` quando
+            a conta **não existia** antes — impossível restaurar a senha
+            anterior de uma conta já existente (a VRP não guarda
+            credenciais reversíveis).
+            """
+            return plan.build_rollback_lines(
+                vrp_version=vrp_version, snapshot=snapshot
+            )
 
         session = self._ctx.session
         user = getattr(session, "_user", "admin")
@@ -293,7 +326,7 @@ class BasicConfigHandlers:
             read_state=lambda: self._ctx.sb.send_command("display current-configuration"),
             apply_fn=_apply_lines,
             dry_run=self._ctx.dry_run,
-            rollback_lines=rollback_lines,
+            rollback_fn=_rollback_fn,
             verify_fn=_verify_applied,
         )
 

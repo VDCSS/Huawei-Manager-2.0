@@ -119,12 +119,15 @@ ADMIN_USER_SPECS = (
     ParamSpec("password", "Senha", ParamKind.PASSWORD, secret=True),
     ParamSpec("privilege", "Nível de privilégio", ParamKind.INT, default="15",
               minimum=0, maximum=15),
+    ParamSpec("services", "Serviços habilitados", ParamKind.TEXT,
+              default="ssh terminal", required=False, max_len=64,
+              help="stelnet, telnet, ssh, http, https, ftp, terminal"),
 )
 ADMIN_USER_TEMPLATE = ConfigTemplate((
     "aaa",
     "local-user {username} password irreversible-cipher {password}",
     "local-user {username} privilege level {privilege}",
-    "local-user {username} service-type ssh terminal http",
+    "[[local-user {username} service-type {services}]]",
     "quit",
 ))
 
@@ -135,7 +138,7 @@ ADMIN_USER_TEMPLATE_VRP5 = ConfigTemplate((
     "aaa",
     "local-user {username} password simple {password}",
     "local-user {username} privilege level {privilege}",
-    "local-user {username} service-type ssh terminal http",
+    "[[local-user {username} service-type {services}]]",
     "quit",
 ))
 

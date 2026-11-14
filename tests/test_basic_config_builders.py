@@ -118,3 +118,59 @@ def test_build_rollback_lines_accepts_vrp_version():
     assert any("undo ip address" in l for l in lines)
     lines_vrp8 = plan.build_rollback_lines(vrp_version=VrpVersion.VRP8)
     assert lines == lines_vrp8
+
+
+def test_build_rollback_lines_skips_undo_when_local_user_existed_before():
+    """Conta já existia no snapshot → rollback NÃO apaga (senha anterior
+    desconhecida; restauração manual necessária)."""
+    snapshot = """
+aaa
+ local-user admin password irreversible-cipher *****
+ local-user admin privilege level 15
+ local-user admin service-type ssh terminal
+quit
+"""
+    plan = BasicConfigPlan(
+        admin_user=AdminUserConfig(
+            username="admin", password="SenhaNovaForte123", privilege="15"
+        )
+    )
+    lines = plan.build_rollback_lines(vrp_version=VrpVersion.VRP8, snapshot=snapshot)
+    assert not any("undo local-user" in l for l in lines), (
+        "não deve gerar undo de usuário que já existia antes"
+    )
+
+
+def test_build_rollback_lines_undos_when_local_user_is_new():
+    """Conta não existia no snapshot → rollback gera undo local-user."""
+    snapshot = "sysname RTR\n"
+    plan = BasicConfigPlan(
+        admin_user=AdminUserConfig(
+            username="novo", password="SenhaNovaForte123", privilege="15"
+        )
+    )
+    lines = plan.build_rollback_lines(vrp_version=VrpVersion.VRP8, snapshot=snapshot)
+    assert any("undo local-user novo" in l for l in lines)
+
+
+def test_admin_user_services_rendered_in_block():
+    plan = BasicConfigPlan(
+        admin_user=AdminUserConfig(
+            username="operador",
+            password="SenhaForte1234",
+            privilege="15",
+            services="ssh terminal http",
+        )
+    )
+    lines = plan.build_lines(vrp_version=VrpVersion.VRP8)
+    assert any("service-type ssh terminal http" in l for l in lines)
+
+
+def test_admin_user_services_omits_line_when_empty():
+    plan = BasicConfigPlan(
+        admin_user=AdminUserConfig(
+            username="operador", password="SenhaForte1234", services=""
+        )
+    )
+    lines = plan.build_lines(vrp_version=VrpVersion.VRP8)
+    assert not any("service-type" in l for l in lines)

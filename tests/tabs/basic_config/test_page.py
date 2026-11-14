@@ -92,6 +92,13 @@ class TestBasicConfigTabUI:
         assert tab.state.admin_pass.echoMode() == QLineEdit.EchoMode.Password
         assert tab.state.admin_pass_confirm.echoMode() == QLineEdit.EchoMode.Password
 
+        # Campo de serviços existe e não é um campo de senha
+        assert tab.state.admin_services is not None
+        assert (
+            tab.state.admin_services.echoMode()
+            == QLineEdit.EchoMode.Normal
+        )
+
 
 class TestBasicConfigHandlers:
     def test_empty_plan_raises_validation_error(self):
@@ -175,6 +182,43 @@ class TestBasicConfigHandlers:
         h.apply_plan()
         ctx.sb.send_config_block.assert_not_called()
         assert "Modo MOCK ativo" in tab.state.output.toPlainText()
+
+    def test_apply_mock_mode_redacts_password(self, qtbot):
+        """Em modo MOCK, a senha nunca deve aparecer em texto claro no output."""
+        tab = BasicConfigTab()
+        ctx = _make_ctx(svc_mode=lambda: "mock")
+        w = tab.build(ctx)
+        qtbot.addWidget(w)
+
+        tab.state.admin_chk.setChecked(True)
+        tab.state.admin_user.setText("operador")
+        tab.state.admin_pass.setText("MinhaSenhaSecreta123!")
+        tab.state.admin_pass_confirm.setText("MinhaSenhaSecreta123!")
+
+        h = tab._h()
+        h.apply_plan()
+        output = tab.state.output.toPlainText()
+        assert "Modo MOCK ativo" in output
+        assert "MinhaSenhaSecreta123!" not in output, (
+            "senha não deve vazar em texto claro no preview do MOCK"
+        )
+
+    def test_admin_user_invalid_service_raises(self, qtbot):
+        """Serviço inválido em local-user deve levantar erro de validação."""
+        tab = BasicConfigTab()
+        ctx = _make_ctx()
+        w = tab.build(ctx)
+        qtbot.addWidget(w)
+
+        tab.state.admin_chk.setChecked(True)
+        tab.state.admin_user.setText("operador")
+        tab.state.admin_pass.setText("MinhaSenhaSecreta123!")
+        tab.state.admin_pass_confirm.setText("MinhaSenhaSecreta123!")
+        tab.state.admin_services.setText("ftp misterioso")
+
+        h = tab._h()
+        with pytest.raises(SdnValidationError, match="inválido"):
+            h.build_plan_from_ui()
 
     def test_apply_success_calls_send_config_block(self, qtbot):
         tab = BasicConfigTab()

@@ -45,6 +45,9 @@ class AdminUserConfig:
     username: str
     password: str
     privilege: str = "15"
+    # Serviços habilitados para o usuário local do equipamento (ex.: "ssh terminal").
+    # Valores válidos: stelnet, telnet, ssh, http, https, ftp, terminal.
+    services: str = "ssh terminal"
 
 
 @dataclass(frozen=True)
@@ -161,6 +164,7 @@ class BasicConfigPlan:
                 "username": self.admin_user.username,
                 "password": self.admin_user.password,
                 "privilege": self.admin_user.privilege,
+                "services": self.admin_user.services,
             }
             admin_template = (
                 ADMIN_USER_TEMPLATE_VRP5
@@ -174,8 +178,16 @@ class BasicConfigPlan:
     def build_rollback_lines(
         self,
         vrp_version: VrpVersion = VrpVersion.UNKNOWN,
+        snapshot: str | None = None,
     ) -> list[str]:
-        """Gera linhas inversas para desfazer as alterações pontuais."""
+        """Gera linhas inversas para desfazer as alterações pontuais.
+
+        Para o usuário administrativo local, o ``undo local-user`` só é
+        gerado quando a conta **não existia** no snapshot. Se a conta já
+        existia antes da mutação, não é possível restaurar a senha
+        anterior (a VRP não guarda credenciais reversíveis), então o
+        rollback **não apaga** a conta — deixa para restauração manual.
+        """
         lines: list[str] = []
         if self.interface_l3 is not None:
             lines.extend([
@@ -190,9 +202,16 @@ class BasicConfigPlan:
                 f"undo vlan {self.l2_access.vlan_id}",
             ])
         if self.admin_user is not None:
-            lines.extend([
-                "aaa",
-                f"undo local-user {self.admin_user.username}",
-                "quit",
-            ])
+            u = self.admin_user.username
+            user_existed_before = (
+                snapshot is not None and f"local-user {u}" in snapshot
+            )
+            if not user_existed_before:
+                lines.extend([
+                    "aaa",
+                    f"undo local-user {u}",
+                    "quit",
+                ])
+            # Se existia antes, não gera undo: impossível restaurar a
+            # senha anterior (fail-closed e honesto).
         return lines

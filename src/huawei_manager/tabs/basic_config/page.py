@@ -242,6 +242,12 @@ class BasicConfigTab:
         self._style_input(self.state.admin_pass_confirm)
         row_adm_pass.addWidget(self.state.admin_pass_confirm)
         sec_admin_layout.addLayout(row_adm_pass)
+
+        self.state.admin_services = QLineEdit(sec_admin)
+        self.state.admin_services.setPlaceholderText("Ex: ssh terminal http")
+        self.state.admin_services.setText("ssh terminal")
+        self._style_input(self.state.admin_services)
+        sec_admin_layout.addWidget(self.state.admin_services)
         p_layout.addWidget(sec_admin)
 
     def _build_actions_and_output(self, parent: QWidget) -> None:

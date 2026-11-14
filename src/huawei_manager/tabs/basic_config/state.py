@@ -60,6 +60,7 @@ class BasicConfigState:
     admin_user: QLineEdit | None = None
     admin_pass: QLineEdit | None = None
     admin_pass_confirm: QLineEdit | None = None
+    admin_services: QLineEdit | None = None
     admin_priv: QLineEdit | None = None
 
     # Botões de Ação
