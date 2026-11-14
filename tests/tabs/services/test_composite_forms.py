@@ -162,7 +162,9 @@ class TestCompositeFormUi:
         form = tab.state.form_state
         assert form is not None, "formulário de ACL não foi construído"
         values = form.values()
-        assert set(values) == {"identificacao", "rules", "applications"}
+        assert set(values) == {
+            "identificacao", "rules", "traffic_policy", "applications",
+        }
 
     def test_acl_form_starts_with_one_rule_row(self, qtbot):
         ctx = _fake_ctx(device=_device())
@@ -377,7 +379,9 @@ class TestCompositeHandlers:
         text = _out(state)
         assert "não encontrada" in text
         # o comando de configuração fica registrado para rollback posterior
-        assert ctx.set_last_config_command.called
+        # (slot PRIVADO da aba Serviços — não o global do App)
+        assert state.last_config_command is not None
+        ctx.set_last_config_command.assert_not_called()
 
     def test_verify_read_error_is_reported(self, qtbot):
         """Falha de leitura na verificação → erro reportado (não "Falha SSH")."""

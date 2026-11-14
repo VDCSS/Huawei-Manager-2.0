@@ -324,7 +324,7 @@ class BasicConfigHandlers:
             return
         except SdnError as exc:
             self._ctx.sb.invalidate_connection()
-            self._ctx.set_last_config_command(cmd)
+            self._state.last_config_command = cmd
             _ui.write(
                 self._state.output,
                 f"✘  Falha de comunicação SSH: {exc}",
@@ -341,7 +341,7 @@ class BasicConfigHandlers:
             )
             return
 
-        self._ctx.set_last_config_command(cmd)
+        self._state.last_config_command = cmd
         clean_msg = redact_secrets(result.message, secrets)
         _ui.write(self._state.output, clean_msg, self._ctx.dispatch)
 
@@ -367,12 +367,17 @@ class BasicConfigHandlers:
         )
 
     def rollback_plan(self) -> None:
-        """Executa rollback do último comando de configuração registrado."""
-        last_cmd = self._ctx.get_last_config_command()
+        """Executa rollback do último comando de configuração desta aba.
+
+        O alvo é o snapshot registrado pela própria aba Config Básica — o
+        rollback da aba Serviços (e vice-versa) é independente.
+        """
+        last_cmd = self._state.last_config_command
         if last_cmd is None:
             _ui.write(
                 self._state.output,
-                "✘  Nenhum comando de configuração anterior para rollback.",
+                "✘  Nenhum comando de configuração anterior aplicado nesta "
+                "aba para rollback.",
                 self._ctx.dispatch,
             )
             return

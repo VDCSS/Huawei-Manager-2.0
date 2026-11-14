@@ -25,6 +25,10 @@ from huawei_manager.sdn_controller.napalm_backend import (
 )
 from huawei_manager.sdn_controller.validator import _DEFAULT_DENY_PATTERNS
 from huawei_manager.services import ServiceDef, execute_service
+from huawei_manager.services.device_precheck import (
+    interfaces_in_block,
+    missing_interfaces,
+)
 from huawei_manager.services.form_registry import (
     check_anchors,
     get_form_spec,
@@ -362,7 +366,7 @@ class ServicesHandlers:
                         # Conexão pode ter caído no meio da mutação:
                         # invalida e mantém o snapshot p/ rollback posterior.
                         self._ctx.sb.invalidate_connection()
-                        self._ctx.set_last_config_command(service_cmd)
+                        self._state.last_config_command = service_cmd
                         _ui.write(self._state.output,
                                   f"✘  Falha SSH: {exc}",
                                   self._ctx.dispatch)
@@ -373,7 +377,7 @@ class ServicesHandlers:
                             backend="netmiko",
                         )
                         return
-                    self._ctx.set_last_config_command(service_cmd)
+                    self._state.last_config_command = service_cmd
                     _ui.write(self._state.output, svc_result.message,
                               self._ctx.dispatch)
                     audit_config_op(
@@ -581,6 +585,49 @@ class ServicesHandlers:
                 vrp_version=version,
             )
 
+        # ── Pré-checagem: a interface existe no device? ──────────────
+        # Sem esta checagem a VRP responde "Wrong parameter found at '^'
+        # position" e o operador não descobre o nome correto da interface.
+        ifaces = interfaces_in_block(lines)
+        if ifaces:
+            try:
+                pre_state = self._ctx.sb.send_command(
+                    "display current-configuration")
+            except SdnError as exc:
+                _ui.write(
+                    self._state.output,
+                    f"✘  Falha ao ler o running-config: {exc} — "
+                    "nada foi aplicado.",
+                    self._ctx.dispatch,
+                )
+                audit_config_op(
+                    audit, op="config_apply", user=user, host=host,
+                    session_id=session_id, status="blocked",
+                    reason="pre-check falhou", service=svc.name,
+                    backend="netmiko", form_kind=svc.form_kind,
+                    vrp_version=str(version), saved=False,
+                )
+                return
+            missing = missing_interfaces(pre_state, ifaces)
+            if missing:
+                _ui.write(
+                    self._state.output,
+                    "✘  Interface(s) inexistente(s) no device: "
+                    + ", ".join(missing)
+                    + "\nVerifique o nome exato em 'display interface brief'."
+                    + "\nNada foi aplicado ao dispositivo.",
+                    self._ctx.dispatch,
+                )
+                audit_config_op(
+                    audit, op="config_apply", user=user, host=host,
+                    session_id=session_id, status="blocked",
+                    reason=f"interface inexistente: {', '.join(missing)}",
+                    service=svc.name, backend="netmiko",
+                    form_kind=svc.form_kind, vrp_version=str(version),
+                    saved=False,
+                )
+                return
+
         def _verify() -> tuple[bool, str]:
             try:
                 running = self._ctx.sb.send_command(
@@ -625,7 +672,7 @@ class ServicesHandlers:
             return
         except SdnError as exc:
             self._ctx.sb.invalidate_connection()
-            self._ctx.set_last_config_command(service_cmd)
+            self._state.last_config_command = service_cmd
             _ui.write(self._state.output,
                       f"✘  Falha SSH: {exc}",
                       self._ctx.dispatch)
@@ -638,7 +685,7 @@ class ServicesHandlers:
             )
             return
 
-        self._ctx.set_last_config_command(service_cmd)
+        self._state.last_config_command = service_cmd
         message = result.message
 
         # ── Persistência: só depois da verificação ──────────────────
@@ -678,16 +725,21 @@ class ServicesHandlers:
             )))
 
     def rollback_last(self) -> None:
-        """Desfaz a última configuração aplicada (rollback do snapshot).
+        """Desfaz a última configuração aplicada **nesta aba** (rollback).
+
+        O alvo é o snapshot registrado pela própria aba Serviços — o
+        rollback da Config Básica (e vice-versa) é independente: cada aba
+        desfaz apenas o que ela mesma aplicou.
 
         O rollback roda apenas na running-config — para persistir a
         reversão, marque "Salvar" e aplique novamente.
         """
-        last_cmd = self._ctx.get_last_config_command()
+        last_cmd = self._state.last_config_command
         if last_cmd is None:
             _ui.write(
                 self._state.output,
-                "✘  Nenhuma configuração anterior para reverter.",
+                "✘  Nenhuma configuração anterior aplicada nesta aba "
+                "para reverter.",
                 self._ctx.dispatch,
             )
             return

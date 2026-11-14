@@ -11,7 +11,10 @@ from huawei_manager.basic_config.vrp_version import (
     save_command,
 )
 from huawei_manager.exceptions import SdnCommandError, SdnConnectionError
-from huawei_manager.sdn_controller.vrp_errors import detect_vrp_errors
+from huawei_manager.sdn_controller.vrp_errors import (
+    describe_vrp_failure,
+    detect_vrp_errors,
+)
 from huawei_manager.security_redaction import redact_secrets
 from huawei_manager.session_helpers import resolve_filter
 from huawei_manager.utils import clean_output, sanitize_command
@@ -203,9 +206,11 @@ class SessionCommandsMixin:
                             except Exception:
                                 pass
                             ctx.set_status("error")
-                            return False, (
-                                "Configuração recusada pela VRP: "
-                                + "; ".join(errors[:5])
+                            # Atribui cada erro ao comando rejeitado — sem
+                            # isso o operador recebe N mensagens idênticas e
+                            # não sabe o que corrigir.
+                            return False, describe_vrp_failure(
+                                output_for_check, lines
                             )
 
                     # ── 2. Saída do system-view via Ctrl+Z (byte bruto) ──
@@ -301,9 +306,8 @@ class SessionCommandsMixin:
                         errors = detect_vrp_errors(clean_for_error_check)
                         if errors:
                             ctx.set_status("error")
-                            return False, (
-                                "Configuração recusada pela VRP: "
-                                + "; ".join(errors[:5])
+                            return False, describe_vrp_failure(
+                                clean_for_error_check, lines
                             )
                     ctx.set_status("ok")
                     saved = " e salva" if save else " (running-config)"

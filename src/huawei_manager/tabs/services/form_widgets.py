@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -100,6 +100,10 @@ class _FieldBox:
 class FormWidget(QWidget):
     """Formulário renderizado a partir de um :class:`FormSpec`."""
 
+    #: Emitido quando qualquer valor do formulário muda — usado pela aba
+    #: para atualizar a pré-visualização viva do bloco de configuração.
+    changed = Signal()
+
     def __init__(self, spec: FormSpec, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._spec = spec
@@ -130,6 +134,12 @@ class FormWidget(QWidget):
             title = QLabel(section.title.upper(), frame)
             title.setStyleSheet(_ui.css_label(C.FG_DIM, C.BG_INPUT, 10, True))
             fl.addWidget(title)
+
+            if section.hint:
+                hint = QLabel(section.hint, frame)
+                hint.setWordWrap(True)
+                hint.setStyleSheet(_ui.css_label(C.FG_DIM, C.BG_INPUT, 10))
+                fl.addWidget(hint)
 
             if section.repeatable:
                 rows_box = QVBoxLayout()
@@ -304,6 +314,7 @@ class FormWidget(QWidget):
         if section is None or not section.repeatable:
             raise KeyError(f"seção repetível inexistente: '{section_key}'")
         self._add_row(section)
+        self.changed.emit()
 
     def clear(self) -> None:
         """Restaura os defaults e remove as linhas extras."""
@@ -321,10 +332,12 @@ class FormWidget(QWidget):
             for _ in range(section.min_rows):
                 self._add_row(section)
         self._refresh_visibility()
+        self.changed.emit()
 
     # ── visibilidade ────────────────────────────────────────────────
     def _on_change(self, *_args: object) -> None:
         self._refresh_visibility()
+        self.changed.emit()
 
     def _flat_values(self) -> dict[str, str]:
         flat: dict[str, str] = {}

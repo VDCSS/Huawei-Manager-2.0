@@ -63,7 +63,7 @@ class TestFormSpecLookup:
         assert isinstance(spec, FormSpec)
         assert spec.kind == "acl"
         assert [s.key for s in spec.sections] == [
-            "identificacao", "rules", "applications"]
+            "identificacao", "rules", "traffic_policy", "applications"]
 
     def test_static_route_spec_is_registered(self):
         spec = get_form_spec("static_route")

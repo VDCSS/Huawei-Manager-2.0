@@ -13,6 +13,8 @@ if TYPE_CHECKING:
         QTextEdit,
     )
 
+    from huawei_manager.command import ConfigCommand
+
 
 @dataclass
 class BasicConfigState:
@@ -71,3 +73,9 @@ class BasicConfigState:
 
     # Saída / Console
     output: QTextEdit | None = None
+
+    # Último comando de configuração aplicado **nesta aba** (com snapshot)
+    # — alvo do botão "Rollback" da aba Config Básica. Privado da aba para
+    # que o rollback da Config Básica e o da aba Serviços sejam
+    # independentes (cada um desfaz apenas o que a própria aba aplicou).
+    last_config_command: ConfigCommand | None = None

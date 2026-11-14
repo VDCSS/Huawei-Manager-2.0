@@ -6,7 +6,8 @@ Escopo (VRP CLI):
   identificada por **número** ou por **nome** (mutuamente exclusivos).
 * **Regras** — uma ou mais linhas ``rule <id> <permit|deny> ...``.
 * **Aplicação** — ``traffic-filter`` em interface(s) e/ou ``acl ... inbound``
-  em ``user-interface vty``.
+  em ``user-interface vty``; alternativa via cadeia ``traffic policy``
+  (classifier → behavior → policy), ver :mod:`huawei_manager.services.traffic_policy`.
 
 Sintaxe VRP (verificada no NE40E / VRP 8.180 — EVE-NG):
 
@@ -33,9 +34,17 @@ from huawei_manager.services.form_spec import (
     FormSection,
     FormSpec,
     FormValues,
+    FormWarning,
     RenderedForm,
     require_field,
     section_rows,
+)
+from huawei_manager.services.traffic_policy import (
+    TRAFFIC_POLICY_SECTION_KEY,
+    TrafficPolicyChain,
+    build_traffic_policy_section,
+    render_chain,
+    undo_chain,
 )
 
 #: A VRP aceita ``acl number <n> name <nome>``?
@@ -152,6 +161,7 @@ ACL_FORM_SPEC = FormSpec(
                 ),
             ),
         ),
+        build_traffic_policy_section(),
         FormSection(
             key="applications",
             title="Aplicação",
@@ -162,18 +172,24 @@ ACL_FORM_SPEC = FormSpec(
                 FormField(
                     key="where", label="Aplicar em",
                     kind=ParamKind.ENUM, default="interface",
-                    choices=("interface", "vty"),
+                    choices=("interface", "traffic policy", "vty"),
+                    help="'interface' = traffic-filter direto na interface. "
+                         "'traffic policy' = cadeia classifier → behavior → "
+                         "policy (exige device com feature QoS). "
+                         "'vty' = acl inbound em user-interface vty.",
                 ),
                 FormField(
-                    key="interface", label="Interface",
+                    key="interface", label="Interface (ex.: GigabitEthernet0/0/1)",
                     kind=ParamKind.INTERFACE, required=False,
-                    depends_on=("where", ("interface",)),
+                    depends_on=("where", ("interface", "traffic policy")),
+                    help="Nome exato da interface, sem espaço "
+                         "(confirme em 'display interface brief').",
                 ),
                 FormField(
                     key="direction", label="Direção",
                     kind=ParamKind.ENUM, default="inbound",
                     choices=("inbound", "outbound"),
-                    depends_on=("where", ("interface",)),
+                    depends_on=("where", ("interface", "traffic policy")),
                 ),
                 FormField(
                     key="vty_range", label="Faixa VTY",
@@ -200,11 +216,39 @@ ACL_FORM_SPEC = FormSpec(
         r"^undo\s+acl\s+name\s+[A-Za-z0-9_-]+$",
         r"^undo\s+acl\s+inbound$",
         r"^undo\s+traffic-filter\s+(inbound|outbound)\s+acl\s+\S+$",
+        # Cadeia traffic policy (classifier → behavior → policy).
+        r"^traffic\s+classifier\s+[A-Za-z][A-Za-z0-9_-]*$",
+        r"^if-match\s+acl\s+\S+$",
+        r"^traffic\s+behavior\s+[A-Za-z][A-Za-z0-9_-]*$",
+        r"^(permit|deny)$",
+        r"^traffic\s+policy\s+[A-Za-z][A-Za-z0-9_-]*$",
+        r"^classifier\s+[A-Za-z][A-Za-z0-9_-]*\s+behavior\s+[A-Za-z][A-Za-z0-9_-]*$",
+        r"^traffic-policy\s+[A-Za-z][A-Za-z0-9_-]*\s+(inbound|outbound)$",
+        r"^undo\s+traffic\s+classifier\s+[A-Za-z][A-Za-z0-9_-]*$",
+        r"^undo\s+traffic\s+behavior\s+[A-Za-z][A-Za-z0-9_-]*$",
+        r"^undo\s+traffic\s+policy\s+[A-Za-z][A-Za-z0-9_-]*$",
+        r"^undo\s+traffic-policy\s+[A-Za-z][A-Za-z0-9_-]*\s+(inbound|outbound)$",
     ),
     # Linhas que podem cortar o próprio acesso do operador → confirmação.
     confirm_patterns=(
         r"^traffic-filter\s+(inbound|outbound)\s+acl\s+\S+$",
         r"^acl\s+\S+\s+inbound$",
+        r"^traffic-policy\s+[A-Za-z][A-Za-z0-9_-]*\s+(inbound|outbound)$",
+    ),
+    # Aviso exibido na UI quando o operador escolhe a cadeia traffic
+    # policy — o device precisa ter a feature QoS/política de tráfego.
+    warnings=(
+        FormWarning(
+            field_key="where",
+            values=("traffic policy",),
+            message=(
+                "A cadeia traffic policy (classifier → behavior → policy) "
+                "exige um device com a feature de QoS/política de tráfego. "
+                "Em imagens sem essa feature (ex.: NE40E no EVE-NG) o device "
+                "recusa o comando com 'Unrecognized command' — nesse caso, "
+                "aplique em um device compatível."
+            ),
+        ),
     ),
 )
 
@@ -360,6 +404,24 @@ def build_acl_form(values: FormValues) -> RenderedForm:
         if not name:
             raise _fail("informe o nome da ACL")
 
+    # ── cadeia traffic policy (opcional) ───────────────────────────
+    # Nomes dos objetos classifier/behavior/policy — validados mesmo
+    # quando a cadeia não é usada (valores residuais são rejeitados).
+    tp_rows = section_rows(values, TRAFFIC_POLICY_SECTION_KEY)
+    tp = tp_rows[0] if tp_rows else {}
+    classifier = require_field(ACL_FORM_SPEC, "classifier_name").validate(
+        tp.get("classifier_name", "")
+    )
+    behavior = require_field(ACL_FORM_SPEC, "behavior_name").validate(
+        tp.get("behavior_name", "")
+    )
+    policy = require_field(ACL_FORM_SPEC, "policy_name").validate(
+        tp.get("policy_name", "")
+    )
+    action = require_field(ACL_FORM_SPEC, "behavior_action").validate(
+        tp.get("behavior_action") or "permit"
+    )
+
     # ── linhas de configuração ─────────────────────────────────────
     lines: list[str] = []
     if id_mode == "numero":
@@ -413,12 +475,39 @@ def build_acl_form(values: FormValues) -> RenderedForm:
 
     lines.append("quit")
 
-    # ── aplicações ─────────────────────────────────────────────────
+    # ── cadeia traffic policy (antes das aplicações) ───────────────
     app_rows = section_rows(values, "applications")
+    uses_traffic_policy = any(
+        str(row.get("where", "")).replace(" ", "_") == "traffic_policy"
+        for row in app_rows
+    )
+    chain = TrafficPolicyChain(
+        classifier=classifier, behavior=behavior, policy=policy, action=action,
+    )
+    if uses_traffic_policy:
+        if not (classifier and behavior and policy):
+            raise _fail(
+                "aplicação via 'traffic policy' exige o nome do classifier, "
+                "do behavior e da policy"
+            )
+        chain_lines, chain_anchors = render_chain(chain, ref)
+        lines.extend(chain_lines)
+        anchors.extend(chain_anchors)
+    elif classifier or behavior or policy:
+        # Fail-closed: nomes preenchidos sem nenhuma aplicação via traffic
+        # policy significam configuração incompleta (ou erro de operador).
+        raise _fail(
+            "nomes de traffic policy preenchidos, mas nenhuma aplicação usa "
+            "'traffic policy' — use 'interface' (traffic-filter) ou "
+            "'traffic policy'"
+        )
+
+    # ── aplicações ─────────────────────────────────────────────────
     rendered_apps: list[tuple[str, list[str], list[str]]] = []
     for row in app_rows:
         where = row.get("where", "interface")
-        if where == "interface":
+        normalized_where = str(where).replace(" ", "_")
+        if normalized_where in ("interface", "traffic_policy"):
             iface_name = require_field(
                 ACL_FORM_SPEC, "interface").validate(row.get("interface", ""))
             if not iface_name:
@@ -429,17 +518,30 @@ def build_acl_form(values: FormValues) -> RenderedForm:
                 )
             dir_name = require_field(
                 ACL_FORM_SPEC, "direction").validate(row.get("direction", "inbound"))
-            block = [
-                f"interface {iface_name}",
-                f"traffic-filter {dir_name} acl {ref}",
-                "quit",
-            ]
-            undo = [
-                f"interface {iface_name}",
-                f"undo traffic-filter {dir_name} acl {ref}",
-                "quit",
-            ]
-            anchors.append(f"traffic-filter {dir_name} acl {ref}")
+            if normalized_where == "traffic_policy":
+                block = [
+                    f"interface {iface_name}",
+                    f"traffic-policy {policy} {dir_name}",
+                    "quit",
+                ]
+                undo = [
+                    f"interface {iface_name}",
+                    f"undo traffic-policy {policy} {dir_name}",
+                    "quit",
+                ]
+                anchors.append(f"traffic-policy {policy} {dir_name}")
+            else:
+                block = [
+                    f"interface {iface_name}",
+                    f"traffic-filter {dir_name} acl {ref}",
+                    "quit",
+                ]
+                undo = [
+                    f"interface {iface_name}",
+                    f"undo traffic-filter {dir_name} acl {ref}",
+                    "quit",
+                ]
+                anchors.append(f"traffic-filter {dir_name} acl {ref}")
         else:
             vty_range = require_field(
                 ACL_FORM_SPEC, "vty_range").validate(row.get("vty_range", "0 4"))
@@ -460,10 +562,14 @@ def build_acl_form(values: FormValues) -> RenderedForm:
         rendered_apps.append((where, block, undo))
 
     def rollback_builder(snapshot: str) -> list[str]:
-        """Desfaz aplicações → regras → ACL (nesta ordem obrigatória)."""
+        """Desfaz aplicações → cadeia → regras → ACL (nesta ordem)."""
         out: list[str] = []
         for _where, _block, undo in rendered_apps:
             out.extend(undo)
+        if uses_traffic_policy:
+            # Só remove os objetos que **não** existiam antes (preserva o
+            # estado pré-existente do snapshot).
+            out.extend(undo_chain(chain, snapshot))
         if _acl_existed(snapshot, id_mode, number, name):
             # A ACL já existia: desfaz apenas as regras **novas** (as que já
             # estavam no snapshot não são tocadas).

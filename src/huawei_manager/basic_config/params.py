@@ -43,6 +43,8 @@ _INTERFACE_RE = re.compile(
 _NULL0 = "NULL0"
 # Nome de ACL nomeada VRP: 1–32 caracteres, sem espaços nem separadores.
 _ACL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+# Nome de objeto VRP (traffic classifier/behavior/policy): começa por letra.
+_VRP_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
 _HOSTNAME_RE = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,62}[A-Za-z0-9])?$"
 )
@@ -74,6 +76,9 @@ class ParamKind(StrEnum):
     INT = "int"
     ENUM = "enum"
     VTY_RANGE = "vty_range"
+    #: Nome de objeto VRP (traffic classifier/behavior/policy, qos queue,
+    #: etc.): 1–32 caracteres, começa por letra, sem espaços.
+    VRP_NAME = "vrp_name"
 
 
 @dataclass(frozen=True)
@@ -172,6 +177,12 @@ def validate_value(spec: ParamSpec, raw: str | None) -> str:
         case ParamKind.WILDCARD:
             if value.lower() == "any":
                 return "any"
+            if value == "0":
+                # Forma curta aceita pela VRP ("0" = 0.0.0.0, casamento
+                # exato). Normalizada para a forma longa — é assim que o
+                # device grava a máscara no running-config (a âncora de
+                # verificação precisa casar).
+                return "0.0.0.0"
             try:
                 return str(ipaddress.IPv4Address(value))
             except ValueError as exc:
@@ -198,6 +209,14 @@ def validate_value(spec: ParamSpec, raw: str | None) -> str:
                     spec.label,
                     "nome de ACL não pode ser apenas numérico "
                     "(colide com a ACL numérica)",
+                )
+            return value
+        case ParamKind.VRP_NAME:
+            if not _VRP_NAME_RE.fullmatch(value):
+                raise _fail(
+                    spec.label,
+                    "nome VRP inválido (1–32 caracteres, começa por letra; "
+                    "letras, números, '-' e '_')",
                 )
             return value
         case ParamKind.ACL_ID:

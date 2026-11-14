@@ -203,7 +203,9 @@ class TestBasicConfigHandlers:
         call_kwargs = ctx.sb.send_config_block.call_args.kwargs
         assert call_kwargs["vrp_version"] == VrpVersion.VRP8
         assert "OK Configuração aplicada" in tab.state.output.toPlainText()
-        ctx.set_last_config_command.assert_called_once()
+        # o rollback da Config Básica usa o slot PRÓPRIO da aba
+        assert tab.state.last_config_command is not None
+        ctx.set_last_config_command.assert_not_called()
 
     def test_apply_save_optional_checkbox_unchecked(self, qtbot):
         """Save é opcional: checkbox não marcado → send=False."""

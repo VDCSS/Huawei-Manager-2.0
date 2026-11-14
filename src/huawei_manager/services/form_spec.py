@@ -74,6 +74,9 @@ class FormSection:
     repeatable: bool = False
     min_rows: int = 0
     max_rows: int = 20
+    #: Legenda informativa exibida sob o título da seção (o que preencher,
+    #: o que é gerado automaticamente). Vazio = sem legenda.
+    hint: str = ""
 
 
 @dataclass(frozen=True)
