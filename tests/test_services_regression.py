@@ -51,10 +51,13 @@ class TestParseParamsDefaults:
         assert len(set(labels)) == len(labels) == 4
 
     def test_no_config_service_has_blank_default(self) -> None:
+        # Serviços com template tipado propositalmente exigem preenchimento consciente
+        # pelo operador (default="") para segurança; serviços legados continuam
+        # exigindo default extraído do comando de exemplo.
         blanks = [
             (svc.id, label)
             for svc in SERVICE_REGISTRY
-            if svc.config_mode
+            if svc.config_mode and svc.config_template is None
             for label, default in parse_params(svc)
             if not default
         ]
