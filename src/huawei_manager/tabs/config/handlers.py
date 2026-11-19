@@ -32,12 +32,12 @@ class ConfigHandlers:
         self._ctx.touch_session()
         out = self._state.out
         dispatch = self._ctx.dispatch
-        _ui.loading(out, "Carregando configuracao atual…", dispatch)
+        _ui.loading(out, "Carregando configuração atual…", dispatch)
         try:
             output = self._ctx.sb.send_command("display current-configuration")
         except SdnError as exc:
             self._ctx.sb.invalidate_connection()
-            _ui.write(out, f"✘ Falha SSH: {exc}", dispatch)
+            _ui.write(out, f"x Falha SSH: {exc}", dispatch)
             return
         _ui.write(out, output, dispatch)
         self._ctx.event_bus.put(Event(EventType.COMMAND_EXECUTED,

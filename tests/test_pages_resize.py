@@ -96,7 +96,7 @@ class TestCmdPageResize:
 
         buttons = [
             b for b in page.findChildren(ActionButton)
-            if b.text().strip() in ("▶ Executar", "⚙ Enviar Config")
+            if b.text().strip() in ("executar Executar", "configurar Enviar Config")
         ]
         assert len(buttons) == 2
         for btn in buttons:
@@ -200,7 +200,7 @@ class TestManutencaoPageGrid:
 
         buttons = [
             b for b in page.findChildren(ActionButton)
-            if b.text().strip() in ("⚙  Install", "🔄  Reset")
+            if b.text().strip() in ("configurar  Install", "reset  Reset")
         ]
         assert len(buttons) == 2
         for btn in buttons:

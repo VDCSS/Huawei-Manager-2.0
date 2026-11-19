@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import random
-import socket
 from unittest.mock import MagicMock, patch
 
 from huawei_manager.device_models import Device

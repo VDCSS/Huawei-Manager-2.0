@@ -188,11 +188,11 @@ class CmdTab:
         right_layout.addWidget(abar)
         right_layout.addSpacing(6)
 
-        btn_exec = action_button(abar, "▶ Executar",
+        btn_exec = action_button(abar, "executar Executar",
                                  lambda: self.run_cmd_safe(self.get_editor_cmd()), C.NEON_CYAN)
         abar_layout.addWidget(btn_exec)
         abar_layout.addSpacing(6)
-        btn_cfg = action_button(abar, "⚙ Enviar Config",
+        btn_cfg = action_button(abar, "configurar Enviar Config",
                                 lambda: self.run_config_safe(self.get_editor_cmd()), C.NEON_AMBER)
         abar_layout.addWidget(btn_cfg)
 
@@ -207,7 +207,7 @@ class CmdTab:
         abar_layout.addWidget(sysview_cb)
         abar_layout.addStretch()
 
-        warn_lbl = QLabel("⚠  Todas as operacoes sao registradas em huawei_audit_structured.jsonl", right)
+        warn_lbl = QLabel("aviso  Todas as operacoes sao registradas em huawei_audit_structured.jsonl", right)
         warn_lbl.setStyleSheet(_ui.css_label(C.NEON_AMBER, C.BG_INPUT, 10))
         right_layout.addWidget(warn_lbl)
         right_layout.addSpacing(4)

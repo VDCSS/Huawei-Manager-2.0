@@ -1,7 +1,7 @@
 """Menu de contexto da topologia sob RBAC (plano W3, C.6.2 item 4).
 
 Tecnico/admin veem as acoes Editar/Excluir e o handler libera
-(D5 revertida); user nao ve menu e nenhum handler e acionado.
+(D5 revertida); user não ve menu e nenhum handler e acionado.
 """
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtCore import QPoint
 
-from huawei_manager.topology import TopologyCanvas
 from huawei_manager.device_models import Device
+from huawei_manager.topology import TopologyCanvas
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("QT_QPA_PLATFORM"),

@@ -45,7 +45,7 @@ class BaseDriver(ABC):
 
     @abstractmethod
     def send_config(self, commands: list[str]) -> tuple[bool, str]:
-        """Envia comandos de configuracao. Retorna (sucesso, mensagem)."""
+        """Envia comandos de configuração. Retorna (sucesso, mensagem)."""
 
     @abstractmethod
     def get_routing_table(self) -> list[RouteEntry]:

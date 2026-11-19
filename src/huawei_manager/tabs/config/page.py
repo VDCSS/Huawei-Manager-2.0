@@ -49,13 +49,13 @@ class ConfigTab:
         state = self.state
 
         p = _ui.page_frame("config")
-        _ui.page_title(p, "Configuracao Atual", C.NEON_CYAN, "")
+        _ui.page_title(p, "Configuração Atual", C.NEON_CYAN, "")
 
         state.out = output_text(p)
         _ui.page_layout(p).addWidget(state.out, stretch=1)
         _ui.page_layout(p).addSpacing(10)
 
-        btn = action_button(p, "↻  Carregar Configuracao Atual",
+        btn = action_button(p, "↻  Carregar Configuração Atual",
                             lambda: self.fetch_config(), C.NEON_CYAN)
         _ui.page_layout(p).addWidget(btn)
 

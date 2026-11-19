@@ -50,7 +50,7 @@ class RouteTab:
 
         p = _ui.page_frame("route")
         _ui.page_title(p, "Tabelas e Status do Roteador", C.NEON_CYAN,
-                       "Visualizacao de tabelas, vizinhos e metricas do dispositivo")
+                       "Visualização de tabelas, vizinhos e metricas do dispositivo")
         row = QWidget(p)
         row.setStyleSheet(f"background: {C.BG_CARD};")
         row.setMaximumHeight(40)

@@ -49,7 +49,7 @@ class DiffReport:
 
 
 class DryRunEngine:
-    """Engine de dry-run para comandos de configuracao.
+    """Engine de dry-run para comandos de configuração.
 
     Gera diff entre config atual e proposta (simulacao sem envio).
     """
@@ -60,8 +60,8 @@ class DryRunEngine:
         """Gera diff entre config atual e proposta.
 
         Args:
-            current: Configuracao atual (string multilinha).
-            proposed: Configuracao proposta (string multilinha).
+            current: Configuração atual (string multilinha).
+            proposed: Configuração proposta (string multilinha).
 
         Returns:
             ``DiffReport`` com as diferencas encontradas.

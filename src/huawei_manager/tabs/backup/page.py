@@ -56,7 +56,7 @@ class BackupTab:
         state = self.state
 
         p = _ui.page_frame("backup")
-        _ui.page_title(p, "Backup de Configuracao", C.NEON_PURP,
+        _ui.page_title(p, "Backup de Configuração", C.NEON_PURP,
                        "display current-configuration → arquivo")
 
         ctrl = QWidget(p)
@@ -82,7 +82,7 @@ class BackupTab:
             lambda t: setattr(state, 'backup_path', t))
         ctrl_layout.addWidget(state.backup_entry)
 
-        btn_dir = action_button(ctrl, "📁 Escolha",
+        btn_dir = action_button(ctrl, "pasta Escolha",
                                 self._choose_backup_dir, C.NEON_PURP)
         ctrl_layout.addWidget(btn_dir)
         ctrl_layout.addSpacing(8)
@@ -108,7 +108,7 @@ class BackupTab:
         state.out = output_text(p)
         page_layout.addWidget(state.out, stretch=1)
         page_layout.addSpacing(10)
-        btn = action_button(p, "💾  Fazer Backup",
+        btn = action_button(p, "disco  Fazer Backup",
                             lambda: self.run_backup(C.BACKUP_FMT_TEXT),
                             C.NEON_PURP)
         page_layout.addWidget(btn)

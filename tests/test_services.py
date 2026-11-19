@@ -1,7 +1,7 @@
 from huawei_manager.services import (
-    SERVICE_REGISTRY,
     DEVICE_CATEGORIES,
     DEVICE_TYPES,
+    SERVICE_REGISTRY,
     execute_service,
     get_all_show_commands,
     get_categories_for,

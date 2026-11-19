@@ -14,7 +14,7 @@ from huawei_manager.widgets.auth_overlay import AuthOverlay
 
 
 class AuthMixin:
-    """Mixin com metodos de autenticacao (admin / tecnico)."""
+    """Mixin com metodos de autenticação (admin / tecnico)."""
 
     # ══════════════════════════════════════════════════════════════════
     #  AUTENTICACAO

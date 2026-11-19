@@ -107,11 +107,12 @@ class ServicesTab:
         state.cat_cb = None
         state.listbox = None
         state.detail_frame = None
+        state.action_bar = None
         state.param_entries.clear()
         state.services.clear()
         state.current_svc = None
         state.form_state = None
-        state.save_chk = None
+        self.state.save_chk = None
 
     # ── Fachadas (usadas pelo shell: F5, Devices, Ctrl+L) ────────────
     def refresh_service_list(self) -> None:
@@ -189,7 +190,7 @@ class ServicesTab:
             return
 
         for svc in services:
-            icon = "⚙" if svc.config_mode else "▶"
+            icon = "configurar" if svc.config_mode else "executar"
             listbox.addItem(f"  {icon} {svc.name}")
 
         # (opção (ii)) Não auto-selecionar: o painel começa vazio;
@@ -290,7 +291,7 @@ class ServicesTab:
         split_layout.addWidget(left)
         split_layout.addSpacing(10)
 
-        # Header com toggle — fica visível sempre; o botão ☰ aparece só
+        # Header com toggle — fica visível sempre; o botão [MENU] aparece só
         # quando o painel está recolhido.
         header_row = QWidget(left)
         header_layout = QHBoxLayout(header_row)
@@ -301,7 +302,7 @@ class ServicesTab:
         header_layout.addWidget(svc_header)
         header_layout.addStretch()
 
-        state.list_toggle = QPushButton("☰", left)
+        state.list_toggle = QPushButton("[MENU]", left)
         state.list_toggle.setFixedSize(24, 24)
         state.list_toggle.setStyleSheet(f"""
             QPushButton {{
@@ -373,6 +374,19 @@ class ServicesTab:
         state.detail_scroll = scroll
         right_layout.addWidget(scroll, stretch=1)
 
+        # Barra de ações fixa (botões EXCUTAR / PRÉ-VISUALIZAR / CONSULTAR /
+        # REVERTER / Salvar / Limpar output). Fica fora do QScrollArea, presa
+        # no rodapé da coluna direita, acima do output. Começa oculta; é
+        # populada e mostrada quando um serviço é selecionado.
+        action_bar = QWidget(right)
+        action_bar.setStyleSheet(f"background: {C.BG_INPUT};")
+        action_bar_layout = QHBoxLayout(action_bar)
+        action_bar_layout.setContentsMargins(0, 4, 0, 4)
+        action_bar_layout.setSpacing(6)
+        right_layout.addWidget(action_bar)
+        state.action_bar = action_bar
+        action_bar.setVisible(False)
+
     # ── Services: seleção / detalhe ──────────────────────────────────
     def _on_svc_cat_changed(self, text: str) -> None:
         self.state.cat_var = text
@@ -393,7 +407,7 @@ class ServicesTab:
     def _set_list_open(self, open_: bool) -> None:
         """Abre ou recolhe a barra esquerda de serviços.
 
-        Recolhida: vira um trilho (~36 px) com só o botão ☰.
+        Recolhida: vira um trilho (~36 px) com só o botão [MENU].
         Aberta: volta aos 240–340 px com header + lista.
         """
         state = self.state
@@ -447,6 +461,20 @@ class ServicesTab:
         self.state.current_svc = None
         self.state.form_state = None
         self.state.save_chk = None
+        self.state.block_internet_btn = None
+        self.state.block_site_btn = None
+
+        # Barra de ações fixa: oculta e limpa quando não há serviço selecionado.
+        abar = self.state.action_bar
+        if abar is not None:
+            abar.setVisible(False)
+            abar_layout = abar.layout()
+            if abar_layout is not None:
+                while abar_layout.count():
+                    item = abar_layout.takeAt(0)
+                    w = item.widget() if item is not None else None
+                    if w is not None:
+                        w.deleteLater()
 
     def _show_service_detail(self, svc: ServiceDef) -> None:
         self._clear_detail_panel()
@@ -460,7 +488,34 @@ class ServicesTab:
 
         title_lbl = QLabel(f"{mode_label}: {svc.name}", p)
         title_lbl.setStyleSheet(_ui.css_label(title_color, C.BG_INPUT, 13, True))
-        p_layout.addWidget(title_lbl, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        if svc.form_kind == "acl":
+            # Cabeçalho com os botões pré-definidos de bloqueio (pedido):
+            # título à esquerda (stretch 2) + botões à direita (stretch 1).
+            header_row = QFrame(p)
+            header_row.setStyleSheet("background: transparent;")
+            hr_layout = QHBoxLayout(header_row)
+            hr_layout.setContentsMargins(0, 0, 0, 0)
+            hr_layout.setSpacing(6)
+            hr_layout.addWidget(
+                title_lbl, stretch=2,
+                alignment=Qt.AlignmentFlag.AlignLeft,
+            )
+            self.state.block_internet_btn = action_button(
+                header_row, "Bloquear Internet",
+                lambda _checked=False: self._h().block_internet(),
+                C.NEON_RED,
+            )
+            self.state.block_site_btn = action_button(
+                header_row, "Bloquear site",
+                lambda _checked=False: self._h().block_site(),
+                C.NEON_AMBER,
+            )
+            hr_layout.addWidget(self.state.block_internet_btn, stretch=1)
+            hr_layout.addWidget(self.state.block_site_btn, stretch=1)
+            p_layout.addWidget(header_row)
+        else:
+            p_layout.addWidget(title_lbl, alignment=Qt.AlignmentFlag.AlignLeft)
         p_layout.addSpacing(4)
 
         cat_lbl = QLabel(f"Categoria: {svc.category}", p)
@@ -486,32 +541,41 @@ class ServicesTab:
             else:
                 self._build_param_fields(p, svc)
 
-        abar = QWidget(p)
-        abar_layout = QHBoxLayout(abar)
-        abar_layout.setContentsMargins(0, 0, 0, 0)
-        p_layout.addWidget(abar)
-        p_layout.addSpacing(4)
+        # Barra de ações fixa (fora do QScrollArea). Limpa widgets anteriores
+        # (troca de serviço) e reconstrói com os callbacks deste serviço.
+        abar = self.state.action_bar
+        if abar is None:
+            return
+        abar_layout = abar.layout()
+        if abar_layout is None or not isinstance(abar_layout, QHBoxLayout):
+            return
+        # Remove widgets anteriores (ex.: save_chk de serviço anterior).
+        while abar_layout.count():
+            item = abar_layout.takeAt(0)
+            w = item.widget() if item is not None else None
+            if w is not None:
+                w.deleteLater()
 
         # NOTA: ``QPushButton.clicked`` emite ``checked: bool`` — o callback
         # precisa absorver esse argumento, senão o ``bool`` sobrescreve o
         # default ``s=svc`` e o handler recebe ``False`` (AttributeError
         # engolido pelo Qt → botão "morto").
         btn_svc_exec = action_button(
-            abar, f"▶ {mode_label}",
+            abar, f"executar {mode_label}",
             lambda _checked=False, s=svc: self._h().run_service(s),
             C.NEON_CYAN,
         )
         abar_layout.addWidget(btn_svc_exec)
         if svc.form_kind:
             btn_preview = action_button(
-                abar, "👁  Pré-visualizar",
+                abar, "visualizar  Pré-visualizar",
                 lambda _checked=False, s=svc: self._h().preview_form(s),
                 C.NEON_AMBER,
             )
             abar_layout.addWidget(btn_preview)
             abar_layout.addSpacing(6)
             btn_consult = action_button(
-                abar, "🔎  Consultar",
+                abar, "consultar  Consultar",
                 lambda _checked=False, s=svc: self._h().consult_form(s),
                 C.NEON_CYAN,
             )
@@ -524,24 +588,25 @@ class ServicesTab:
             )
             abar_layout.addWidget(btn_rollback)
             abar_layout.addSpacing(12)
-            state = self.state
-            state.save_chk = QCheckBox(
+            self.state.save_chk = QCheckBox(
                 "Salvar na startup-config (save)", abar)
-            state.save_chk.setChecked(False)
-            state.save_chk.setToolTip(
+            self.state.save_chk.setChecked(False)
+            self.state.save_chk.setToolTip(
                 "Desmarcado: a configuração fica apenas no running-config. "
                 "Marcado: também é persistida (save all virtual-systems na "
                 "VRP8, save nas demais)."
             )
-            state.save_chk.setStyleSheet(
+            self.state.save_chk.setStyleSheet(
                 _ui.css_label(C.FG_DIM, C.BG_INPUT, 10))
-            abar_layout.addWidget(state.save_chk)
+            abar_layout.addWidget(self.state.save_chk)
         abar_layout.addSpacing(6)
         abar_layout.addStretch()
-        btn_svc_clr = action_button(abar, "✖  Limpar output",
+        btn_svc_clr = action_button(abar, "limpar  Limpar output",
                                     self._clear_output,
                                     C.NEON_PURP)
         abar_layout.addWidget(btn_svc_clr)
+
+        abar.setVisible(True)
 
     def _build_composite_form(self, parent: QWidget, svc: ServiceDef) -> None:
         """Constrói o formulário composto (ACL, rota estática) do serviço."""
@@ -602,10 +667,10 @@ class ServicesTab:
         try:
             rendered = render_form(svc.form_kind or "", form.values())
         except SdnValidationError as err:
-            preview.setPlainText(f"⚠  {err}")
+            preview.setPlainText(f"aviso  {err}")
             return
         except (KeyError, TypeError, ValueError) as err:
-            preview.setPlainText(f"⚠  Formulário inconsistente: {err}")
+            preview.setPlainText(f"aviso  Formulário inconsistente: {err}")
             return
         preview.setPlainText("\n".join(rendered.lines))
 

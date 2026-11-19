@@ -16,10 +16,15 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-from PySide6.QtCore import QPoint, QEvent
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QEnterEvent
-from PySide6.QtWidgets import QApplication, QListWidget, QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout
+from PySide6.QtWidgets import (
+    QApplication,
+    QListWidget,
+    QPushButton,
+    QSizePolicy,
+    QWidget,
+)
 
 from huawei_manager.tabs._contract import TabContext
 from huawei_manager.tabs.services.page import ServicesTab
@@ -244,18 +249,68 @@ class TestOutputFixedHeight:
 
 
 class TestActionBarFixed:
-    """A barra de ações fica fixa no rodapé da coluna direita."""
+    """A barra de ações fica fixa no rodapé da coluna direita (não rola com o formulário)."""
 
-    def test_action_bar_is_fixed_height(self, qtbot):
+    def test_action_bar_exists_outside_scroll_area(self, qtbot):
         ctx = _fake_ctx()
         tab, widget = _build(qtbot, ctx, svc_id="svc-acl")
 
-        # Encontra o widget da barra de ações (o QHBoxLayout com os botões).
-        # Não testa diretamente a altura — verifica que os botões existem
-        # e o detail_frame está dentro de um QScrollArea.
         assert tab.state.current_svc is not None
+        # A barra de ações deve existir como container próprio.
+        assert tab.state.action_bar is not None
+
+        # A barra NÃO é descendente do detail_frame (conteúdo rolável).
+        assert tab.state.action_bar.parentWidget() is not None
+        assert tab.state.action_bar.parentWidget() is not tab.state.detail_frame
+        assert tab.state.action_bar.parentWidget() is not tab.state.detail_scroll
+
+        # A barra é filha da coluna direita, irmão do QScrollArea.
+        right = tab.state.detail_scroll.parentWidget()
+        assert tab.state.action_bar.parentWidget() is right
+
+        # Os botões continuam visíveis.
         btn_exec = _button(widget, "Configurando")
         assert btn_exec.isVisible()
+
+    def test_action_bar_is_below_scroll_in_column(self, qtbot):
+        """A barra de ações vem depois do QScrollArea no layout da coluna."""
+        ctx = _fake_ctx()
+        tab, widget = _build(qtbot, ctx, svc_id="svc-acl")
+
+        right = tab.state.detail_scroll.parentWidget()
+        children = right.findChildren(QWidget, options=Qt.FindDirectChildrenOnly)
+        # A action_bar deve estar entre os filhos diretos da coluna direita.
+        assert tab.state.action_bar in children
+
+        # O scroll ocupa espaço expansível (stretch=1); a barra não.
+        scroll_policy = tab.state.detail_scroll.sizePolicy()
+        assert scroll_policy.verticalPolicy() == QSizePolicy.Policy.Expanding
+
+    def test_action_bar_buttons_visible_after_service_select(self, qtbot):
+        ctx = _fake_ctx()
+        tab, widget = _build(qtbot, ctx, svc_id="svc-acl")
+
+        # Sem serviço selecionado: barra existe mas está vazia/oculta.
+        assert tab.state.action_bar is not None
+
+        btn_exec = _button(widget, "Configurando")
+        assert btn_exec.isVisible()
+
+    def test_action_bar_buttons_not_descendants_of_detail_frame(self, qtbot):
+        """Garantia de que os botões não rolam junto com o formulário."""
+        ctx = _fake_ctx()
+        tab, widget = _build(qtbot, ctx, svc_id="svc-acl")
+
+        detail_children = tab.state.detail_frame.findChildren(QPushButton)
+        # Nenhum botão de ação está dentro do detail_frame rolável.
+        for btn in detail_children:
+            assert btn.text() not in (
+                "executar Configurando",
+                "visualizar  Pré-visualizar",
+                "consultar  Consultar",
+                "↩  Reverter (rollback)",
+                "limpar  Limpar output",
+            )
 
 
 class TestDetailScrollArea:
@@ -299,3 +354,73 @@ class TestTrafficPolicyLabelsWithoutExamples:
         assert any("Classificador" in t and "nome" in t for t in labels), labels
         assert any("Behavior" in t and "nome" in t for t in labels), labels
         assert any("Policy" in t and "nome" in t for t in labels), labels
+
+
+class TestBlockHeaderButtons:
+    """Botões pré-definidos no cabeçalho do detalhe da ACL.
+
+    Pedido: os dois botões ficam na linha do título
+    "Configurando: ACL (Criação e Aplicação)", alinhados à direita
+    (stretch 2:1), **sem** alterar a renderização/aplicação da ACL.
+    """
+
+    def test_block_buttons_present_on_acl_service(self, qtbot):
+        ctx = _fake_ctx()
+        tab, widget = _build(qtbot, ctx, svc_id="svc-acl")
+
+        internet = _button(widget, "Bloquear Internet")
+        site = _button(widget, "Bloquear site")
+
+        # Fazem parte do conteúdo do detalhe (rolável), não da barra fixa.
+        assert internet in tab.state.detail_frame.findChildren(QPushButton)
+        assert site in tab.state.detail_frame.findChildren(QPushButton)
+        assert internet not in tab.state.action_bar.findChildren(QPushButton)
+        assert site not in tab.state.action_bar.findChildren(QPushButton)
+
+        # Guardados no estado para o wiring dos handlers.
+        assert tab.state.block_internet_btn is internet
+        assert tab.state.block_site_btn is site
+
+    def test_block_buttons_absent_on_other_services(self, qtbot):
+        """Só o serviço de ACL (form_kind='acl') exibe os botões."""
+        ctx = _fake_ctx()
+        tab, widget = _build(qtbot, ctx, svc_id="svc-static-route")
+
+        texts = [b.text() for b in widget.findChildren(QPushButton)]
+        assert not any("Bloquear Internet" in t for t in texts), texts
+        assert not any("Bloquear site" in t for t in texts), texts
+        assert tab.state.block_internet_btn is None
+        assert tab.state.block_site_btn is None
+
+    def test_block_buttons_in_title_row_with_stretch(self, qtbot):
+        """Título + botões na mesma linha horizontal (título 2 : botões 1)."""
+        ctx = _fake_ctx()
+        tab, widget = _build(qtbot, ctx, svc_id="svc-acl")
+
+        internet = tab.state.block_internet_btn
+        assert internet is not None
+        row = internet.parentWidget()
+        assert row is not None
+
+        layout = row.layout()
+        assert layout is not None
+        # A linha contém o título e os dois botões.
+        texts: list[str] = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            w = item.widget()
+            if w is not None:
+                texts.append(w.text())
+        assert any("Configurando: ACL" in t for t in texts), texts
+        assert any("Bloquear Internet" in t for t in texts), texts
+        assert any("Bloquear site" in t for t in texts), texts
+
+    def test_block_buttons_cleared_on_service_change(self, qtbot):
+        """Trocar de serviço limpa os botões do estado (dispose/clear)."""
+        ctx = _fake_ctx()
+        tab, widget = _build(qtbot, ctx, svc_id="svc-acl")
+        assert tab.state.block_internet_btn is not None
+
+        tab._clear_detail_panel()
+        assert tab.state.block_internet_btn is None
+        assert tab.state.block_site_btn is None

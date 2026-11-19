@@ -15,7 +15,6 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtWidgets import QLabel, QMessageBox, QPlainTextEdit, QPushButton
 
-from huawei_manager.services import get_service_by_id
 from huawei_manager.tabs._contract import TabContext
 from huawei_manager.tabs.services.page import ServicesTab
 
@@ -309,7 +308,7 @@ class TestLivePreview:
         # ACL sem número → erro de validação visível na pré-visualização.
         tab.state.form_state.set_value("identificacao", "acl_type", "avancada")
 
-        assert "⚠" in self._preview(widget).toPlainText()
+        assert "aviso" in self._preview(widget).toPlainText()
 
 
 class TestTrafficPolicyHint:

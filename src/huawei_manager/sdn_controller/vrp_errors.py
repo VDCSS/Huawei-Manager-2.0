@@ -145,7 +145,7 @@ def format_vrp_errors(errors: Sequence[VRPCommandError]) -> str:
         if err.command and hint_for_command(err.command)
     }
     for hint in sorted(hints):
-        lines.append(f"💡 {hint}")
+        lines.append(f"dica {hint}")
     return "\n".join(lines)
 
 

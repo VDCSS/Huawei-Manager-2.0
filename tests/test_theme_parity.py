@@ -138,11 +138,13 @@ class TestFocusRules:
 
 class TestTemplatesAccessible:
     def test_cmd_templates_use_qlistwidget(self):
+        from unittest.mock import MagicMock
+
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QListWidget
+
         from huawei_manager.tabs._contract import TabContext
         from huawei_manager.tabs.cmd import CmdTab
-        from PySide6.QtWidgets import QListWidget
-        from PySide6.QtCore import Qt
-        from unittest.mock import MagicMock
         QApplication.instance() or QApplication([])
         ctx = TabContext(
             sb=MagicMock(), audit=None, event_bus=MagicMock(),

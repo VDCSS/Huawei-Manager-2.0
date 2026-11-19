@@ -25,12 +25,12 @@ class SopsBackend(SecretsBackend):
         self._secret_file = secret_file or _default_secret_file()
         if not self._secret_file.exists():
             raise RuntimeError(
-                f"Arquivo {self._secret_file.name} nao encontrado em "
+                f"Arquivo {self._secret_file.name} não encontrado em "
                 f"{self._secret_file.parent}.\n"
                 "Crie com: make encrypt-sops\n"
                 "  (sops --encrypt --input-type dotenv --output-type yaml "
                 "~/.config/huawei-manager/.env > secrets.enc.yaml)\n"
-                "O --output-type yaml e obrigatorio: este backend faz "
+                "O --output-type yaml e obrigatório: este backend faz "
                 "yaml.safe_load() no output.\n"
                 "Requer: sops CLI + chave age (SOPS_AGE_KEY_FILE)"
             )

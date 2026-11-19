@@ -76,9 +76,9 @@ class HomeTab:
             card_layout.addSpacing(4)
             return lbl
 
-        # Card: Conexao
+        # Card: Conexão
         card1, card1_layout = _make_card(row1)
-        _card_title(card1, card1_layout, "🔌 CONEXAO", C.NEON_CYAN)
+        _card_title(card1, card1_layout, "[GIRAR11] CONEXAO", C.NEON_CYAN)
         row1_layout.addWidget(card1)
 
         state.conn_status = QLabel("Desconectado", card1)
@@ -94,7 +94,7 @@ class HomeTab:
 
         # Card: Devices
         card2, card2_layout = _make_card(row1)
-        _card_title(card2, card2_layout, "📡 DISPOSITIVOS", C.NEON_MAG)
+        _card_title(card2, card2_layout, "sinal DISPOSITIVOS", C.NEON_MAG)
         row1_layout.addWidget(card2)
 
         state.device_online = QLabel("Online: 0", card2)
@@ -112,7 +112,7 @@ class HomeTab:
 
         # Card: Ultimas Operacoes
         card3, card3_layout = _make_card(row1)
-        _card_title(card3, card3_layout, "📋 ULTIMAS OPERACOES", C.NEON_AMBER)
+        _card_title(card3, card3_layout, "clipboard ULTIMAS OPERACOES", C.NEON_AMBER)
         row1_layout.addWidget(card3)
 
         state.audit_text = QTextEdit(card3)
@@ -143,9 +143,9 @@ class HomeTab:
         card4_layout.addWidget(bar)
 
         state.shortcut_btns = {
-            "config": "  📋 Config  ",
-            "route":  "  🌐 Rotas   ",
-            "backup": "  💾 Backup  ",
+            "config": "  clipboard Config  ",
+            "route":  "  mundo Rotas   ",
+            "backup": "  disco Backup  ",
             "cmd":    "  ⌨  Editor  ",
         }
         for key, label in state.shortcut_btns.items():

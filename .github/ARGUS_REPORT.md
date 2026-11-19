@@ -1,4 +1,4 @@
-# 🦅 Argus — Quality Gate Report
+# [FURTA-LUZ] Argus — Quality Gate Report
 
 **Data:** 2026-07-14
 **Trigger:** `/argus` manual
@@ -6,7 +6,7 @@
 
 ---
 
-## 🏹 Artemis — Testes Rápidos
+## [ARCO] Artemis — Testes Rápidos
 
 | Check | Result | Detail |
 |-------|--------|--------|
@@ -16,19 +16,19 @@
 
 ---
 
-## 🦉 Athena — Review do Diff
+## [CORUJA3] Athena — Review do Diff
 
-### 🛡️ Metas (Objetivos do Cleanup)
+### [ESCUDO] Metas (Objetivos do Cleanup)
 
 | Objetivo | Status | Observação |
 |----------|--------|------------|
-| Remover modularizar handlers.py (809 LOC) | ✅ | 7 módulos em handlers/ (max 300 LOC) |
-| Extrair threading de app.py (717 LOC) | ✅ | app_threading.py (69 LOC), app.py (660 LOC) |
-| Mover _EXCLUDED_CMDS para constants.py | ✅ | BUILTIN_CMDS em constants.py |
-| Separar vnf_models.py (273 LOC) | ✅ | 4 módulos (model, crypto, probe, inventory) |
-| Remover pyright suppress global | ✅ | 0 errors, exit 0 |
+| Remover modularizar handlers.py (809 LOC) | IMG_OK | 7 módulos em handlers/ (max 300 LOC) |
+| Extrair threading de app.py (717 LOC) | IMG_OK | app_threading.py (69 LOC), app.py (660 LOC) |
+| Mover _EXCLUDED_CMDS para constants.py | IMG_OK | BUILTIN_CMDS em constants.py |
+| Separar vnf_models.py (273 LOC) | IMG_OK | 4 módulos (model, crypto, probe, inventory) |
+| Remover pyright suppress global | IMG_OK | 0 errors, exit 0 |
 
-### 📐 Qualidade
+### [TRIANGULO3] Qualidade
 
 | Aspecto | Verdict | Notas |
 |---------|---------|-------|
@@ -42,7 +42,7 @@
 | Pre-existing: pyright 8 errors | **WARN** | test_authz.py passa float para timeout_secs: int — preexistente, nunca verificado antes |
 | Pre-existing: mixin warnings | **WARN** | 300 reportAttributeAccessIssue — inerente ao padrão mixin, exit 0 |
 
-### 🔒 Segurança
+### [TRAVA3] Segurança
 
 | Aspecto | Verdict | Notas |
 |---------|---------|-------|
@@ -52,7 +52,7 @@
 
 ---
 
-## 💀 Hades — Crash Check
+## [CALAVERA] Hades — Crash Check
 
 | Check | Result | Detail |
 |-------|--------|--------|
@@ -62,12 +62,12 @@
 
 ---
 
-## 🚫 Bloqueios
+## IMG_PROIBIDO Bloqueios
 
 Nenhum.
 
 ---
 
-## ✅ Verdict: **PASS**
+## IMG_OK Verdict: **PASS**
 
 Implementação limpa e segura para fazer merge.

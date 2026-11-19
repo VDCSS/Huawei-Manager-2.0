@@ -219,10 +219,22 @@ class DeviceDialog(QDialog):
         port_text = self._form_fields["port"].text().strip()
         try:
             port_val = int(port_text) if port_text else 22
-            if not (1 <= port_val <= 65535):
-                port_val = 22
         except ValueError:
-            port_val = 22
+            self._form_fields["port"].setFocus()
+            self._form_fields["port"].setStyleSheet(
+                f"background: {C.BG_INPUT}; color: {C.NEON_RED}; "
+                f"border: 1px solid {C.NEON_RED}; border-radius: 3px; "
+                f"padding: 4px 8px; font: 12px {C.FONT_UI_FAMILY};"
+            )
+            return
+        if not (1 <= port_val <= 65535):
+            self._form_fields["port"].setFocus()
+            self._form_fields["port"].setStyleSheet(
+                f"background: {C.BG_INPUT}; color: {C.NEON_RED}; "
+                f"border: 1px solid {C.NEON_RED}; border-radius: 3px; "
+                f"padding: 4px 8px; font: 12px {C.FONT_UI_FAMILY};"
+            )
+            return
 
         self._port_val = port_val
         self.accept()

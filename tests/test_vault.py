@@ -143,7 +143,7 @@ class TestCryptoEnvBackend:
 class TestSopsBackend:
     def test_no_secret_file_raises(self, tmp_path):
         """Arquivo inexistente (path explícito) → RuntimeError antes do subprocess."""
-        with pytest.raises(RuntimeError, match="nao encontrado"):
+        with pytest.raises(RuntimeError, match="não encontrado"):
             SopsBackend(secret_file=tmp_path / "nao_existe.yaml")
 
     def test_default_path_is_repo_root_not_cwd(self, tmp_path, monkeypatch):

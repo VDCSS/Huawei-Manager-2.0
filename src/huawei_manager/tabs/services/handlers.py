@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.basic_config.vrp_version import VrpVersion, detect_vrp_version
 from huawei_manager.command import ConfigCommand, audit_config_op
 from huawei_manager.exceptions import SdnError, SdnValidationError, SnapshotError
+from huawei_manager.sdn_controller.authz import role_meets
 from huawei_manager.sdn_controller.event_queue import Event, EventType
 from huawei_manager.sdn_controller.events import CommandExecutedPayload
 from huawei_manager.sdn_controller.napalm_backend import (
@@ -25,6 +28,22 @@ from huawei_manager.sdn_controller.napalm_backend import (
 )
 from huawei_manager.sdn_controller.validator import _DEFAULT_DENY_PATTERNS
 from huawei_manager.services import ServiceDef, execute_service
+from huawei_manager.services.acl_presets import (
+    AclBlockProfile,
+    delete_profile,
+    device_key,
+    load_profile,
+    save_profile,
+)
+from huawei_manager.services.block_cli import (
+    absence_check,
+    anchors_for,
+    preview_lines,
+    preview_site_lines,
+    rollback_for,
+    site_anchors,
+    site_rollback,
+)
 from huawei_manager.services.device_precheck import (
     interfaces_in_block,
     missing_interfaces,
@@ -39,6 +58,12 @@ from huawei_manager.services.form_spec import RenderedForm
 from huawei_manager.services.ui_bridge import ask_from_worker
 from huawei_manager.tabs import _ui
 from huawei_manager.utils import sanitize_command
+from huawei_manager.widgets.block_dialog import (
+    BlockInternetDecision,
+    BlockInternetDialog,
+    BlockSiteDecision,
+    BlockSiteDialog,
+)
 
 if TYPE_CHECKING:
     from huawei_manager.tabs._contract import TabContext
@@ -160,7 +185,7 @@ class ServicesHandlers:
         if svc.config_mode and not self._ctx.require_access("admin"):
             _ui.write(
                 self._state.output,
-                "✘  Permissão negada: configuração de dispositivo exige papel admin.",
+                "x  Permissão negada: configuração de dispositivo exige papel admin.",
                 self._ctx.dispatch,
             )
             return
@@ -169,7 +194,7 @@ class ServicesHandlers:
         if mode == "napalm" and svc.config_mode:
             _ui.write(
                 self._state.output,
-                "✘  Modo NAPALM não suporta aplicação de blocos VRP neste serviço. Alterne para o modo CLI/SSH padrão.",
+                "x  Modo NAPALM não suporta blocos VRP. Use CLI/SSH padrão.",
                 self._ctx.dispatch,
             )
             return
@@ -204,7 +229,7 @@ class ServicesHandlers:
                 except SdnValidationError as err:
                     _ui.write(
                         self._state.output,
-                        f"✘  Parâmetro inválido: {err}",
+                        f"x  Parâmetro inválido: {err}",
                         self._ctx.dispatch,
                     )
                     return
@@ -230,7 +255,7 @@ class ServicesHandlers:
                 if len(placeholders) != len(entries):
                     _ui.write(
                         self._state.output,
-                        "✘  Servico inconsistente: "
+                        "x  Servico inconsistente: "
                         f"{len(placeholders)} placeholder(s) para {len(entries)} "
                         "campo(s). Nada foi executado.",
                         self._ctx.dispatch)
@@ -240,7 +265,7 @@ class ServicesHandlers:
                     if _REJECT_PARAM.search(val):
                         _ui.write(
                             self._state.output,
-                            f"✘  Parametro '{placeholder}' contem caracteres "
+                            f"x  Parametro '{placeholder}' contem caracteres "
                             "invalidos (& ; | ` $ ( ) { }).",
                             self._ctx.dispatch)
                         return
@@ -256,7 +281,7 @@ class ServicesHandlers:
         if rejected:
             for cmd, reason in rejected:
                 _ui.write(self._state.output,
-                          f"✘  Comando bloqueado ({reason}): {cmd}",
+                          f"x  Comando bloqueado ({reason}): {cmd}",
                           self._ctx.dispatch)
             logger = self._ctx.audit
             if logger is not None:
@@ -295,7 +320,7 @@ class ServicesHandlers:
 
             if not self._ctx.sb.is_alive():
                 _ui.write(self._state.output,
-                          "✘  Sem sessao SSH ativa. Conecte-se primeiro.",
+                          "x  Sem sessao SSH ativa. Conecte-se primeiro.",
                           self._ctx.dispatch)
                 return
 
@@ -353,7 +378,7 @@ class ServicesHandlers:
                     except SnapshotError as exc:
                         self._ctx.sb.invalidate_connection()
                         _ui.write(self._state.output,
-                                  f"✘  {exc} — nada foi aplicado.",
+                                  f"x  {exc} — nada foi aplicado.",
                                   self._ctx.dispatch)
                         audit_config_op(
                             audit, op="config_apply", user=user, host=host,
@@ -368,7 +393,7 @@ class ServicesHandlers:
                         self._ctx.sb.invalidate_connection()
                         self._state.last_config_command = service_cmd
                         _ui.write(self._state.output,
-                                  f"✘  Falha SSH: {exc}",
+                                  f"x  Falha SSH: {exc}",
                                   self._ctx.dispatch)
                         audit_config_op(
                             audit, op="config_apply", user=user, host=host,
@@ -437,13 +462,13 @@ class ServicesHandlers:
         if not command:
             _ui.write(
                 self._state.output,
-                f"✘  '{svc.name}' não possui comando de consulta.",
+                f"x  '{svc.name}' não possui comando de consulta.",
                 self._ctx.dispatch,
             )
             return
         if not self._ctx.sb.is_alive():
             _ui.write(self._state.output,
-                      "✘  Sem sessao SSH ativa. Conecte-se primeiro.",
+                      "x  Sem sessao SSH ativa. Conecte-se primeiro.",
                       self._ctx.dispatch)
             return
 
@@ -454,7 +479,7 @@ class ServicesHandlers:
                 output = self._ctx.sb.send_command(command)
             except SdnError as exc:
                 _ui.write(self._state.output,
-                          f"✘  Falha na consulta: {exc}",
+                          f"x  Falha na consulta: {exc}",
                           self._ctx.dispatch)
                 return
             _ui.write(
@@ -471,7 +496,7 @@ class ServicesHandlers:
         if form is None:
             _ui.write(
                 self._state.output,
-                "✘  Formulário indisponível — selecione o serviço novamente.",
+                "x  Formulário indisponível — selecione o serviço novamente.",
                 self._ctx.dispatch,
             )
             return None
@@ -480,7 +505,7 @@ class ServicesHandlers:
         except SdnValidationError as err:
             _ui.write(
                 self._state.output,
-                f"✘  Formulário inválido: {err}",
+                f"x  Formulário inválido: {err}",
                 self._ctx.dispatch,
             )
             return None
@@ -498,7 +523,7 @@ class ServicesHandlers:
         if denied:
             _ui.write(
                 self._state.output,
-                "✘  Comando bloqueado pela política de segurança:\n"
+                "x  Comando bloqueado pela política de segurança:\n"
                 + "\n".join(denied)
                 + "\nNada foi aplicado ao dispositivo.",
                 self._ctx.dispatch,
@@ -540,7 +565,7 @@ class ServicesHandlers:
 
         if not self._ctx.sb.is_alive():
             _ui.write(self._state.output,
-                      "✘  Sem sessao SSH ativa. Conecte-se primeiro.",
+                      "x  Sem sessao SSH ativa. Conecte-se primeiro.",
                       self._ctx.dispatch)
             return
 
@@ -596,7 +621,7 @@ class ServicesHandlers:
             except SdnError as exc:
                 _ui.write(
                     self._state.output,
-                    f"✘  Falha ao ler o running-config: {exc} — "
+                    f"x  Falha ao ler o running-config: {exc} — "
                     "nada foi aplicado.",
                     self._ctx.dispatch,
                 )
@@ -612,7 +637,7 @@ class ServicesHandlers:
             if missing:
                 _ui.write(
                     self._state.output,
-                    "✘  Interface(s) inexistente(s) no device: "
+                    "x  Interface(s) inexistente(s) no device: "
                     + ", ".join(missing)
                     + "\nVerifique o nome exato em 'display interface brief'."
                     + "\nNada foi aplicado ao dispositivo.",
@@ -660,7 +685,7 @@ class ServicesHandlers:
         except SnapshotError as exc:
             self._ctx.sb.invalidate_connection()
             _ui.write(self._state.output,
-                      f"✘  {exc} — nada foi aplicado.",
+                      f"x  {exc} — nada foi aplicado.",
                       self._ctx.dispatch)
             audit_config_op(
                 audit, op="config_apply", user=user, host=host,
@@ -674,7 +699,7 @@ class ServicesHandlers:
             self._ctx.sb.invalidate_connection()
             self._state.last_config_command = service_cmd
             _ui.write(self._state.output,
-                      f"✘  Falha SSH: {exc}",
+                      f"x  Falha SSH: {exc}",
                       self._ctx.dispatch)
             audit_config_op(
                 audit, op="config_apply", user=user, host=host,
@@ -724,6 +749,487 @@ class ServicesHandlers:
                 },
             )))
 
+    # ── Feature "Bloquear Internet" (botão pré-definido da ACL) ──────
+
+    def block_internet(self) -> None:
+        """Abre o modal "Bloquear Internet" e executa a decisão.
+
+        Fluxo: perfil por device (D2) → estado do binding detectado no
+        device (ou cache com aviso de estado estimado) → modal com
+        revisão obrigatória (D4) → execução com snapshot/verify/rollback.
+        Persistência **somente** com ``result.ok`` + save marcado + papel
+        admin (D3/D6).
+        """
+        svc = self._state.current_svc
+        if svc is None or svc.form_kind != "acl":
+            _ui.write(
+                self._state.output,
+                "x  Bloquear Internet disponível apenas no serviço de ACL.",
+                self._ctx.dispatch,
+            )
+            return
+        if not self._ctx.require_access("admin"):
+            _ui.write(
+                self._state.output,
+                "x  Permissão negada: configuração de dispositivo exige "
+                "papel admin.",
+                self._ctx.dispatch,
+            )
+            return
+        mode = self._ctx.svc_mode()
+        if mode == "napalm":
+            _ui.write(
+                self._state.output,
+                "x  Modo NAPALM não suporta aplicação de blocos VRP neste "
+                "serviço. Alterne para o modo CLI/SSH padrão.",
+                self._ctx.dispatch,
+            )
+            return
+
+        device = self._ctx.device()
+        if device is None:
+            _ui.write(self._state.output,
+                      "x  Nenhum device selecionado.",
+                      self._ctx.dispatch)
+            return
+        key = device_key(str(device.name), str(device.host))
+        try:
+            profile = load_profile(None, key)
+        except SdnValidationError as exc:
+            _ui.write(self._state.output, f"x  {exc} — nada foi aplicado.",
+                      self._ctx.dispatch)
+            return
+
+        applied, source = self._detect_applied(profile)
+        dialog = BlockInternetDialog(
+            profile=profile,
+            applied=applied,
+            applied_source=source,
+            can_save=role_meets(self._ctx.role(), "admin"),
+        )
+        dialog.set_device_key(key)
+        if not dialog.exec():
+            _ui.write(self._state.output, "Operação cancelada pelo usuário.",
+                      self._ctx.dispatch)
+            return
+        decision = dialog.get_decision()
+
+        if not self._ctx.sb.is_alive():
+            _ui.write(self._state.output,
+                      "x  Sem sessao SSH ativa. Conecte-se primeiro.",
+                      self._ctx.dispatch)
+            return
+        if self._ctx.ensure_device_ready("aplicar o bloqueio") is None:
+            return
+        self._ctx.spawn_io(lambda: self._run_block(decision))
+
+    def block_site(self) -> None:
+        """Abre o modal "Bloquear site" e executa a decisão.
+
+        Fluxo B: estratégia → destinos → aplicação → **revisão
+        obrigatória** (D4) → execução com snapshot/verify/rollback.
+        Save somente com ``result.ok`` + save marcado + papel admin
+        (D3/D6); sem JSON de perfil (D2 é exclusivo do Bloquear
+        Internet).
+        """
+        svc = self._state.current_svc
+        if svc is None or svc.form_kind != "acl":
+            _ui.write(
+                self._state.output,
+                "x  Bloquear site disponível apenas no serviço de ACL.",
+                self._ctx.dispatch,
+            )
+            return
+        if not self._ctx.require_access("admin"):
+            _ui.write(
+                self._state.output,
+                "x  Permissão negada: configuração de dispositivo exige "
+                "papel admin.",
+                self._ctx.dispatch,
+            )
+            return
+        mode = self._ctx.svc_mode()
+        if mode == "napalm":
+            _ui.write(
+                self._state.output,
+                "x  Modo NAPALM não suporta aplicação de blocos VRP neste "
+                "serviço. Alterne para o modo CLI/SSH padrão.",
+                self._ctx.dispatch,
+            )
+            return
+
+        dialog = BlockSiteDialog(
+            can_save=role_meets(self._ctx.role(), "admin"),
+        )
+        if not dialog.exec():
+            _ui.write(self._state.output, "Operação cancelada pelo usuário.",
+                      self._ctx.dispatch)
+            return
+        decision = dialog.get_decision()
+
+        if not self._ctx.sb.is_alive():
+            _ui.write(self._state.output,
+                      "x  Sem sessao SSH ativa. Conecte-se primeiro.",
+                      self._ctx.dispatch)
+            return
+        if self._ctx.ensure_device_ready("aplicar o bloqueio") is None:
+            return
+        self._ctx.spawn_io(lambda: self._run_block_site(decision))
+
+    def _detect_applied(
+        self, profile: AclBlockProfile | None
+    ) -> tuple[bool, str]:
+        """Binding na interface: consulta real ou cache do JSON.
+
+        Returns:
+            ``(applied, fonte)`` — ``"device"`` = verificado no
+            running-config; ``"cache"`` = MOCK/offline (estado estimado
+            a partir do campo ``applied`` do perfil, exibido com aviso).
+        """
+        if profile is None:
+            return False, "cache"
+        if not self._ctx.sb.is_alive():
+            return bool(profile.applied), "cache"
+        try:
+            running = self._ctx.sb.send_command("display current-configuration")
+        except SdnError:
+            return bool(profile.applied), "cache"
+        missing = check_anchors(running, anchors_for(profile, "apply"))
+        return (not missing), "device"
+
+    def _run_block(self, decision: BlockInternetDecision) -> None:
+        """Executa a decisão do modal Bloquear Internet (thread de IO).
+
+        Calcula o bloco e as funções de verificação/rollback da ação e
+        delega ao motor compartilhado :meth:`_execute_block`.
+        """
+        action = decision.action
+        profile = decision.profile
+        try:
+            lines = preview_lines(profile, action)
+        except SdnValidationError as exc:
+            _ui.write(self._state.output, f"x  {exc}",
+                      self._ctx.dispatch)
+            return
+
+        def verify_fn() -> tuple[bool, str]:
+            try:
+                running = self._ctx.sb.send_command(
+                    "display current-configuration")
+            except SdnError as exc:
+                return False, f"falha ao ler o running-config: {exc}"
+            if action == "apply":
+                absent = check_anchors(
+                    running, anchors_for(profile, "apply"))
+                if absent:
+                    return False, (
+                        "linha(s) não encontrada(s) no running-config: "
+                        + "; ".join(absent[:5])
+                    )
+                return True, "configuração confirmada no running-config"
+            lingering = [
+                a for a in absence_check(profile, action) if a in running
+            ]
+            if lingering:
+                return False, (
+                    "linha(s) ainda presente(s) no running-config: "
+                    + "; ".join(lingering)
+                )
+            return True, "remoção confirmada no running-config"
+
+        self._execute_block(
+            lines=lines,
+            block_action=action,
+            progress=f"Aplicando bloqueio ({action})…",
+            verify_fn=verify_fn,
+            rollback_fn=lambda _snapshot: rollback_for(profile, action),
+            save=decision.save,
+            persist_fn=lambda pre_state: self._persist_block(
+                action, profile, pre_state),
+            event_command=f"Bloquear Internet ({action})",
+        )
+
+    def _run_block_site(self, decision: BlockSiteDecision) -> None:
+        """Executa a decisão do modal Bloquear site (thread de IO).
+
+        Sem JSON de perfil (D2 é exclusivo do Bloquear Internet): o save
+        D3 persiste apenas na startup-config.
+        """
+        try:
+            lines = preview_site_lines(
+                strategy=decision.strategy,
+                acl_number=decision.acl_number,
+                interface=decision.interface,
+                direction=decision.direction,
+                resolved=decision.resolved,
+            )
+            anchors = site_anchors(
+                strategy=decision.strategy,
+                acl_number=decision.acl_number,
+                interface=decision.interface,
+                direction=decision.direction,
+                resolved=decision.resolved,
+            )
+        except SdnValidationError as exc:
+            _ui.write(self._state.output, f"x  {exc}",
+                      self._ctx.dispatch)
+            return
+
+        def verify_fn() -> tuple[bool, str]:
+            try:
+                running = self._ctx.sb.send_command(
+                    "display current-configuration")
+            except SdnError as exc:
+                return False, f"falha ao ler o running-config: {exc}"
+            absent = check_anchors(running, anchors)
+            if absent:
+                return False, (
+                    "linha(s) não encontrada(s) no running-config: "
+                    + "; ".join(absent[:5])
+                )
+            return True, "configuração confirmada no running-config"
+
+        self._execute_block(
+            lines=lines,
+            block_action="site-apply",
+            progress=f"Aplicando bloqueio de site ({decision.strategy})…",
+            verify_fn=verify_fn,
+            rollback_fn=lambda snapshot: site_rollback(
+                acl_number=decision.acl_number,
+                interface=decision.interface,
+                direction=decision.direction,
+                snapshot=snapshot,
+            ),
+            save=decision.save,
+            persist_fn=None,
+            event_command=f"Bloquear site ({decision.strategy})",
+        )
+
+    def _execute_block(
+        self,
+        *,
+        lines: list[str],
+        block_action: str,
+        progress: str,
+        verify_fn: Callable[[], tuple[bool, str]],
+        rollback_fn: Callable[[str], list[str]],
+        save: bool,
+        persist_fn: Callable[[str], bool] | None,
+        event_command: str,
+    ) -> None:
+        """Motor compartilhado dos botões de bloqueio (thread de IO).
+
+        Mesmo fluxo do ``_apply_composite``: modo MOCK → pré-checagem de
+        interface → ``ConfigCommand`` (snapshot → apply → verify →
+        rollback) → persistência D3 (``result.ok`` + save + admin) →
+        auditoria + evento. ``persist_fn`` (``None`` no Bloquear site)
+        recebe o ``pre_state`` e grava o JSON por device.
+        """
+        svc = self._state.current_svc
+        svc_name = svc.name if svc is not None else "Serviço"
+
+        if self._ctx.svc_mode() == "mock":
+            _ui.write(
+                self._state.output,
+                "Modo MOCK — nada foi aplicado:\n" + "\n".join(lines),
+                self._ctx.dispatch,
+            )
+            return
+
+        session = self._ctx.session
+        user = getattr(session, "_user", "unknown")
+        host = getattr(session, "_host", "unknown")
+        session_id = getattr(session, "_session_id", None)
+        audit: AuditLogger | None = self._ctx.audit
+        version = self._detect_vrp_version()
+        spec = get_form_spec("acl")
+        allow_patterns = list(spec.allow_patterns) or None
+
+        def _apply_lines(block: list[str]) -> tuple[bool, str]:
+            return self._ctx.sb.send_config_block(
+                block,
+                save=False,
+                allow_patterns=allow_patterns,
+                vrp_version=version,
+            )
+
+        pre_state = ""
+        ifaces = interfaces_in_block(lines)
+        if ifaces:
+            try:
+                pre_state = self._ctx.sb.send_command(
+                    "display current-configuration")
+            except SdnError as exc:
+                _ui.write(
+                    self._state.output,
+                    f"x  Falha ao ler o running-config: {exc} — "
+                    "nada foi aplicado.",
+                    self._ctx.dispatch,
+                )
+                audit_config_op(
+                    audit, op="config_apply", user=user, host=host,
+                    session_id=session_id, status="blocked",
+                    reason="pre-check falhou", service=svc_name,
+                    backend="netmiko", form_kind="acl",
+                    vrp_version=str(version), saved=False,
+                    block_action=block_action,
+                )
+                return
+            missing = missing_interfaces(pre_state, ifaces)
+            if missing:
+                _ui.write(
+                    self._state.output,
+                    "x  Interface(s) inexistente(s) no device: "
+                    + ", ".join(missing)
+                    + "\nVerifique o nome exato em 'display interface brief'."
+                    + "\nNada foi aplicado ao dispositivo.",
+                    self._ctx.dispatch,
+                )
+                audit_config_op(
+                    audit, op="config_apply", user=user, host=host,
+                    session_id=session_id, status="blocked",
+                    reason=f"interface inexistente: {', '.join(missing)}",
+                    service=svc_name, backend="netmiko",
+                    form_kind="acl", vrp_version=str(version),
+                    saved=False, block_action=block_action,
+                )
+                return
+
+        service_cmd = ConfigCommand(
+            lines,
+            read_state=lambda: self._ctx.sb.send_command(
+                "display current-configuration"),
+            apply_fn=_apply_lines,
+            dry_run=self._ctx.dry_run,
+            verify_fn=verify_fn,
+            rollback_fn=rollback_fn,
+        )
+
+        _ui.loading(self._state.output, progress, self._ctx.dispatch)
+        try:
+            result = service_cmd.execute()
+        except SnapshotError as exc:
+            self._ctx.sb.invalidate_connection()
+            _ui.write(self._state.output,
+                      f"x  {exc} — nada foi aplicado.",
+                      self._ctx.dispatch)
+            audit_config_op(
+                audit, op="config_apply", user=user, host=host,
+                session_id=session_id, status="blocked",
+                reason="snapshot falhou", service=svc_name,
+                backend="netmiko", form_kind="acl",
+                vrp_version=str(version), saved=False,
+                block_action=block_action,
+            )
+            return
+        except SdnError as exc:
+            self._ctx.sb.invalidate_connection()
+            self._state.last_config_command = service_cmd
+            _ui.write(self._state.output, f"x  Falha SSH: {exc}",
+                      self._ctx.dispatch)
+            audit_config_op(
+                audit, op="config_apply", user=user, host=host,
+                session_id=session_id, status="error",
+                reason="falha ssh", service=svc_name,
+                backend="netmiko", form_kind="acl",
+                vrp_version=str(version), saved=False,
+                block_action=block_action,
+            )
+            return
+
+        self._state.last_config_command = service_cmd
+        message = result.message
+
+        # ── D3: persistência só com result.ok + save + papel admin ──
+        saved = False
+        persisted = False
+        save_ok = bool(save) and role_meets(self._ctx.role(), "admin")
+        if result.ok and save_ok:
+            try:
+                ok_save, save_msg = self._ctx.sb.save_running_config(version)
+            except SdnError as exc:
+                ok_save, save_msg = False, f"falha ao salvar: {exc}"
+            saved = bool(ok_save)
+            message = f"{message}\n{save_msg}"
+            if saved and persist_fn is not None:
+                persisted = persist_fn(pre_state)
+        if result.ok and save_ok and not saved:
+            result_status = "error"
+        else:
+            result_status = result.status
+
+        if persist_fn is not None:
+            if persisted:
+                message += "\nPerfil de bloqueio persistido (JSON)."
+            elif saved:
+                message += "\nFalha ao persistir o perfil de bloqueio (JSON)."
+            elif result.ok:
+                message += (
+                    "\nPerfil do bloqueio NÃO persistido — marque "
+                    "'Salvar' para gravar na startup-config."
+                )
+        elif result.ok and not saved:
+            message += (
+                "\nNÃO persistido na startup-config — marque "
+                "'Salvar' para gravar após reboot."
+            )
+
+        _ui.write(self._state.output, message, self._ctx.dispatch)
+        audit_config_op(
+            audit, op="config_apply", user=user, host=host,
+            session_id=session_id, status=result_status,
+            duration_ms=result.duration_ms, service=svc_name,
+            backend="netmiko", form_kind="acl",
+            vrp_version=str(version), saved=saved,
+            block_action=block_action,
+        )
+        self._ctx.event_bus.put(Event(
+            EventType.CONFIG_CHANGED, source="service",
+            payload=CommandExecutedPayload(
+                command=event_command,
+                data={
+                    "mode": "cli",
+                    "form_kind": "acl",
+                    "status": result_status,
+                    "saved": saved,
+                },
+            ),
+        ))
+
+    def _persist_block(
+        self, action: str, profile: AclBlockProfile, pre_state: str
+    ) -> bool:
+        """Grava o resultado do bloqueio no JSON por device (D2/D3).
+
+        Chamado **apenas** após ``result.ok`` + save confirmado. Falha de
+        JSON nunca derruba a operação já aplicada (fail-closed + aviso).
+        """
+        try:
+            if action == "delete":
+                delete_profile(None, profile.device_key)
+                return True
+            if action == "apply":
+                existing = load_profile(None, profile.device_key)
+                if existing is not None:
+                    # A origem da ACL é decidida uma única vez (primeira
+                    # persistência) — reaplicar não muda a classificação.
+                    created = existing.created_from_snapshot
+                else:
+                    created = (
+                        f"acl number {profile.acl_number}" in pre_state
+                    )
+            else:
+                created = profile.created_from_snapshot
+            save_profile(None, replace(
+                profile,
+                applied=(action == "apply"),
+                created_from_snapshot=created,
+            ))
+            return True
+        except SdnValidationError as exc:
+            log.warning("perfil de bloqueio não persistido: %s", exc)
+            return False
+
     def rollback_last(self) -> None:
         """Desfaz a última configuração aplicada **nesta aba** (rollback).
 
@@ -738,7 +1244,7 @@ class ServicesHandlers:
         if last_cmd is None:
             _ui.write(
                 self._state.output,
-                "✘  Nenhuma configuração anterior aplicada nesta aba "
+                "x  Nenhuma configuração anterior aplicada nesta aba "
                 "para reverter.",
                 self._ctx.dispatch,
             )
@@ -751,7 +1257,7 @@ class ServicesHandlers:
                 res = last_cmd.rollback()
             except SdnError as exc:
                 _ui.write(self._state.output,
-                          f"✘  Falha durante o rollback: {exc}",
+                          f"x  Falha durante o rollback: {exc}",
                           self._ctx.dispatch)
                 return
             _ui.write(
@@ -828,11 +1334,11 @@ class ServicesHandlers:
             # NAPALM: recusa auditada, nunca fallback silencioso para o Netmiko
             # (o usuário optou pela flag — falhar fechado).
             _ui.write(self._state.output,
-                      "✘  NAPALM: sem sessao Netmiko ativa — nada foi aplicado.",
+                      "x  NAPALM: sem sessao Netmiko ativa — nada foi aplicado.",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
                                   session_id=session_id, service=svc.name,
-                                  reason="sem conexao Netmiko exposta")
+                                  reason="sem conexão Netmiko exposta")
             return True
         executor = NapalmVRPBackend(
             conn,  # sessão Netmiko existente (sem 2º SSH)
@@ -850,7 +1356,7 @@ class ServicesHandlers:
             # nunca exceção silenciosa nem fallback para Netmiko.
             err = sanitize_command(str(exc))
             _ui.write(self._state.output,
-                      f"✘  NAPALM: preview (dry-run) falhou — nada foi "
+                      f"x  NAPALM: preview (dry-run) falhou — nada foi "
                       f"aplicado.\n{err}",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,
@@ -869,7 +1375,7 @@ class ServicesHandlers:
         #    confirmação: comportamento nunca pior que hoje (hoje não há diff).
         bridge = self._ctx.ui_bridge()
         if bridge is None:
-            log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmacao",
+            log.warning("NAPALM: sem UiBridge — aplicando '%s' sem confirmação",
                         svc.name)
             approved = True
         else:
@@ -891,7 +1397,7 @@ class ServicesHandlers:
         except SdnError as exc:
             # o backend já auditou (status blocked/error) — só reporta aqui.
             _ui.write(self._state.output,
-                      f"✘  NAPALM: aplicacao recusada pelo dispositivo — "
+                      f"x  NAPALM: aplicação recusada pelo dispositivo — "
                       f"alteracoes descartadas.\n{sanitize_command(str(exc))}",
                       self._ctx.dispatch)
             return True
@@ -901,7 +1407,7 @@ class ServicesHandlers:
             # cru — vira recusa auditada, nunca fallback Netmiko.
             err = sanitize_command(str(exc))
             _ui.write(self._state.output,
-                      f"✘  NAPALM: falha ao aplicar — nada foi "
+                      f"x  NAPALM: falha ao aplicar — nada foi "
                       f"confirmado.\n{err}",
                       self._ctx.dispatch)
             _audit_napalm_blocked(audit, user=user, host=host,

@@ -10,16 +10,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-from PySide6.QtWidgets import QCheckBox, QLabel, QLineEdit
+from PySide6.QtWidgets import QCheckBox
 
 from huawei_manager.basic_config.vrp_version import VrpVersion
 from huawei_manager.exceptions import SdnError
 from huawei_manager.services import get_service_by_id
 from huawei_manager.tabs._contract import TabContext
-from huawei_manager.tabs.services.handlers import ServicesHandlers
 from huawei_manager.tabs.services.page import ServicesTab
-from huawei_manager.tabs.services.state import ServicesState
 
 
 def _fake_ctx(**overrides) -> TabContext:

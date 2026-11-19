@@ -92,8 +92,8 @@ class EventQueue(IEventBus):
 
         Args:
             event: Evento a ser publicado.
-            block: Se True (padrao), bloqueia se a fila estiver cheia.
-            timeout: Tempo maximo de espera em segundos (padrao 0.5s).
+            block: Se True (padrão), bloqueia se a fila estiver cheia.
+            timeout: Tempo maximo de espera em segundos (padrão 0.5s).
         """
         item: _PQueueItem = (event.priority, next(self._counter), event)
         try:
@@ -159,7 +159,7 @@ class EventQueue(IEventBus):
 
         Args:
             timeout: Tempo de espera inicial pelo primeiro evento (s).
-            max_events: Numero maximo de eventos a drenar (padrao 100).
+            max_events: Numero maximo de eventos a drenar (padrão 100).
 
         Returns:
             Lista de eventos pendentes (pode ser vazia), ordenados por

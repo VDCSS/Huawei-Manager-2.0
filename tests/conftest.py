@@ -1,5 +1,6 @@
-from unittest.mock import MagicMock
 import os
+from unittest.mock import MagicMock
+
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -10,6 +11,25 @@ if not _home or not os.access(_home, os.W_OK):
     _tmp_home = os.path.join(os.sep, "tmp", "huawei_manager_test_home")
     os.makedirs(_tmp_home, exist_ok=True)
     os.environ["HOME"] = _tmp_home
+
+
+# ── Camada 1 de defesa: nenhum teste toca o DB real ~/.huawei_manager/ ──
+# Define HW_DATA_DIR / HUAWEI_MANAGER_DIR para um tmp_path de sessão, de modo
+# que get_database_path() (sem argumentos) sempre resolva para o sandbox de
+# teste e NUNCA para o banco real do usuário durante pytest.
+@pytest.fixture(scope="session", autouse=True)
+def _sandbox_db_dir(tmp_path_factory):
+    """Redireciona HW_DATA_DIR/HUAWEI_MANAGER_DIR para tmp_path durante pytest.
+
+    Isso impede que qualquer código (ex.: DeviceService.save_inventory via
+    _refresh_devices) escreva ou apague registros do banco real
+    ~/.huawei_manager/inventory.db enquanto os testes rodam.
+    """
+    sandbox = tmp_path_factory.mktemp("huawei_manager_db")
+    os.environ["HW_DATA_DIR"] = str(sandbox)
+    os.environ["HUAWEI_MANAGER_DIR"] = str(sandbox)
+    yield
+    # Mantém o diretório após os testes para permitir inspeção de falhas.
 
 try:
     import PySide6  # noqa: F401

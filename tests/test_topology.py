@@ -5,10 +5,10 @@ import unittest.mock
 import pytest
 from cryptography.fernet import Fernet
 
-from huawei_manager.topology import TopologyCanvas
 from huawei_manager.device_inventory import load_devices, save_devices
 from huawei_manager.device_models import Device
 from huawei_manager.device_probe import _check_device, probe_devices
+from huawei_manager.topology import TopologyCanvas
 
 
 class TestDevice:

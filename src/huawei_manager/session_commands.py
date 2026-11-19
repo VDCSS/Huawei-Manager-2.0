@@ -79,7 +79,7 @@ class SessionCommandsMixin:
     # ── executa comando CLI ──────────────────────────────────────────
     def _cmd(self, command: str, read_timeout: int = 120) -> str:
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         try:
             out = self._conn.send_command(command, read_timeout=read_timeout)
             return clean_output(str(out))
@@ -89,7 +89,7 @@ class SessionCommandsMixin:
 
     def run_cli_timing(self, cmd: str) -> str:
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         sanitized = sanitize_command(cmd)
         with self._lock:
             with self._audit.timed(
@@ -164,7 +164,7 @@ class SessionCommandsMixin:
         5. Nunca salva se commit não foi confirmado.
         """
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         save_cmd = save_command(vrp_version) if vrp_version is not None else "save"
         commit_required = requires_commit(vrp_version) if vrp_version is not None else False
 
@@ -311,7 +311,7 @@ class SessionCommandsMixin:
                             )
                     ctx.set_status("ok")
                     saved = " e salva" if save else " (running-config)"
-                    return True, f"OK Configuracao aplicada{saved}\n{clean}"
+                    return True, f"OK Configuração aplicada{saved}\n{clean}"
                 except Exception as exc:
                     # Cleanup sempre: tenta sair do system-view antes de propagar.
                     self._exit_config_best_effort()
@@ -344,7 +344,7 @@ class SessionCommandsMixin:
         prompt de confirmação ``[Y/N]``.
         """
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         cmd = save_command(vrp_version) if vrp_version is not None else "save"
         with self._lock:
             try:
@@ -360,7 +360,7 @@ class SessionCommandsMixin:
                     output += "\n" + clean_output(str(answer))
                 except Exception as exc:
                     sanitized = sanitize_command(str(exc)) or str(exc)
-                    log.warning("confirmacao de save falhou: %s", sanitized)
+                    log.warning("confirmação de save falhou: %s", sanitized)
                     return False, (
                         f"Falha ao confirmar o save: {sanitized}"
                     )

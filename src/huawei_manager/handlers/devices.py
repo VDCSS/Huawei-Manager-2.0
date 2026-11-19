@@ -27,7 +27,7 @@ class DevicesMixin:
         finally:
             if lock is not None:
                 lock.release()
-        # I/O pesado (probe TCP 5s/device + escrita) FORA do lock para nao
+        # I/O pesado (probe TCP 5s/device + escrita) FORA do lock para não
         # travar o refresh do dashboard nem concorrer com _delete_device.
         devices = self._device_service.probe_or_simulate(devices, self._mock_mode)
         try:
@@ -75,7 +75,7 @@ class DevicesMixin:
         from PySide6.QtWidgets import QMessageBox
         reply = QMessageBox.question(
             None, "Excluir",
-            f"Confirmar exclusao de {device.name} ({device.host})?",
+            f"Confirmar exclusão de {device.name} ({device.host})?",
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
@@ -118,8 +118,8 @@ class DevicesMixin:
     def _ensure_device_ready(self: AppCoreProtocol, action: str) -> Device | None:
         """Garante device cadastrado e selecionado antes de acoes que exigem device.
 
-        Retorna o device selecionado, ou None se nao houver device cadastrado
-        (admin e convidado a cadastrar via dialog modal; nao-admin recebe aviso)
+        Retorna o device selecionado, ou None se não houver device cadastrado
+        (admin e convidado a cadastrar via dialog modal; não-admin recebe aviso)
         ou se nenhum device estiver selecionado.
         """
         devices = self._devices
@@ -138,7 +138,7 @@ class DevicesMixin:
         return device
 
     def _prompt_no_devices(self: AppCoreProtocol, action: str) -> None:
-        """Dialog modal (admin) ou aviso (nao-admin) quando nao ha devices."""
+        """Dialog modal (admin) ou aviso (não-admin) quando não ha devices."""
         if role_meets(self._access_level, "admin"):
             from PySide6.QtWidgets import QMessageBox
             reply = QMessageBox.question(

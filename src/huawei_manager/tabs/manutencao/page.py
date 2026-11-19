@@ -60,7 +60,7 @@ class ManutencaoTab:
             p = _ui.page_frame("manutencao")
             _ui.page_title(p, "Acesso Restrito", C.NEON_AMBER)
 
-            lbl = QLabel("🔒  Esta pagina e exclusiva para usuarios Tecnico ou Admin.", p)
+            lbl = QLabel("[TRAVA7]  Esta pagina e exclusiva para usuarios Tecnico ou Admin.", p)
             lbl.setStyleSheet(_ui.css_label(C.FG_DIM, C.BG_CARD, 13))
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lay = _ui.page_layout(p)
@@ -68,7 +68,7 @@ class ManutencaoTab:
             lay.addWidget(lbl)
             lay.addSpacing(10)
 
-            btn = action_button(p, "🔑  Autenticar como Tecnico / Admin",
+            btn = action_button(p, "[TRAVA6]  Autenticar como Tecnico / Admin",
                                 ctx.show_auth_dialog, C.NEON_PURP)
             lay.addWidget(btn, alignment=Qt.AlignmentFlag.AlignCenter)
             return p
@@ -101,19 +101,19 @@ class ManutencaoTab:
         grp_dev_layout.setContentsMargins(4, 4, 4, 4)
         top_layout.addWidget(grp_dev, 0, 0)
 
-        btn_lint = action_button(grp_dev, "⚙  Lint",
+        btn_lint = action_button(grp_dev, "configurar  Lint",
                                  lambda: self._h().run_dev_cmd("lint"), C.NEON_CYAN)
         grp_dev_layout.addWidget(btn_lint)
         grp_dev_layout.addSpacing(4)
-        btn_test = action_button(grp_dev, "🧪  Testes",
+        btn_test = action_button(grp_dev, "[TESTES]  Testes",
                                  lambda: self._h().run_dev_cmd("test"), C.NEON_MAG)
         grp_dev_layout.addWidget(btn_test)
         grp_dev_layout.addSpacing(4)
-        btn_types = action_button(grp_dev, "🔍  Types",
+        btn_types = action_button(grp_dev, "lupa  Types",
                                   lambda: self._h().run_dev_cmd("typecheck"), C.NEON_PURP)
         grp_dev_layout.addWidget(btn_types)
         grp_dev_layout.addSpacing(4)
-        btn_all = action_button(grp_dev, "▶  Todos",
+        btn_all = action_button(grp_dev, "executar  Todos",
                                 lambda: self._h().run_dev_cmd("all"), C.NEON_AMBER)
         grp_dev_layout.addWidget(btn_all)
 
@@ -134,13 +134,13 @@ class ManutencaoTab:
         grp_agents_layout.setContentsMargins(4, 4, 4, 4)
         top_layout.addWidget(grp_agents, 0, 1)
 
-        btn_agents = action_button(grp_agents, "🔍  Agora",
+        btn_agents = action_button(grp_agents, "lupa  Agora",
                                    lambda: self._h().run_agents(), C.NEON_PURP)
         grp_agents_layout.addWidget(btn_agents)
         grp_agents_layout.addSpacing(4)
         watcher_btn = action_button(
             grp_agents,
-            f"🔄  Auto: {'ON' if ctx.watcher.is_active else 'OFF'}",
+            f"reset  Auto: {'ON' if ctx.watcher.is_active else 'OFF'}",
             self._toggle_watcher, C.NEON_CYAN)
         st.watcher_btn = watcher_btn
         grp_agents_layout.addWidget(watcher_btn)
@@ -165,7 +165,7 @@ class ManutencaoTab:
         mock = ctx.is_mock()
         mode_text = "Real" if not mock else "Mock"
         mode_color = C.NEON_CYAN if not mock else C.NEON_AMBER
-        mode_btn = action_button(grp_mode, f"●  {mode_text}",
+        mode_btn = action_button(grp_mode, f"[CIRCULO]  {mode_text}",
                                  self._toggle_probe_mode, mode_color)
         st.mode_btn = mode_btn
         grp_mode_layout.addWidget(mode_btn)
@@ -187,15 +187,15 @@ class ManutencaoTab:
         grp_setup_layout.setContentsMargins(4, 4, 4, 4)
         top_layout.addWidget(grp_setup, 1, 1)
 
-        btn_check = action_button(grp_setup, "📋  Check",
+        btn_check = action_button(grp_setup, "clipboard  Check",
                                   lambda: self._h().run_setup("check"), C.NEON_AMBER)
         grp_setup_layout.addWidget(btn_check)
         grp_setup_layout.addSpacing(4)
-        btn_install = action_button(grp_setup, "⚙  Install",
+        btn_install = action_button(grp_setup, "configurar  Install",
                                     lambda: self._h().run_setup("install"), C.NEON_CYAN)
         grp_setup_layout.addWidget(btn_install)
         grp_setup_layout.addSpacing(4)
-        btn_reset = action_button(grp_setup, "🔄  Reset",
+        btn_reset = action_button(grp_setup, "reset  Reset",
                                   lambda: self._h().run_setup("reset"), C.NEON_MAG)
         grp_setup_layout.addWidget(btn_reset)
 
@@ -274,7 +274,7 @@ class ManutencaoTab:
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(bottom)
 
-        btn_limpar = action_button(bottom, "✖  Limpar",
+        btn_limpar = action_button(bottom, "limpar  Limpar",
                                    lambda: self._h().cancel_and_clear(), C.NEON_PURP)
         bottom_layout.addWidget(btn_limpar)
         bottom_layout.addStretch()
@@ -322,12 +322,12 @@ class ManutencaoTab:
         if ctx.watcher.is_active:
             ctx.watcher.stop()
             if self.state.watcher_btn is not None:
-                self.state.watcher_btn.setText("🔄  Auto: OFF")
+                self.state.watcher_btn.setText("reset  Auto: OFF")
             _ui.write(self.state.output, "Watcher desligado.", ctx.dispatch)
         else:
             ctx.watcher.start()
             if self.state.watcher_btn is not None:
-                self.state.watcher_btn.setText("🔄  Auto: ON")
+                self.state.watcher_btn.setText("reset  Auto: ON")
             _ui.write(self.state.output,
                       "Watcher ligado — varredura a cada 60s.", ctx.dispatch)
 
@@ -339,7 +339,7 @@ class ManutencaoTab:
         mock = ctx.toggle_mock()
         mode = "Mock" if mock else "Real"
         color = C.NEON_AMBER if mock else C.NEON_CYAN
-        btn.setText(f"●  {mode}")
+        btn.setText(f"[CIRCULO]  {mode}")
         btn.setStyleSheet(
             f"color: {color}; background: {C.BG_CARD}; font: bold 11px {C.FONT_UI_FAMILY};"
             f" border: 1px solid {color}; border-radius: 4px; padding: 4px 12px;")
@@ -364,15 +364,15 @@ class ManutencaoTab:
 
         lines: list[str] = []
         for r in results:
-            icon = {"ok": "✅", "warning": "⚠", "error": "❌",
-                    "info": "💡"}.get(r.status, "❓")
+            icon = {"ok": "ok", "warning": "aviso", "error": "falha",
+                    "info": "dica"}.get(r.status, "?")
             lines.append(f"{icon}  {r.name:<12}  {r.summary}")
         total = sum(counts.values())
         lines.insert(0, f"  Total: {total} scans | "
-                        f"❌{counts.get('error',0)}  "
-                        f"⚠{counts.get('warning',0)}  "
-                        f"💡{counts.get('info',0)}  "
-                        f"✅{counts.get('ok',0)}")
+                        f"falha{counts.get('error',0)}  "
+                        f"aviso{counts.get('warning',0)}  "
+                        f"dica{counts.get('info',0)}  "
+                        f"ok{counts.get('ok',0)}")
         lines.insert(1, "")
 
         summary = st.summary
@@ -387,11 +387,11 @@ class ManutencaoTab:
             for it in r.items:
                 if filter_val != "all" and it.severity != filter_val:
                     continue
-                icon = {"warning": "⚠", "error": "❌",
-                        "info": "💡"}.get(it.severity, "•")
+                icon = {"warning": "aviso", "error": "falha",
+                        "info": "dica"}.get(it.severity, "•")
                 items.append(f"{icon}  {r.name}: {it.file}\n"
-                             f"   📋  {it.message}\n"
-                             f"   💡  {it.suggestion}")
+                             f"   clipboard  {it.message}\n"
+                             f"   dica  {it.suggestion}")
         if items:
             label = {"all": "Todos", "error": "Erros", "warning": "Avisos",
                      "info": "Info"}.get(filter_val, filter_val)
@@ -399,5 +399,5 @@ class ManutencaoTab:
             _ui.write(st.output, header + "\n".join(items), ctx.dispatch)
         else:
             _ui.write(st.output,
-                      "✅  Nenhum problema encontrado para o filtro atual.",
+                      "ok  Nenhum problema encontrado para o filtro atual.",
                       ctx.dispatch)

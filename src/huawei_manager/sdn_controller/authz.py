@@ -60,7 +60,7 @@ def role_meets(actual: str, required: str = "tecnico") -> bool:
     Returns:
         True se ``actual`` atende ao requisito. Nivel desconhecido em
         ``actual`` cai para ``Role.USER`` (fail-closed); ``required``
-        desconhecido tambem cai para ``Role.USER`` para nao quebrar call
+        desconhecido tambem cai para ``Role.USER`` para não quebrar call
         sites existentes — nenhum call site real passa nivel invalido.
     """
     try:
@@ -103,7 +103,7 @@ class SessionTracker:
 
     @property
     def is_active(self) -> bool:
-        """True se a role atual nao e USER."""
+        """True se a role atual não e USER."""
         return self.current_role is not Role.USER
 
     def set_role(self, role: Role) -> None:
