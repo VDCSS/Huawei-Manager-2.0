@@ -79,14 +79,33 @@ class TestSaveInventoryNeverDeletesRealDb:
             )
             svc.save_inventory([dev])
 
+            # A gravação aconteceu no sandbox (não depende do HOME do runner).
+            saved = conn.execute(
+                "SELECT COUNT(*) FROM devices WHERE id = ?", ("dev-sandbox",)
+            ).fetchone()
+            assert saved[0] == 1, "save_inventory não gravou no sandbox"
+
             # O banco real em ~/.huawei_manager não deve conter dev-sandbox.
-            real_conn = get_connection(_real_db_path())
-            try:
-                row = real_conn.execute(
-                    "SELECT COUNT(*) FROM devices WHERE id = ?", ("dev-sandbox",)
-                ).fetchone()
-                assert row[0] == 0, "banco real foi poluído pelo teste"
-            finally:
-                real_conn.close()
+            # Em CI o HOME é limpo: o arquivo pode não existir (ou existir
+            # vazio, sem schema). Nesses casos não há o que consultar — o
+            # teste deve ser hermético e não criar o DB real só para lê-lo.
+            real_path = _real_db_path()
+            if real_path.exists():
+                real_conn = get_connection(real_path)
+                try:
+                    tables = {
+                        row[0]
+                        for row in real_conn.execute(
+                            "SELECT name FROM sqlite_master WHERE type = 'table'"
+                        )
+                    }
+                    if "devices" in tables:
+                        row = real_conn.execute(
+                            "SELECT COUNT(*) FROM devices WHERE id = ?",
+                            ("dev-sandbox",),
+                        ).fetchone()
+                        assert row[0] == 0, "banco real foi poluído pelo teste"
+                finally:
+                    real_conn.close()
         finally:
             conn.close()
