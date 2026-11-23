@@ -270,7 +270,7 @@ class BasicConfigTab:
         btn_row = QHBoxLayout()
         self.state.btn_preview = action_button(
             actions_card,
-            "👁 Prévia",
+            "visualizar Prévia",
             lambda: self._h().preview_plan(),
             C.NEON_PURP,
         )
@@ -278,7 +278,7 @@ class BasicConfigTab:
 
         self.state.btn_apply = action_button(
             actions_card,
-            "▶ Aplicar Bloco",
+            "executar Aplicar Bloco",
             lambda: self._h().apply_plan(),
             C.NEON_CYAN,
         )
@@ -294,7 +294,7 @@ class BasicConfigTab:
 
         self.state.btn_clear = action_button(
             actions_card,
-            "✖ Limpar",
+            "limpar Limpar",
             lambda: _ui.write(
                 self.state.output,
                 "",

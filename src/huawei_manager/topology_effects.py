@@ -90,7 +90,7 @@ def draw_sdn_bar(scene: QGraphicsScene, view_width: int, device_count: int) -> N
     accent_line.setOpacity(0.5)
     scene.addItem(accent_line)
 
-    # ── Símbolo ⬡ ─────────────────────────────────────────────────
+    # ── Símbolo [HEXAGONO] ─────────────────────────────────────────────────
     symbol_text = QGraphicsSimpleTextItem("\u2b61")
     symbol_text.setBrush(QBrush(QColor(C.NEON_PURP)))
     symbol_text.setFont(_to_qfont(C.FONT_H1))

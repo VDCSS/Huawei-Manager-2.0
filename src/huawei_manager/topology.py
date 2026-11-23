@@ -144,7 +144,7 @@ class TopologyCanvas(QWidget):
         """Atualiza o status de um dispositivo (evento SDN) e redesenha."""
         node = self._device_map.get(device_id)
         if node is None:
-            log.warning("set_device_status: device %s nao encontrado no canvas", device_id)
+            log.warning("set_device_status: device %s não encontrado no canvas", device_id)
             return
         node.status = status
         self._draw()

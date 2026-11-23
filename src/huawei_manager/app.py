@@ -240,7 +240,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             ensure_encrypt_key()
         except Exception as exc:
             log.warning(
-                "VNF_ENCRYPT_KEY nao disponivel — segredos Device falharao "
+                "VNF_ENCRYPT_KEY não disponivel — segredos Device falharao "
                 "no save (fail-closed): %s",
                 exc,
             )
@@ -1039,7 +1039,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._active_btn = None
         self.pages.clear()
         # Widgets recriados em _build_layout/_rebuild_page: zerar refs para
-        # nao apontar para objetos C++ deletados (RuntimeError/AttributeError).
+        # não apontar para objetos C++ deletados (RuntimeError/AttributeError).
         self._auth_overlay = None
         self._ui_queue.clear()
 

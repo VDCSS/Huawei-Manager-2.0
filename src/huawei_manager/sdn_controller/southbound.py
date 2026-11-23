@@ -36,7 +36,7 @@ from huawei_manager.vault import SecretsBackend
 
 log = logging.getLogger("huawei.southbound")
 
-# Padrao para detectar credenciais em mensagens de erro
+# Padrão para detectar credenciais em mensagens de erro
 _CRED_PATTERN = re.compile(
     r"(?i)(password|passwd|secret|token|auth)\s*['\"]?\S+['\"]?"
 )
@@ -47,11 +47,11 @@ class SouthboundProtocol(ABC):
 
     @abstractmethod
     def connect(self) -> None:
-        """Estabelece conexao com o dispositivo."""
+        """Estabelece conexão com o dispositivo."""
 
     @abstractmethod
     def disconnect(self) -> None:
-        """Encerra a conexao com o dispositivo."""
+        """Encerra a conexão com o dispositivo."""
 
     @abstractmethod
     def send_command(self, command: str) -> str:
@@ -61,7 +61,7 @@ class SouthboundProtocol(ABC):
     def send_config(
         self, commands: list[str]
     ) -> tuple[bool, str]:
-        """Envia comandos de configuracao. Retorna (sucesso, mensagem)."""
+        """Envia comandos de configuração. Retorna (sucesso, mensagem)."""
 
     def send_config_block(
         self,
@@ -93,11 +93,11 @@ class SouthboundProtocol(ABC):
 
     @abstractmethod
     def is_alive(self) -> bool:
-        """Retorna True se a conexao esta ativa."""
+        """Retorna True se a conexão esta ativa."""
 
     @abstractmethod
     def invalidate_connection(self) -> None:
-        """Invalida o cache de conexao e marca como desconectado."""
+        """Invalida o cache de conexão e marca como desconectado."""
 
     @abstractmethod
     def set_access_role(self, role: str) -> None:
@@ -116,10 +116,10 @@ class SouthboundProtocol(ABC):
     def connection(self) -> NetmikoConnection | None:
         """Handle Netmiko bruto da sessao ativa (somente leitura).
 
-        Exposto apenas para o backend NAPALM reaproveitar a conexao SSH ja
-        aberta (nenhuma segunda autenticacao, nenhum segredo novo manipulado).
-        Padrao ``None`` (fail-closed): implementacoes que nao expoem a
-        conexao seguem bloqueando o caminho NAPALM.
+        Exposto apenas para o backend NAPALM reaproveitar a conexão SSH já
+        aberta (nenhuma segunda autenticação, nenhum segredo novo manipulado).
+        Padrão ``None`` (fail-closed): implementacoes que não expoem a
+        conexão seguem bloqueando o caminho NAPALM.
         """
         return None
 
@@ -135,11 +135,11 @@ class SSHSouthbound(SouthboundProtocol):
     Args:
         backend: Backend de secrets para credenciais.
         audit_logger: Logger de auditoria.
-        timeout: Timeout de conexao em segundos (padrao: _config.SSH_TIMEOUT).
-        max_retries: Numero maximo de tentativas de conexao (padrao 2).
+        timeout: Timeout de conexão em segundos (padrão: _config.SSH_TIMEOUT).
+        max_retries: Numero maximo de tentativas de conexão (padrão 2).
         session: Sessao Netmiko existente (opcional).
         validator: Validador de comandos (opcional).
-        access_role: Papel de acesso usado pelo validator (padrao "user").
+        access_role: Papel de acesso usado pelo validator (padrão "user").
     """
 
     def __init__(
@@ -255,7 +255,7 @@ class SSHSouthbound(SouthboundProtocol):
         Usa cache para evitar I/O de rede na main thread
         (chamado pelo dashboard timer a cada 5s).
         Delegado a NetmikoSession.is_connected() que verifica
-        o estado real da conexao.
+        o estado real da conexão.
         """
         with self._lock:
             now = time.time()
@@ -268,7 +268,7 @@ class SSHSouthbound(SouthboundProtocol):
         return alive
 
     def invalidate_connection(self) -> None:
-        """Invalida o cache de conexao e marca como desconectado.
+        """Invalida o cache de conexão e marca como desconectado.
 
         Chamado apos detectar que a sessao SSH esta morta
         (ex: RuntimeError em send_command/send_config).
@@ -282,7 +282,7 @@ class SSHSouthbound(SouthboundProtocol):
     def connection(self) -> NetmikoConnection | None:
         """Handle Netmiko bruto da sessao ativa (somente leitura).
 
-        O backend NAPALM (``HW_BACKEND=napalm``) reutiliza essa conexao para
+        O backend NAPALM (``HW_BACKEND=napalm``) reutiliza essa conexão para
         preview/apply sem abrir um segundo SSH. Nao expoe credenciais — o
         objeto Netmiko as retira do ``SecretsBackend`` sob demanda.
         """
@@ -299,7 +299,7 @@ class SSHSouthbound(SouthboundProtocol):
 
         Se um ``validator`` foi configurado, valida o comando antes
         de executar. Comandos negados disparam ``SdnAuthError``;
-        falhas de execucao disparam ``SdnCommandError``.
+        falhas de execução disparam ``SdnCommandError``.
 
         ``read_timeout`` opcional (segundos); None preserva o default do
         caminho manual (120s). O polling passa um valor menor por comando.
@@ -324,17 +324,17 @@ class SSHSouthbound(SouthboundProtocol):
     def send_config(
         self, commands: list[str], save: bool = False
     ) -> tuple[bool, str]:
-        """Envia comandos de configuracao.
+        """Envia comandos de configuração.
 
         Se um ``validator`` foi configurado, valida cada comando
         individualmente antes de executar. Comandos negados disparam
         ``SdnAuthError``.
 
-        Falhas de execucao nao levantam: retornam ``(False, mensagem)``
+        Falhas de execução não levantam: retornam ``(False, mensagem)``
         com a mensagem sanitizada (sem credenciais).
 
         ``save=True`` persiste na startup-config (mudanca duradoura);
-        por padrao a config e aplicada apenas na running-config.
+        por padrão a config e aplicada apenas na running-config.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")
@@ -442,10 +442,10 @@ class SSHSouthbound(SouthboundProtocol):
         """Executa comandos de servico e devolve ``(comando, output)``.
 
         Mesma semantica de ``send_service_commands`` (system-view/quit,
-        validacao, invalidacao da conexao em ``SdnError``), mas preserva a
+        validação, invalidacao da conexão em ``SdnError``), mas preserva a
         granularidade por comando. O polling adaptativo usa essa granularidade
-        para distinguir um comando nao suportado pelo device (ex.: BGP/OSPF
-        ausente) de uma falha real de conexao.
+        para distinguir um comando não suportado pelo device (ex.: BGP/OSPF
+        ausente) de uma falha real de conexão.
         """
         if not self._connected:
             raise SdnConnectionError("Not connected")

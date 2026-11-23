@@ -164,7 +164,8 @@ class TestBuilders:
 
     def test_interface_l3_block(self):
         from huawei_manager.basic_config.builders import (
-            INTERFACE_L3_SPECS, INTERFACE_L3_TEMPLATE,
+            INTERFACE_L3_SPECS,
+            INTERFACE_L3_TEMPLATE,
         )
         lines = INTERFACE_L3_TEMPLATE.render(INTERFACE_L3_SPECS, {
             "interface": "GigabitEthernet0/0/0",
@@ -182,7 +183,8 @@ class TestBuilders:
 
     def test_l2_access_block(self):
         from huawei_manager.basic_config.builders import (
-            L2_ACCESS_SPECS, L2_ACCESS_TEMPLATE,
+            L2_ACCESS_SPECS,
+            L2_ACCESS_TEMPLATE,
         )
         lines = L2_ACCESS_TEMPLATE.render(L2_ACCESS_SPECS, {
             "vlan_id": "10", "interface": "GigabitEthernet0/0/1",
@@ -211,7 +213,8 @@ class TestBuilders:
 
     def test_acl_basic_block_has_no_ip_keyword(self):
         from huawei_manager.basic_config.builders import (
-            ACL_BASIC_RULE_SPECS, ACL_BASIC_RULE_TEMPLATE,
+            ACL_BASIC_RULE_SPECS,
+            ACL_BASIC_RULE_TEMPLATE,
         )
         lines = ACL_BASIC_RULE_TEMPLATE.render(ACL_BASIC_RULE_SPECS, {
             "acl": "2000", "rule": "5", "action": "permit",
@@ -225,7 +228,8 @@ class TestBuilders:
 
     def test_acl_advanced_block_optional_destination(self):
         from huawei_manager.basic_config.builders import (
-            ACL_ADVANCED_RULE_SPECS, ACL_ADVANCED_RULE_TEMPLATE,
+            ACL_ADVANCED_RULE_SPECS,
+            ACL_ADVANCED_RULE_TEMPLATE,
         )
         lines = ACL_ADVANCED_RULE_TEMPLATE.render(ACL_ADVANCED_RULE_SPECS, {
             "acl": "3000", "rule": "5", "action": "permit", "protocol": "tcp",
@@ -242,7 +246,8 @@ class TestBuilders:
 
     def test_traffic_filter_block(self):
         from huawei_manager.basic_config.builders import (
-            TRAFFIC_FILTER_SPECS, TRAFFIC_FILTER_TEMPLATE,
+            TRAFFIC_FILTER_SPECS,
+            TRAFFIC_FILTER_TEMPLATE,
         )
         lines = TRAFFIC_FILTER_TEMPLATE.render(TRAFFIC_FILTER_SPECS, {
             "interface": "GigabitEthernet0/0/0", "direction": "inbound",

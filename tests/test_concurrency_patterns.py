@@ -195,9 +195,10 @@ class TestVaultConcurrency:
 
     def test_env_backend_concurrent_read_write(self):
         """EnvBackend read/write concorrente — não deve corromper."""
-        from huawei_manager.vault_backends.backends_env import EnvBackend
-        import tempfile
         import os
+        import tempfile
+
+        from huawei_manager.vault_backends.backends_env import EnvBackend
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write("TEST_KEY=initial\n")
@@ -240,9 +241,10 @@ class TestAuditLogConcurrency:
 
     def test_concurrent_log_operations(self):
         """10 threads escrevendo logs simultaneamente — não deve corromper."""
-        from huawei_manager.audit_log import AuditLogger
-        import tempfile
         import os
+        import tempfile
+
+        from huawei_manager.audit_log import AuditLogger
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             log_path = f.name

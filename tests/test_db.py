@@ -99,17 +99,20 @@ class TestDatabasePath:
     def test_returns_path(self) -> None:
         from huawei_manager.db import get_database_path
 
+        # Sob pytest o conftest define HW_DATA_DIR para tmp_path, então o
+        # caminho NUNCA é o banco real do usuário.
         path = get_database_path()
         assert isinstance(path, Path)
         assert path.name == "inventory.db"
-        assert ".huawei_manager" in str(path)
+        real = Path.home() / ".huawei_manager" / "inventory.db"
+        assert str(path) != str(real), "get_database_path() não deve retornar o banco real sob pytest"
 
     def test_creates_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from huawei_manager import db
 
-        fake_home = tmp_path / "fakehome"
-        monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
-        # Re-call to get the path with our patched home
+        # Sob pytest o conftest já define HW_DATA_DIR para tmp_path; o
+        # monkeypatch de Path.home abaixo não afeta o resultado, mas o
+        # diretório do sandbox deve existir.
         path = db.get_database_path()
         assert path.parent.exists()
 

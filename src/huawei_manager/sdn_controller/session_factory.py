@@ -46,7 +46,7 @@ class _OriginAuditWrapper(AuditLogger):
     def _write(self, entry: AuditEntry) -> None:
         self._inner._write(entry)
 
-    # Delegacoes: o wrapper nao roda o __init__ de AuditLogger (nao tem
+    # Delegacoes: o wrapper não roda o __init__ de AuditLogger (não tem
     # arquivo/chave proprios), entao os metodos herdados que leem o arquivo
     # precisam apontar para o logger interno.
     def verify(self) -> bool:

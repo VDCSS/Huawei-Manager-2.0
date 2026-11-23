@@ -39,7 +39,7 @@ class ServicesState:
     left_panel: QWidget | None = None
     #: Cabeçalho da barra esquerda (com o botão de toggle).
     list_header: QLabel | None = None
-    #: Botão de toggle (☰) mostrado no trilho recolhido.
+    #: Botão de toggle ([MENU]) mostrado no trilho recolhido.
     list_toggle: QPushButton | None = None
     #: Se a barra esquerda está aberta.
     list_open: bool = True
@@ -48,6 +48,16 @@ class ServicesState:
     #: QScrollArea que envolve o detail_frame (para rolagem do formulário).
     detail_scroll: QScrollArea | None = None
     detail_frame: QWidget | None = None
+    #: Botões pré-definidos no cabeçalho do detalhe da ACL
+    #: ("Bloquear Internet" / "Bloquear site"). Só existem quando o
+    #: serviço selecionado tem ``form_kind == "acl"``; ficam no conteúdo
+    #: rolável (linha do título), não na barra fixa.
+    block_internet_btn: QPushButton | None = None
+    block_site_btn: QPushButton | None = None
+    #: Container fixo da barra de ações (botões EXCUTAR / PRÉ-VISUALIZAR /
+    #: CONSULTAR / REVERTER / Salvar / Limpar output). Fica fora do
+    #: QScrollArea, presa no rodapé da coluna direita, acima do output.
+    action_bar: QWidget | None = None
     param_entries: dict[str, QLineEdit] = field(default_factory=dict[str, QLineEdit])
     services: list[ServiceDef] = field(default_factory=list[ServiceDef])
     current_svc: ServiceDef | None = None

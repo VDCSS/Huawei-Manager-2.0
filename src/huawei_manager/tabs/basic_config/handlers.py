@@ -168,7 +168,7 @@ class BasicConfigHandlers:
             plan = self.build_plan_from_ui()
             lines = plan.build_lines()
         except SdnValidationError as err:
-            _ui.write(self._state.output, f"✘  Erro de validação: {err}", self._ctx.dispatch)
+            _ui.write(self._state.output, f"x  Erro de validação: {err}", self._ctx.dispatch)
             return
 
         secrets = plan.collect_secrets()
@@ -198,7 +198,7 @@ class BasicConfigHandlers:
         if not self._ctx.require_access("admin"):
             _ui.write(
                 self._state.output,
-                "✘  Permissão negada: Configuração Básica exige papel admin.",
+                "x  Permissão negada: Configuração Básica exige papel admin.",
                 self._ctx.dispatch,
             )
             return
@@ -248,7 +248,7 @@ class BasicConfigHandlers:
         if vrp_version == VrpVersion.UNKNOWN:
             _ui.write(
                 self._state.output,
-                "⚠  Não foi possível detectar a versão VRP (usando sintaxe VRP8 por padrão). "
+                "aviso  Não foi possível detectar a versão VRP (usando sintaxe VRP8 por padrão). "
                 "Revise o bloco na prévia antes de aplicar.",
                 self._ctx.dispatch,
             )
@@ -257,7 +257,7 @@ class BasicConfigHandlers:
             plan = self.build_plan_from_ui(is_switch=is_switch)
             lines = plan.build_lines(vrp_version=vrp_version)
         except SdnValidationError as err:
-            _ui.write(self._state.output, f"✘  Erro de validação: {err}", self._ctx.dispatch)
+            _ui.write(self._state.output, f"x  Erro de validação: {err}", self._ctx.dispatch)
             return
 
         secrets = plan.collect_secrets()
@@ -342,7 +342,7 @@ class BasicConfigHandlers:
             self._ctx.sb.invalidate_connection()
             _ui.write(
                 self._state.output,
-                f"✘  Snapshot pré-mudança falhou: {exc} — nada foi aplicado.",
+                f"x  Snapshot pré-mudança falhou: {exc} — nada foi aplicado.",
                 self._ctx.dispatch,
             )
             audit_config_op(
@@ -360,7 +360,7 @@ class BasicConfigHandlers:
             self._state.last_config_command = cmd
             _ui.write(
                 self._state.output,
-                f"✘  Falha de comunicação SSH: {exc}",
+                f"x  Falha de comunicação SSH: {exc}",
                 self._ctx.dispatch,
             )
             audit_config_op(
@@ -409,7 +409,7 @@ class BasicConfigHandlers:
         if last_cmd is None:
             _ui.write(
                 self._state.output,
-                "✘  Nenhum comando de configuração anterior aplicado nesta "
+                "x  Nenhum comando de configuração anterior aplicado nesta "
                 "aba para rollback.",
                 self._ctx.dispatch,
             )
@@ -425,7 +425,7 @@ class BasicConfigHandlers:
         except SdnError as err:
             _ui.write(
                 self._state.output,
-                f"✘  Falha durante o rollback: {err}",
+                f"x  Falha durante o rollback: {err}",
                 self._ctx.dispatch,
             )
             return

@@ -215,7 +215,7 @@ SECRETS_BACKEND=env
 
 ## Execução
 
-> ⚠ A interface requer servidor gráfico (DISPLAY). Não funciona em headless puro.
+> IMG_AVISO A interface requer servidor gráfico (DISPLAY). Não funciona em headless puro.
 
 ```bash
 make run             # via Makefile
@@ -252,16 +252,16 @@ make clean-all       # DESTRUTIVO: clean + .venv + logs
 
 | Aba | Descrição |
 |-----|-----------|
-| 🏠 **Dashboard** | Status da conexão, VNFs, últimas operações de auditoria |
-| 🗺 **Topologia / VNFs** | Canvas SDN interativo, seleção de alvo SSH |
-| 📋 **Configuração Atual** | `display current-configuration` com filtros |
-| 🌐 **Roteamento** | Tabela de roteamento, BGP, OSPF |
-| 📡 **ARP** | Tabela ARP via CLI |
-| 💻 **Info do Sistema** | Versão, CPU, memória, interfaces, LLDP |
+| IMG_INICIO **Dashboard** | Status da conexão, VNFs, últimas operações de auditoria |
+| [MAPA] **Topologia / VNFs** | Canvas SDN interativo, seleção de alvo SSH |
+| IMG_CLIPBOARD **Configuração Atual** | `display current-configuration` com filtros |
+| IMG_MUNDO **Roteamento** | Tabela de roteamento, BGP, OSPF |
+| IMG_SINAL **ARP** | Tabela ARP via CLI |
+| [PC] **Info do Sistema** | Versão, CPU, memória, interfaces, LLDP |
 | ⌨ **Editor de Comandos** | Editor CLI com 21 templates, streaming de output |
-| 💾 **Backup** | Backup da running-config para arquivo |
-| ⚡ **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
-| 🔧 **Manutenção** | Dev tools, scans de agentes, setup |
+| [DVD2] **Backup** | Backup da running-config para arquivo |
+| IMG_RAIO **Serviços** | Catálogo completo de 144 comandos por tipo de VNF |
+| [CHAVE_FENDA] **Manutenção** | Dev tools, scans de agentes, setup |
 
 
 ## Modos de Operação

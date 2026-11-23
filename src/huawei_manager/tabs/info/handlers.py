@@ -45,14 +45,14 @@ class InfoHandlers:
         ]
         try:
             for title, cmd in commands:
-                buf.write(f"{'=' * 70}\n▶  {title}\n{'-' * 70}\n")
+                buf.write(f"{'=' * 70}\nexecutar  {title}\n{'-' * 70}\n")
                 buf.write(self._ctx.sb.send_command(cmd or ""))
                 buf.write("\n\n")
         except SdnError as exc:
             self._ctx.sb.invalidate_connection()
-            _ui.write(out, f"✘ Falha SSH: {exc}", dispatch)
+            _ui.write(out, f"x Falha SSH: {exc}", dispatch)
             return
-        buf.write(f"{'=' * 70}\n▶  Interfaces\n{'-' * 70}\n")
+        buf.write(f"{'=' * 70}\nexecutar  Interfaces\n{'-' * 70}\n")
         intf_entries = self._ctx.drv().get_interfaces()
         if intf_entries:
             buf.write(f"{'Interface':<30} {'Status':<8} {'Protocolo'}\n")

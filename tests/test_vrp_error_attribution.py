@@ -89,7 +89,7 @@ class TestFormatting:
     def test_message_contains_the_feature_hint(self):
         msg = describe_vrp_failure(VRP_OUTPUT, COMMANDS)
         assert "QoS" in msg
-        assert "💡" in msg
+        assert "dica" in msg
 
     def test_hint_only_for_known_features(self):
         assert hint_for_command("traffic-policy P inbound")

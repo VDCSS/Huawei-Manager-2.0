@@ -6,8 +6,9 @@ from __future__ import annotations
 
 from unittest.mock import ANY, MagicMock, patch
 
-from ._factories import make_device as _make_device
 from huawei_manager.handlers.ssh import SshMixin
+
+from ._factories import make_device as _make_device
 
 
 def _make_mixin(**attrs) -> SshMixin:
@@ -89,7 +90,7 @@ class TestDoConnect:
 
         mixin._spawn_io = _capture_spawn_io
         mixin._do_connect("OK {sid}", "Erro")
-        mixin._set_status.assert_called_with("Falha de autenticacao", ANY)
+        mixin._set_status.assert_called_with("Falha de autenticação", ANY)
 
     def test_timeout_error_sets_status(self):
         from netmiko.exceptions import NetmikoTimeoutException
@@ -101,7 +102,7 @@ class TestDoConnect:
 
         mixin._spawn_io = _capture_spawn_io
         mixin._do_connect("OK {sid}", "Erro")
-        mixin._set_status.assert_called_with("Timeout de conexao", ANY)
+        mixin._set_status.assert_called_with("Timeout de conexão", ANY)
 
     def test_value_error_sets_config_status(self):
         mixin = _make_mixin()

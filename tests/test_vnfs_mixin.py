@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from ._factories import make_device as _make_device
-
 from huawei_manager.handlers.devices import DevicesMixin
 from huawei_manager.sdn_controller.event_queue import EventType
 from huawei_manager.services.device_service import SessionOverrides
+
+from ._factories import make_device as _make_device
 
 
 def _make_device_service(returns=None):
@@ -285,7 +285,7 @@ class TestRefreshDevices:
     def test_save_failure_does_not_propagate(self):
         svc = _make_device_service(returns=[_make_device()])
         svc.save_inventory.side_effect = ValueError(
-            "DEVICE_ENCRYPT_KEY nao configurada"
+            "DEVICE_ENCRYPT_KEY não configurada"
         )
         lock = MagicMock()
         lock.acquire.return_value = True

@@ -7,9 +7,10 @@ da W2 — inclusive para admin (defesa em profundidade).
 """
 from __future__ import annotations
 
-import pytest
 
 from unittest.mock import MagicMock
+
+import pytest
 
 from huawei_manager.handlers.auth import AuthMixin
 from huawei_manager.services import ServiceDef
@@ -17,7 +18,7 @@ from huawei_manager.tabs.services.handlers import ServicesHandlers
 
 ROLES = ("user", "tecnico", "admin")
 
-# user ❌ | tecnico ✅ | admin ✅
+# user falha | tecnico ok | admin ok
 ALLOWED = {"user": False, "tecnico": True, "admin": True}
 # sempre bloqueado, independente do papel
 DENIED = {"user": False, "tecnico": False, "admin": False}

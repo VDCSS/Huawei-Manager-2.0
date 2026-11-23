@@ -106,9 +106,9 @@ class NetmikoSession(SessionCommandsMixin):
     def connection(self) -> NetmikoConnection | None:
         """Handle Netmiko bruto da sessao (somente leitura).
 
-        Permite ao backend NAPALM reaproveitar o SSH ja autenticado (nenhuma
-        segunda autenticacao, nenhum segredo novo manipulado). ``None`` quando
-        nao ha conexao ativa (fail-closed).
+        Permite ao backend NAPALM reaproveitar o SSH já autenticado (nenhuma
+        segunda autenticação, nenhum segredo novo manipulado). ``None`` quando
+        não ha conexão ativa (fail-closed).
         """
         return self._conn
 
@@ -134,7 +134,7 @@ class NetmikoSession(SessionCommandsMixin):
         with kh.open("a") as f:
             f.write(f"{host} {key}\n")
 
-    # ── validacao pre-conexao ─────────────────────────────────────────
+    # ── validação pre-conexão ─────────────────────────────────────────
     def _validate_credentials(self) -> None:
         missing: list[str] = []
         if not self._host:
@@ -155,7 +155,7 @@ class NetmikoSession(SessionCommandsMixin):
                 + ", ".join(missing)
             )
 
-    # ── conexao ──────────────────────────────────────────────────────
+    # ── conexão ──────────────────────────────────────────────────────
     def connect(self, timeout: int | None = None) -> None:
         if timeout is None:
             from huawei_manager._config import SSH_TIMEOUT
@@ -178,7 +178,7 @@ class NetmikoSession(SessionCommandsMixin):
             sess_log_path = str(sess_dir / f"{self._host}_{self._port}_{ts}.log")
             log.debug("Session log: %s", sess_log_path)
         except OSError:
-            log.warning("Nao foi possivel criar %s — session log desabilitado", sess_dir)
+            log.warning("Não foi possível criar %s — session log desabilitado", sess_dir)
 
         cfg = ConnectionConfig(
             host=self._host,
@@ -210,10 +210,10 @@ class NetmikoSession(SessionCommandsMixin):
                 "session_log": cfg.session_log or None,
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
-            # Netmiko (>=4) ja filtra password/secret do session_log
-            # automaticamente (SessionLog.no_log + SecretsFilter) — nao
+            # Netmiko (>=4) já filtra password/secret do session_log
+            # automaticamente (SessionLog.no_log + SecretsFilter) — não
             # existe o kwarg `no_log` em ConnectHandler, e passa-lo quebra
-            # a conexao com TypeError.
+            # a conexão com TypeError.
             self._conn = ConnectHandler(**kwargs)
             ctx.set_status("ok")
 
@@ -276,7 +276,7 @@ class NetmikoSession(SessionCommandsMixin):
         (ex.: commit do VRP8) em vez do prompt de exec view.
         """
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         self._conn.write_channel(data)
 
     def _read_raw_timing(self) -> str:
@@ -285,7 +285,7 @@ class NetmikoSession(SessionCommandsMixin):
         Não bloqueia: retorna o que estiver no buffer do canal no momento.
         """
         if not self._conn:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
         out = self._conn.read_channel_timing()
         return clean_output(str(out))
 

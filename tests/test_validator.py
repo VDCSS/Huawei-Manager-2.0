@@ -1,8 +1,6 @@
 """Tests for CommandValidator — allow-list and deny-list validation."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -201,7 +199,7 @@ class TestEdgeCases:
 
 class TestSeparatorInvariants:
     """Invariantes de seguranca do buffer: deny vence allow, separadores
-    nao encadeiam comando negado, pipe nao divide."""
+    não encadeiam comando negado, pipe não divide."""
 
     def test_deny_wins_over_allow_same_part(self, validator):
         """Invariante 1: deny-list vence allow-list na mesma parte."""
@@ -209,7 +207,7 @@ class TestSeparatorInvariants:
         assert result.allowed is False
 
     def test_semicolon_does_not_chain_denied(self, validator):
-        """Invariante 2: ; nao encadeia comando negado apos permitido."""
+        """Invariante 2: ; não encadeia comando negado apos permitido."""
         result = validator.validate(
             "display version;reset saved-configuration", role="user"
         )
@@ -235,7 +233,7 @@ class TestSeparatorInvariants:
         assert result.allowed is False
 
     def test_pipe_does_not_split(self, validator):
-        """Invariante 3: pipe e filtro de output, nao separador."""
+        """Invariante 3: pipe e filtro de output, não separador."""
         result = validator.validate(
             "display cpu-usage | include cpu", role="user"
         )

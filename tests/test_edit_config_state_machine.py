@@ -16,11 +16,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from huawei_manager.audit_log import AuditLogger
 from huawei_manager.basic_config.vrp_version import VrpVersion
 from huawei_manager.exceptions import SdnConnectionError
 from huawei_manager.session_commands import SessionCommandsMixin
-from huawei_manager.vault import EnvBackend
 
 
 class _CtrlZSession(SessionCommandsMixin):

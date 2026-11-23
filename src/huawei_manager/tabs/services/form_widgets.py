@@ -3,7 +3,7 @@
 Constrói a UI a partir de um :class:`~huawei_manager.services.form_spec.FormSpec`:
 
 * seções únicas → grade de campos (label + editor);
-* seções repetíveis → linhas com botão "−" (remove) e botão "＋ Adicionar".
+* seções repetíveis → linhas com botão "−" (remove) e botão "[ADICIONAR] Adicionar".
 
 Campos ``ENUM`` viram ``QComboBox``; os demais, ``QLineEdit``. Campos com
 ``depends_on`` ficam ocultos até que o campo controlador tenha um dos
@@ -148,7 +148,7 @@ class FormWidget(QWidget):
                 self._rows_layout[section.key] = rows_box
                 for _ in range(section.min_rows):
                     self._add_row(section)
-                add_btn = QPushButton("＋ Adicionar linha", frame)
+                add_btn = QPushButton("[ADICIONAR] Adicionar linha", frame)
                 add_btn.setStyleSheet(f"""
                     QPushButton {{
                         background: {C.BG_BASE}; color: {C.NEON_CYAN};
@@ -172,7 +172,7 @@ class FormWidget(QWidget):
         # Avisos condicionais — um rótulo por aviso (fora do laço de
         # seções, para não duplicar nem dessincronizar os avisos).
         for warning in self._spec.warnings:
-            lbl = QLabel(f"⚠  {warning.message}", self)
+            lbl = QLabel(f"aviso  {warning.message}", self)
             lbl.setWordWrap(True)
             lbl.setStyleSheet(_ui.css_label(C.NEON_AMBER, C.BG_INPUT, 10))
             lbl.setVisible(False)

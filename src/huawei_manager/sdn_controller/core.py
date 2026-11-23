@@ -3,7 +3,7 @@
 Fornece o ``ControllerCore`` (gerencia estado em RAM com dump periodico
 para JSON) e o dataclass ``DeviceState``.
 
-Headless — sem dependencia Qt. Thread-safe via ``threading.Lock``.
+Headless — sem dependência Qt. Thread-safe via ``threading.Lock``.
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class DeviceState:
 
     Attributes:
         device_id: Identificador unico do dispositivo.
-        host: Endereco IP ou hostname.
+        host: Endereço IP ou hostname.
         port: Porta SSH/CLI.
         device_type: Familia do dispositivo (router, switch, firewall, ...).
         status: Status operacional (unknown, online, offline, error, ...).
@@ -90,9 +90,9 @@ class ControllerCore:
         event_queue: Opcional — fila de eventos para publicar mudancas
             de estado. Se fornecida, o core tambem se inscreve para
             processar eventos automaticamente.
-        dump_path: Caminho do arquivo JSON para persistencia.
+        dump_path: Caminho do arquivo JSON para persistência.
         dump_interval: Intervalo em segundos entre dumps periodicos.
-            Padrao: 60s. ``0`` desabilita dump periodico.
+            Padrão: 60s. ``0`` desabilita dump periodico.
     """
 
     def __init__(
@@ -128,7 +128,7 @@ class ControllerCore:
     ) -> DeviceState:
         """Registra um dispositivo no controlador.
 
-        Se o device_id ja existir, sobrescreve o estado anterior.
+        Se o device_id já existir, sobrescreve o estado anterior.
         Publica um evento ``DEVICE_CONNECTED`` se houver ``event_queue``.
         """
         state = DeviceState(
@@ -149,7 +149,7 @@ class ControllerCore:
         return state
 
     def get_state(self, device_id: str) -> DeviceState | None:
-        """Retorna o estado de um dispositivo, ou None se nao existir."""
+        """Retorna o estado de um dispositivo, ou None se não existir."""
         with self._lock:
             return self._devices.get(device_id)
 
@@ -189,7 +189,7 @@ class ControllerCore:
             metadata: Metadados a serem mesclados (opcional).
 
         Returns:
-            O ``DeviceState`` atualizado, ou None se o dispositivo nao existir.
+            O ``DeviceState`` atualizado, ou None se o dispositivo não existir.
         """
         with self._lock:
             state = self._devices.get(device_id)
@@ -214,7 +214,7 @@ class ControllerCore:
         * ``CONFIG_CHANGED`` — metadata registra ``last_config_change``.
         * ``DEVICE_STATUS_CHANGED`` — status extraido de ``event.payload.status``.
 
-        Eventos para dispositivos nao registrados sao ignorados.
+        Eventos para dispositivos não registrados sao ignorados.
         """
         state = self.get_state(event.source)
         if state is None:
@@ -260,14 +260,14 @@ class ControllerCore:
             except Exception:
                 log.debug("immediate dump after %s failed", event.type.name)
 
-    # ── Persistencia ───────────────────────────────────────────────────────
+    # ── Persistência ───────────────────────────────────────────────────────
 
     def dump(self, path: str | None = None) -> None:
         """Serializa o estado de todos os dispositivos para JSON.
 
         Args:
             path: Caminho do arquivo. Se omitido, usa ``dump_path`` da
-                configuracao. Se nenhum estiver configurado, e um no-op.
+                configuração. Se nenhum estiver configurado, e um no-op.
         """
         target = path or self._dump_path
         if target is None:
@@ -287,7 +287,7 @@ class ControllerCore:
             path: Caminho do arquivo JSON.
 
         Returns:
-            Numero de dispositivos carregados (0 se o arquivo nao existir).
+            Numero de dispositivos carregados (0 se o arquivo não existir).
         """
         filepath = Path(path)
         if not filepath.exists():
@@ -314,14 +314,14 @@ class ControllerCore:
     ) -> None:
         """Sincroniza o estado do ControllerCore com o inventario de Devices.
 
-        Registra Devices do inventario que ainda nao estao no controlador.
-        Nao remove dispositivos que existem no core mas nao no inventario
+        Registra Devices do inventario que ainda não estao no controlador.
+        Não remove dispositivos que existem no core mas não no inventario
         (eles podem estar offline temporariamente).
 
         Args:
             devices: Lista de objetos Device do device_models (com .id, .host, .port, .type).
             publish_events: Se False, evita publicar eventos durante o sync
-                para nao gerar feedback loop no drain queue.
+                para não gerar feedback loop no drain queue.
         """
         for device in devices:
             if device.id not in self._devices:
@@ -344,7 +344,7 @@ class ControllerCore:
         """Inicia o timer de dump periodico.
 
         Dispara um dump a cada ``dump_interval`` segundos.
-        Nao faz nada se ``dump_interval <= 0`` ou ``dump_path`` nao configurado.
+        Não faz nada se ``dump_interval <= 0`` ou ``dump_path`` não configurado.
         """
         if self._dump_interval <= 0 or self._dump_path is None:
             return

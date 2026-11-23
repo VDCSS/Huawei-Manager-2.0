@@ -40,7 +40,7 @@ class CmdHandlers:
     #  EDITOR
     # ══════════════════════════════════════════════════════════════
     def confirm_destructive(self, cmd: str) -> bool:
-        """Valida o comando e pede confirmacao explicita para bypass de politica.
+        """Valida o comando e pede confirmação explicita para bypass de politica.
 
         Roda na UI thread (antes do run). Retorna False se o comando for
         bloqueado ou se o operador cancelar um comando destrutivo liberado
@@ -51,7 +51,7 @@ class CmdHandlers:
             return True
         vr = validator.validate(cmd, self._ctx.role())
         if not vr.allowed:
-            _ui.write(self._state.out, f"✘  Comando bloqueado: {vr.reason}",
+            _ui.write(self._state.out, f"x  Comando bloqueado: {vr.reason}",
                       self._ctx.dispatch)
             return False
         if vr.bypass_2fa:
@@ -62,13 +62,13 @@ class CmdHandlers:
                 f"{cmd}\n\nExecutar mesmo assim?",
             )
             if reply != QMessageBox.StandardButton.Yes:
-                _ui.write(self._state.out, "✘  Comando cancelado pelo usuario.",
+                _ui.write(self._state.out, "x  Comando cancelado pelo usuario.",
                           self._ctx.dispatch)
                 return False
         return True
 
     def run_cmd_safe(self, cmd: str = "") -> None:
-        """Despacha exec_cmd apos validacao + confirmacao (UI thread)."""
+        """Despacha exec_cmd apos validação + confirmação (UI thread)."""
         if not cmd:
             return
         if not self.confirm_destructive(cmd):
@@ -76,7 +76,7 @@ class CmdHandlers:
         self._ctx.run(lambda: self.exec_cmd(cmd))
 
     def run_config_safe(self, cmd: str = "") -> None:
-        """Despacha exec_config apos validacao + confirmacao (UI thread)."""
+        """Despacha exec_config apos validação + confirmação (UI thread)."""
         if not cmd:
             return
         if not self.confirm_destructive(cmd):
@@ -93,13 +93,13 @@ class CmdHandlers:
         out = self._state.out
         dispatch = self._ctx.dispatch
         if not cmd:
-            _ui.write(out, "✘  Editor vazio — digite um comando", dispatch)
+            _ui.write(out, "x  Editor vazio — digite um comando", dispatch)
             return
         validator = self._ctx.cmd_validator
         if validator is not None:
             vr = validator.validate(cmd, self._ctx.role())
             if not vr.allowed:
-                _ui.write(out, f"✘  Comando bloqueado: {vr.reason}", dispatch)
+                _ui.write(out, f"x  Comando bloqueado: {vr.reason}", dispatch)
                 return
         if self._state.sysview_var:
             _ui.loading(out,
@@ -109,7 +109,7 @@ class CmdHandlers:
                 _ok, result = self._ctx.sb.send_config(cmd.strip().splitlines())
             except SdnError as exc:
                 self._ctx.sb.invalidate_connection()
-                _ui.write(out, f"✘  Falha SSH: {exc}", dispatch)
+                _ui.write(out, f"x  Falha SSH: {exc}", dispatch)
                 return
         else:
             _ui.loading(out, f"Executando: {cmd}…", dispatch)
@@ -117,7 +117,7 @@ class CmdHandlers:
                 result = self._ctx.sb.send_command(cmd or "")
             except SdnError as exc:
                 self._ctx.sb.invalidate_connection()
-                _ui.write(out, f"✘  Falha SSH: {exc}", dispatch)
+                _ui.write(out, f"x  Falha SSH: {exc}", dispatch)
                 return
         _ui.write(out, result, dispatch)
         self._ctx.event_bus.put(Event(EventType.COMMAND_EXECUTED,
@@ -126,7 +126,7 @@ class CmdHandlers:
                                           command=cmd.splitlines()[0])))
 
     def exec_config(self, cmd: str = "") -> None:
-        """Envia comandos de configuracao do editor via send_config.
+        """Envia comandos de configuração do editor via send_config.
 
         cmd deve ser extraido do editor ANTES de chamar este metodo
         (roda na IO thread).
@@ -135,14 +135,14 @@ class CmdHandlers:
         out = self._state.out
         dispatch = self._ctx.dispatch
         if not cmd:
-            _ui.write(out, "✘  Editor vazio — digite os comandos de configuracao",
+            _ui.write(out, "x  Editor vazio — digite os comandos de configuração",
                       dispatch)
             return
         validator = self._ctx.cmd_validator
         if validator is not None:
             vr = validator.validate(cmd, self._ctx.role())
             if not vr.allowed:
-                _ui.write(out, f"✘  Config bloqueada: {vr.reason}", dispatch)
+                _ui.write(out, f"x  Config bloqueada: {vr.reason}", dispatch)
                 return
         dry_run = self._ctx.dry_run
         session = self._ctx.session
@@ -158,21 +158,21 @@ class CmdHandlers:
                         preview += line
                     _ui.loading(out, f"Dry-run: {diff_report.summary}", dispatch)
                 else:
-                    _ui.write(out, "ℹ  Nenhuma alteracao detectada em relacao a config atual.",
+                    _ui.write(out, "ℹ  Nenhuma alteração detectada em relacao a config atual.",
                               dispatch)
                     return
             except Exception:
-                # Protecao falhou -> NAO aplicar: seguir sem preview violaria
+                # Proteção falhou -> NÃO aplicar: seguir sem preview violaria
                 # o contrato de dry-run (mudanca de estado sem visibilidade).
                 if _config.log is not None:
-                    _config.log.exception("Dry-run falhou — abortando aplicacao de config")
+                    _config.log.exception("Dry-run falhou — abortando aplicação de config")
                 _ui.write(
                     out,
-                    "✘  Dry-run falhou — configuracao NAO aplicada. Verifique o log.",
+                    "x  Dry-run falhou — configuração NÃO aplicada. Verifique o log.",
                     dispatch,
                 )
                 return
-        _ui.loading(out, "Aplicando configuracao…", dispatch)
+        _ui.loading(out, "Aplicando configuração…", dispatch)
         # Command pattern: snapshot pré-mudança (fail-closed) + mutação.
         # Sem snapshot não há rollback possível — nada é aplicado.
         command = ConfigCommand(
@@ -186,7 +186,7 @@ class CmdHandlers:
             result = command.execute()
         except SnapshotError as exc:
             self._ctx.sb.invalidate_connection()
-            _ui.write(out, f"✘  {exc} — configuração NÃO aplicada.", dispatch)
+            _ui.write(out, f"x  {exc} — configuração NÃO aplicada.", dispatch)
             audit_config_op(
                 _config.audit,
                 op="config_apply",
@@ -202,7 +202,7 @@ class CmdHandlers:
             # para permitir rollback depois de reconectar.
             self._ctx.sb.invalidate_connection()
             self._ctx.set_last_config_command(command)
-            _ui.write(out, f"✘  Falha SSH: {exc}", dispatch)
+            _ui.write(out, f"x  Falha SSH: {exc}", dispatch)
             audit_config_op(
                 _config.audit,
                 op="config_apply",
@@ -262,7 +262,7 @@ class CmdHandlers:
             result = command.rollback()
         except SdnError as exc:
             self._ctx.sb.invalidate_connection()
-            _ui.write(out, f"✘  Falha SSH no rollback: {exc}", dispatch)
+            _ui.write(out, f"x  Falha SSH no rollback: {exc}", dispatch)
             audit_config_op(
                 _config.audit,
                 op="config_rollback",

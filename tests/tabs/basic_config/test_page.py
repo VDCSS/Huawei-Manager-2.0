@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtWidgets import QWidget
 
-from huawei_manager.basic_config.models import BasicConfigPlan
 from huawei_manager.basic_config.vrp_version import VrpVersion
 from huawei_manager.exceptions import SdnValidationError
 from huawei_manager.tabs._contract import TabContext

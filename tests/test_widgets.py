@@ -132,9 +132,9 @@ class TestNeonButton:
         assert btn.text() == "Dashboard"
 
     def test_with_icon(self, qtbot):
-        btn = NeonButton(text="Home", icon="🏠")
+        btn = NeonButton(text="Home", icon="inicio")
         qtbot.addWidget(btn)
-        assert "🏠" in btn.text()
+        assert "inicio" in btn.text()
         assert "Home" in btn.text()
 
     def test_connects_command(self, qtbot):

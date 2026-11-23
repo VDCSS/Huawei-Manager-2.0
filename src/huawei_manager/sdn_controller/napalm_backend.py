@@ -240,7 +240,7 @@ class NapalmVRPBackend:
                                                    read_timeout=30))
             return ret
         except Exception as exc:  # degradação fechada: o erro original segue visível
-            return f"\n[aviso] nao foi possivel sair do config mode: {exc}"
+            return f"\n[aviso] não foi possível sair do config mode: {exc}"
 
     def apply(self, commands: list[str], *, snapshot: str | None = None) -> ApplyResult:
         """Aplica um lote de comandos com snapshot pré-mudança e auditoria.
@@ -257,7 +257,7 @@ class NapalmVRPBackend:
             SdnCommandError: Dispositivo rejeitou algum comando (alterações descartadas).
         """
         if self._conn is None:
-            raise SdnConnectionError("Sem conexao ativa")
+            raise SdnConnectionError("Sem conexão ativa")
 
         started = time.monotonic()
         pre = snapshot if snapshot is not None else self.snapshot()
@@ -270,7 +270,7 @@ class NapalmVRPBackend:
         except Exception as exc:
             self._log(status="error", commands=commands, started=started,
                       error=str(exc))
-            raise SdnCommandError(f"Falha ao aplicar configuracao: {exc}") from exc
+            raise SdnCommandError(f"Falha ao aplicar configuração: {exc}") from exc
 
         self._log(status="ok", commands=commands, started=started)
         return ApplyResult(

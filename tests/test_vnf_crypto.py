@@ -251,4 +251,4 @@ class TestEnsureEncryptKey:
             ensure_encrypt_key()
 
         # Warning deve ter sido logado
-        assert any("VNF_ENCRYPT_KEY gerada mas nao persistida" in r.message for r in caplog.records)
+        assert any("VNF_ENCRYPT_KEY gerada mas não persistida" in r.message for r in caplog.records)

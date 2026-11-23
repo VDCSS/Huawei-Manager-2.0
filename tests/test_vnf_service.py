@@ -8,9 +8,9 @@ from unittest.mock import patch
 import pytest
 from cryptography.fernet import Fernet
 
-from huawei_manager.services.device_service import SessionOverrides, DeviceService
 from huawei_manager.device_crypto import _encrypt_val
 from huawei_manager.device_models import Device
+from huawei_manager.services.device_service import DeviceService, SessionOverrides
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ class TestAddDevice:
 
     def test_add_after_delete_does_not_collide(self, service: DeviceService):
         # Delecao deixa buracos na sequencia: len() subestimaria e
-        # geraria um ID ja em uso. O proximo ID deve superar o maior existente.
+        # geraria um ID já em uso. O proximo ID deve superar o maior existente.
         d1 = service.add_device({"name": "a", "host": "10.0.0.1"})
         d2 = service.add_device({"name": "b", "host": "10.0.0.2"})
         d3 = service.add_device({"name": "c", "host": "10.0.0.3"})
@@ -116,15 +116,15 @@ class TestAddDevice:
         assert len(ids) == len(set(ids))
 
     def test_add_missing_name_raises(self, service: DeviceService):
-        with pytest.raises(ValueError, match="Nome e obrigatorio"):
+        with pytest.raises(ValueError, match="nome e obrigatório"):
             service.add_device({"host": "10.0.0.1"})
 
     def test_add_missing_host_raises(self, service: DeviceService):
-        with pytest.raises(ValueError, match="IP/Host e obrigatorio"):
+        with pytest.raises(ValueError, match="host e obrigatório"):
             service.add_device({"name": "x"})
 
     def test_add_invalid_port_raises(self, service: DeviceService):
-        with pytest.raises(ValueError, match="Porta deve estar entre"):
+        with pytest.raises(ValueError, match="porta deve estar entre"):
             service.add_device({"name": "x", "host": "10.0.0.1", "port": 99999})
 
 
@@ -367,6 +367,7 @@ class TestTarget:
 class TestSaveInventoryWithRepository:
     def test_delete_removes_from_repository(self, monkeypatch):
         from unittest.mock import MagicMock
+
         from huawei_manager.services.device_service import DeviceService
 
         repo = MagicMock()
@@ -384,6 +385,7 @@ class TestSaveInventoryWithRepository:
 
     def test_save_inventory_deletes_removed_devices(self, monkeypatch):
         from unittest.mock import MagicMock
+
         from huawei_manager.services.device_service import DeviceService
 
         repo = MagicMock()
@@ -393,7 +395,7 @@ class TestSaveInventoryWithRepository:
 
         svc = DeviceService(inventory_path="/tmp/unused.json", repository=repo)
 
-        svc.save_inventory([d1])
+        svc.save_inventory([d1], allow_deletion=True)
 
         repo.create_device.assert_called_once_with(d1)
         repo.delete_device.assert_called_once_with("dev-002")

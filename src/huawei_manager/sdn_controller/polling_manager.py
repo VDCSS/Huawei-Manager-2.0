@@ -44,9 +44,9 @@ _ERROR_PREFIXES = ("ERRO:", "Sem conex", "Error:", "Unknown command",
                    "Incomplete command", "Ambiguous", "Unrecognized",
                    "Invalid input")
 
-# Comando que o device nao suporta (ex.: BGP/OSPF ausente) e esquecido por
-# este TTL para nao ser reenviado a cada poll. Curto o bastante para detectar
-# protocolo habilitado depois, longo o bastante para nao poluir o CLI.
+# Comando que o device não suporta (ex.: BGP/OSPF ausente) e esquecido por
+# este TTL para não ser reenviado a cada poll. Curto o bastante para detectar
+# protocolo habilitado depois, longo o bastante para não poluir o CLI.
 _UNSUPPORTED_TTL_SECS = 6 * 60 * 60
 
 
@@ -199,7 +199,7 @@ class PollingManager:
         self._next_due: dict[str, float] = {}
         self._next_due_lock = threading.Lock()
         self._tick_lock = threading.Lock()
-        # (device_id, comando) -> epoch de expiracao do cache de nao suportados
+        # (device_id, comando) -> epoch de expiracao do cache de não suportados
         self._unsupported: dict[tuple[str, str], float] = {}
         self._unsupported_lock = threading.Lock()
         self._truncation_warned = False
@@ -322,7 +322,7 @@ class PollingManager:
                 new = self._remember_unsupported(device.id, failed)
                 if new:
                     log.warning(
-                        "device %s: %d comando(s) nao suportado(s) — "
+                        "device %s: %d comando(s) não suportado(s) — "
                         "ignorados no hash por %dh",
                         device.id, new, _UNSUPPORTED_TTL_SECS // 3600,
                     )

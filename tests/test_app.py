@@ -32,8 +32,9 @@ class TestAppCoreComposition:
         assert issubclass(HuaweiRouterApp, AppCore)
 
     def test_app_core_inherits_qmain_window(self):
-        from huawei_manager.app import AppCore
         from PySide6.QtWidgets import QMainWindow
+
+        from huawei_manager.app import AppCore
         assert issubclass(AppCore, QMainWindow)
 
     def test_app_core_inherits_threading_mixin(self):

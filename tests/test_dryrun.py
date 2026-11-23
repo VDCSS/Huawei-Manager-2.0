@@ -1,8 +1,6 @@
 """Tests for DryRunEngine — diff generation, dry-run, apply, rollback."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from huawei_manager.sdn_controller.dryrun import DryRunEngine

@@ -2,8 +2,8 @@
 
 Valida comandos contra listas de permitidos/negados antes da execucao.
 Roles privilegiados (admin/tecnico) podem liberar comandos negados via
-bypass de politica (``bypass_2fa``). NAO existe mecanismo 2FA: a camada
-de execucao DEVE exigir confirmacao explicita antes de executar um
+bypass de politica (``bypass_2fa``). NÃO existe mecanismo 2FA: a camada
+de execução DEVE exigir confirmação explicita antes de executar um
 comando liberado por bypass.
 """
 from __future__ import annotations
@@ -37,14 +37,14 @@ _CMD_SEPARATORS = re.compile(r"[;\r\n]+")
 
 @dataclass
 class ValidationResult:
-    """Resultado da validacao de um comando.
+    """Resultado da validação de um comando.
 
     Attributes:
         allowed: True se o comando pode ser executado.
         reason: Mensagem explicativa (None se allowed=True sem bypass).
         bypass_2fa: True se o comando foi liberado por bypass de politica
-            (roles privilegiados). NAO e um mecanismo 2FA — a camada de
-            execucao deve exigir confirmacao explicita do operador.
+            (roles privilegiados). NÃO e um mecanismo 2FA — a camada de
+            execução deve exigir confirmação explicita do operador.
     """
 
     allowed: bool
@@ -57,9 +57,9 @@ class CommandValidator:
 
     Args:
         allow_patterns: Lista de padroes regex de comandos permitidos.
-            Padrao: displays/shows.
+            Padrão: displays/shows.
         deny_patterns: Lista de padroes regex de comandos negados.
-            Padrao: format flash, reset saved-configuration, undo
+            Padrão: format flash, reset saved-configuration, undo
             startup, delete.*, reset.*.
     """
 
@@ -85,12 +85,12 @@ class CommandValidator:
         O buffer e dividido em comandos logicos por separadores VRP
         (``;``, ``\\r``, ``\\n``) e cada parte e validada
         individualmente — um comando negado encadeado a um permitido
-        nao escapa da politica. O pipe (``|``) nao divide.
+        não escapa da politica. O pipe (``|``) não divide.
 
         Regras por comando logico:
         1. Deny-list primeiro: deny vence allow.
         2. Deny-list + role com bypass → permitido (bypass de politica;
-           exige confirmacao explicita na camada de execucao).
+           exige confirmação explicita na camada de execução).
         3. Deny-list + role sem bypass → negado.
         4. Allow-list → permitido.
         5. Desconhecido (nem allow nem deny) → negado.
@@ -100,7 +100,7 @@ class CommandValidator:
             role: Papel do usuario (user, tecnico, admin).
 
         Returns:
-            ``ValidationResult`` com o resultado da validacao.
+            ``ValidationResult`` com o resultado da validação.
         """
         if not command.strip():
             return ValidationResult(allowed=False, reason="Empty command")
