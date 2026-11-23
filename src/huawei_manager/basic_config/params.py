@@ -42,9 +42,11 @@ _INTERFACE_RE = re.compile(
 # "NULL0" (interface nula) não casa com _INTERFACE_RE — é literal na VRP.
 _NULL0 = "NULL0"
 # Nome de ACL nomeada VRP: 1–32 caracteres, sem espaços nem separadores.
-_ACL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+# Aceita letras latinas com acento (ABNT2), números, '_' e '-'.
+_ACL_NAME_RE = re.compile(r"^[A-Za-zÀ-ÿ0-9_-]{1,32}$")
 # Nome de objeto VRP (traffic classifier/behavior/policy): começa por letra.
-_VRP_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
+# Aceita letras latinas com acento (ABNT2).
+_VRP_NAME_RE = re.compile(r"^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9_-]{0,31}$")
 _HOSTNAME_RE = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,62}[A-Za-z0-9])?$"
 )

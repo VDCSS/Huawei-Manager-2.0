@@ -141,8 +141,9 @@ def _fake_dialog(monkeypatch, *, decision=None, reject: bool = False):
     cap: dict = {}
 
     class FakeDialog:
-        def __init__(self, parent=None, *, can_save=True, resolver=None):
-            cap.update(can_save=can_save, resolver=resolver)
+        def __init__(self, parent=None, *, can_save=True, resolver=None,
+                     chain=None):
+            cap.update(can_save=can_save, resolver=resolver, chain=chain)
 
         def exec(self) -> int:
             return 0 if reject else 1
@@ -245,7 +246,7 @@ class TestBlockSiteApply:
         lines = ctx.sb.send_config_block.call_args.args[0]
         assert lines[0] == "acl number 3100"
         assert any(ln.startswith("rule 5 deny") for ln in lines), lines
-        assert "traffic-filter outbound acl 3100" in lines
+        assert "traffic-policy P_SITE_3100 outbound" in lines
         ctx.sb.save_running_config.assert_called()
         assert tab.state.last_config_command is not None
         assert "não persistido" not in _out(tab).lower() or (

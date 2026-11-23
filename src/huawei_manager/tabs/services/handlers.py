@@ -12,7 +12,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from huawei_manager.audit_log import AuditLogger
 from huawei_manager.basic_config.vrp_version import VrpVersion, detect_vrp_version
@@ -38,11 +38,16 @@ from huawei_manager.services.acl_presets import (
 from huawei_manager.services.block_cli import (
     absence_check,
     anchors_for,
+    chain_absence,
+    chain_anchors,
+    delete_chain_lines,
     preview_lines,
     preview_site_lines,
     rollback_for,
     site_anchors,
     site_rollback,
+    suggested_chain,
+    update_chain_lines,
 )
 from huawei_manager.services.device_precheck import (
     interfaces_in_block,
@@ -55,6 +60,16 @@ from huawei_manager.services.form_registry import (
     rollback_lines,
 )
 from huawei_manager.services.form_spec import RenderedForm
+from huawei_manager.services.traffic_policy import (
+    TrafficPolicyChain,
+    render_chain,
+)
+from huawei_manager.services.traffic_policy_presets import (
+    TrafficPolicyPreset,
+    delete_preset,
+    load_preset,
+    save_preset,
+)
 from huawei_manager.services.ui_bridge import ask_from_worker
 from huawei_manager.tabs import _ui
 from huawei_manager.utils import sanitize_command
@@ -145,6 +160,142 @@ def _audit_napalm_blocked(audit: AuditLogger | None, *, user: str,
         )
     except Exception:  # justificativa: auditoria nunca derruba a operação
         log.exception("audit de bloqueio NAPALM falhou")
+
+
+def _chain_of(preset: TrafficPolicyPreset | None) -> TrafficPolicyChain | None:
+    """Converte o preset persistido na cadeia usada pelo renderer/CLI."""
+    if preset is None:
+        return None
+    return TrafficPolicyChain(
+        classifier=preset.classifier,
+        behavior=preset.behavior,
+        policy=preset.policy,
+        action=preset.behavior_action,
+    )
+
+
+def _preset_of(
+    device_key: str,
+    flow: str,
+    *,
+    acl_number: int,
+    interface: str,
+    direction: str,
+    chain: TrafficPolicyChain,
+    applied: bool,
+    preexisting: bool,
+) -> TrafficPolicyPreset:
+    """Monta o preset (uma cadeia por device/fluxo) para persistência."""
+    return TrafficPolicyPreset(
+        device_key=device_key,
+        flow=flow,
+        classifier=chain.classifier,
+        behavior=chain.behavior,
+        policy=chain.policy,
+        behavior_action=chain.action,
+        acl_number=acl_number,
+        interface=interface,
+        direction=direction,
+        applied=applied,
+        preexisting=preexisting,
+    )
+
+
+class _ChainPlan(NamedTuple):
+    """Bloco CLI + verificação + rollback de uma config de cadeia.
+
+    ``anchors`` vazias = a verificação deve procurar **ausência** das
+    linhas em ``absence`` (caso da exclusão); caso contrário exige a
+    presença das âncoras no running-config.
+    """
+
+    lines: list[str]
+    anchors: tuple[str, ...]
+    absence: tuple[str, ...]
+    rollback: Callable[[str], list[str]]
+
+
+def _chain_plan(
+    *,
+    config_action: str,
+    old: TrafficPolicyChain | None,
+    new: TrafficPolicyChain,
+    acl_number: int,
+    interface: str,
+    direction: str,
+    preexisting: bool,
+) -> _ChainPlan | None:
+    """Plano CLI para ``update``/``delete`` de cadeia (``None`` = normal).
+
+    Fail-closed: sem cadeia anterior persistida, nenhuma troca/remoção é
+    planejada — o chamador deve abortar antes de tocar no dispositivo.
+    """
+    if config_action == "update" and old is not None:
+        return _ChainPlan(
+            lines=update_chain_lines(
+                old, new, acl_number=acl_number, interface=interface,
+                direction=direction, preexisting=preexisting,
+            ),
+            anchors=chain_anchors(
+                new, acl_number=acl_number, interface=interface,
+                direction=direction,
+            ),
+            absence=chain_absence(old, interface=interface, direction=direction),
+            rollback=lambda _snapshot: update_chain_lines(
+                new, old, acl_number=acl_number, interface=interface,
+                direction=direction, preexisting=preexisting,
+            ),
+        )
+    if config_action == "delete" and old is not None:
+        return _ChainPlan(
+            lines=delete_chain_lines(
+                old, interface=interface, direction=direction,
+                preexisting=preexisting,
+            ),
+            anchors=(),
+            absence=chain_absence(old, interface=interface, direction=direction),
+            rollback=lambda _snapshot: [
+                *render_chain(old, str(acl_number))[0],
+                f"interface {interface}",
+                f"traffic-policy {old.policy} {direction}",
+                "quit",
+            ],
+        )
+    return None
+
+
+def _save_chain_preset(
+    key: str,
+    flow: str,
+    *,
+    acl_number: int,
+    interface: str,
+    direction: str,
+    chain: TrafficPolicyChain,
+    applied: bool,
+    preexisting: bool,
+) -> bool:
+    """Grava o preset da cadeia; falha de JSON volta ``False`` (fail-closed)."""
+    try:
+        save_preset(_preset_of(
+            key, flow, acl_number=acl_number, interface=interface,
+            direction=direction, chain=chain, applied=applied,
+            preexisting=preexisting,
+        ))
+        return True
+    except SdnValidationError as exc:
+        log.warning("cadeia não persistida (%s/%s): %s", key, flow, exc)
+        return False
+
+
+def _delete_chain_preset(key: str, flow: str) -> bool:
+    """Apaga o preset da cadeia; ausência é idempotente."""
+    try:
+        delete_preset(key, flow)
+        return True
+    except SdnValidationError as exc:
+        log.warning("cadeia não removida (%s/%s): %s", key, flow, exc)
+        return False
 
 
 class ServicesHandlers:
@@ -795,17 +946,20 @@ class ServicesHandlers:
         key = device_key(str(device.name), str(device.host))
         try:
             profile = load_profile(None, key)
+            preset = load_preset(key, "internet")
         except SdnValidationError as exc:
             _ui.write(self._state.output, f"x  {exc} — nada foi aplicado.",
                       self._ctx.dispatch)
             return
 
-        applied, source = self._detect_applied(profile)
+        chain = _chain_of(preset)
+        applied, source = self._detect_applied(profile, chain)
         dialog = BlockInternetDialog(
             profile=profile,
             applied=applied,
             applied_source=source,
             can_save=role_meets(self._ctx.role(), "admin"),
+            chain=chain,
         )
         dialog.set_device_key(key)
         if not dialog.exec():
@@ -814,6 +968,19 @@ class ServicesHandlers:
             return
         decision = dialog.get_decision()
 
+        if decision.config_action == "save":
+            self._save_chain_config(
+                chain=decision.chain,
+                key=key,
+                flow="internet",
+                acl_number=decision.profile.acl_number,
+                interface=decision.profile.interface,
+                direction=decision.profile.direction,
+                applied=bool(preset.applied) if preset is not None else False,
+                preexisting=decision.profile.created_from_snapshot,
+            )
+            return
+
         if not self._ctx.sb.is_alive():
             _ui.write(self._state.output,
                       "x  Sem sessao SSH ativa. Conecte-se primeiro.",
@@ -821,7 +988,7 @@ class ServicesHandlers:
             return
         if self._ctx.ensure_device_ready("aplicar o bloqueio") is None:
             return
-        self._ctx.spawn_io(lambda: self._run_block(decision))
+        self._ctx.spawn_io(lambda: self._run_block(decision, key))
 
     def block_site(self) -> None:
         """Abre o modal "Bloquear site" e executa a decisão.
@@ -858,14 +1025,43 @@ class ServicesHandlers:
             )
             return
 
+        device = self._ctx.device()
+        if device is None:
+            _ui.write(self._state.output,
+                      "x  Nenhum device selecionado.",
+                      self._ctx.dispatch)
+            return
+        key = device_key(str(device.name), str(device.host))
+        try:
+            preset = load_preset(key, "site")
+        except SdnValidationError as exc:
+            _ui.write(self._state.output, f"x  {exc} — nada foi aplicado.",
+                      self._ctx.dispatch)
+            return
+        chain = _chain_of(preset)
+
         dialog = BlockSiteDialog(
             can_save=role_meets(self._ctx.role(), "admin"),
+            chain=chain,
         )
         if not dialog.exec():
             _ui.write(self._state.output, "Operação cancelada pelo usuário.",
                       self._ctx.dispatch)
             return
         decision = dialog.get_decision()
+
+        if decision.config_action == "save":
+            self._save_chain_config(
+                chain=decision.chain,
+                key=key,
+                flow="site",
+                acl_number=decision.acl_number,
+                interface=decision.interface,
+                direction=decision.direction,
+                applied=bool(preset.applied) if preset is not None else False,
+                preexisting=False,
+            )
+            return
 
         if not self._ctx.sb.is_alive():
             _ui.write(self._state.output,
@@ -874,10 +1070,83 @@ class ServicesHandlers:
             return
         if self._ctx.ensure_device_ready("aplicar o bloqueio") is None:
             return
-        self._ctx.spawn_io(lambda: self._run_block_site(decision))
+        self._ctx.spawn_io(lambda: self._run_block_site(decision, key))
+
+    def _save_chain_config(
+        self,
+        *,
+        chain: TrafficPolicyChain | None,
+        key: str,
+        flow: str,
+        acl_number: int,
+        interface: str,
+        direction: str,
+        applied: bool,
+        preexisting: bool,
+    ) -> None:
+        """Persiste a cadeia editada no JSON local (sem tocar no device).
+
+        Não exige sessão SSH: ``Editar cadeia`` só salva a configuração.
+        A auditoria registra ``block_action=chain-save`` para distinguir
+        de uma aplicação real. Falha de JSON falha fechado.
+        """
+        if chain is None:
+            _ui.write(self._state.output,
+                      "x  Cadeia inválida — nada foi salvo.",
+                      self._ctx.dispatch)
+            return
+        session = self._ctx.session
+        audit: AuditLogger | None = self._ctx.audit
+        svc = self._state.current_svc
+        svc_name = svc.name if svc is not None else "Serviço"
+        try:
+            save_preset(_preset_of(
+                key, flow, acl_number=acl_number, interface=interface,
+                direction=direction, chain=chain, applied=applied,
+                preexisting=preexisting,
+            ))
+        except SdnValidationError as exc:
+            _ui.write(self._state.output, f"x  {exc} — nada foi salvo.",
+                      self._ctx.dispatch)
+            audit_config_op(
+                audit, op="config_apply",
+                user=getattr(session, "_user", "unknown"),
+                host=getattr(session, "_host", "unknown"),
+                session_id=getattr(session, "_session_id", None),
+                status="error", service=svc_name, backend="cli",
+                form_kind="acl", saved=False, block_action="chain-save",
+            )
+            return
+        _ui.write(
+            self._state.output,
+            f"✓ Cadeia salva localmente: {chain.classifier} / "
+            f"{chain.behavior} / {chain.policy} ({flow}).\n"
+            "Nada foi enviado ao dispositivo — use 'Atualizar cadeia' "
+            "para trocá-lo.",
+            self._ctx.dispatch,
+        )
+        audit_config_op(
+            audit, op="config_apply",
+            user=getattr(session, "_user", "unknown"),
+            host=getattr(session, "_host", "unknown"),
+            session_id=getattr(session, "_session_id", None),
+            status="ok", service=svc_name, backend="cli",
+            form_kind="acl", saved=False, block_action="chain-save",
+        )
+        self._ctx.event_bus.put(Event(
+            EventType.CONFIG_CHANGED, source="service",
+            payload=CommandExecutedPayload(
+                command=f"Cadeia ({flow})",
+                data={"mode": "cli", "form_kind": "acl",
+                      "status": "ok", "saved": False,
+                      "block_action": "chain-save"},
+            ),
+        ))
 
     def _detect_applied(
-        self, profile: AclBlockProfile | None
+        self,
+        profile: AclBlockProfile | None,
+        chain: TrafficPolicyChain | None = None,
     ) -> tuple[bool, str]:
         """Binding na interface: consulta real ou cache do JSON.
 
@@ -894,93 +1163,20 @@ class ServicesHandlers:
             running = self._ctx.sb.send_command("display current-configuration")
         except SdnError:
             return bool(profile.applied), "cache"
-        missing = check_anchors(running, anchors_for(profile, "apply"))
+        missing = check_anchors(
+            running, anchors_for(profile, "apply", chain=chain))
         return (not missing), "device"
 
-    def _run_block(self, decision: BlockInternetDecision) -> None:
-        """Executa a decisão do modal Bloquear Internet (thread de IO).
-
-        Calcula o bloco e as funções de verificação/rollback da ação e
-        delega ao motor compartilhado :meth:`_execute_block`.
-        """
-        action = decision.action
-        profile = decision.profile
+    def _verify_block(
+        self, *, anchors: tuple[str, ...], absence: tuple[str, ...]
+    ) -> tuple[bool, str]:
+        """Verifica presença (âncoras) ou ausência (remoção) no running."""
         try:
-            lines = preview_lines(profile, action)
-        except SdnValidationError as exc:
-            _ui.write(self._state.output, f"x  {exc}",
-                      self._ctx.dispatch)
-            return
-
-        def verify_fn() -> tuple[bool, str]:
-            try:
-                running = self._ctx.sb.send_command(
-                    "display current-configuration")
-            except SdnError as exc:
-                return False, f"falha ao ler o running-config: {exc}"
-            if action == "apply":
-                absent = check_anchors(
-                    running, anchors_for(profile, "apply"))
-                if absent:
-                    return False, (
-                        "linha(s) não encontrada(s) no running-config: "
-                        + "; ".join(absent[:5])
-                    )
-                return True, "configuração confirmada no running-config"
-            lingering = [
-                a for a in absence_check(profile, action) if a in running
-            ]
-            if lingering:
-                return False, (
-                    "linha(s) ainda presente(s) no running-config: "
-                    + "; ".join(lingering)
-                )
-            return True, "remoção confirmada no running-config"
-
-        self._execute_block(
-            lines=lines,
-            block_action=action,
-            progress=f"Aplicando bloqueio ({action})…",
-            verify_fn=verify_fn,
-            rollback_fn=lambda _snapshot: rollback_for(profile, action),
-            save=decision.save,
-            persist_fn=lambda pre_state: self._persist_block(
-                action, profile, pre_state),
-            event_command=f"Bloquear Internet ({action})",
-        )
-
-    def _run_block_site(self, decision: BlockSiteDecision) -> None:
-        """Executa a decisão do modal Bloquear site (thread de IO).
-
-        Sem JSON de perfil (D2 é exclusivo do Bloquear Internet): o save
-        D3 persiste apenas na startup-config.
-        """
-        try:
-            lines = preview_site_lines(
-                strategy=decision.strategy,
-                acl_number=decision.acl_number,
-                interface=decision.interface,
-                direction=decision.direction,
-                resolved=decision.resolved,
-            )
-            anchors = site_anchors(
-                strategy=decision.strategy,
-                acl_number=decision.acl_number,
-                interface=decision.interface,
-                direction=decision.direction,
-                resolved=decision.resolved,
-            )
-        except SdnValidationError as exc:
-            _ui.write(self._state.output, f"x  {exc}",
-                      self._ctx.dispatch)
-            return
-
-        def verify_fn() -> tuple[bool, str]:
-            try:
-                running = self._ctx.sb.send_command(
-                    "display current-configuration")
-            except SdnError as exc:
-                return False, f"falha ao ler o running-config: {exc}"
+            running = self._ctx.sb.send_command(
+                "display current-configuration")
+        except SdnError as exc:
+            return False, f"falha ao ler o running-config: {exc}"
+        if anchors:
             absent = check_anchors(running, anchors)
             if absent:
                 return False, (
@@ -988,21 +1184,199 @@ class ServicesHandlers:
                     + "; ".join(absent[:5])
                 )
             return True, "configuração confirmada no running-config"
+        lingering = [a for a in absence if a in running]
+        if lingering:
+            return False, (
+                "linha(s) ainda presente(s) no running-config: "
+                + "; ".join(lingering[:5])
+            )
+        return True, "remoção confirmada no running-config"
+
+    def _run_block(
+        self, decision: BlockInternetDecision, key: str = ""
+    ) -> None:
+        """Executa a decisão do modal Bloquear Internet (thread de IO).
+
+        Calcula o bloco e as funções de verificação/rollback da ação e
+        delega ao motor compartilhado :meth:`_execute_block`.
+        """
+        action = decision.action
+        profile = decision.profile
+        chain = decision.chain
+        config_action = decision.config_action
+        old_preset = load_preset(key, "internet") if key else None
+        old_chain = _chain_of(old_preset)
+        preexisting = profile.created_from_snapshot
+
+        plan = _chain_plan(
+            config_action=config_action, old=old_chain,
+            new=chain or suggested_chain("BLOQ", profile.acl_number),
+            acl_number=profile.acl_number, interface=profile.interface,
+            direction=profile.direction, preexisting=preexisting,
+        )
+        if config_action in ("update", "delete") and plan is None:
+            _ui.write(
+                self._state.output,
+                "x  Cadeia anterior não encontrada — nada foi aplicado.",
+                self._ctx.dispatch,
+            )
+            return
+
+        rollback_fn: Callable[[str], list[str]]
+        try:
+            if plan is not None:
+                lines = plan.lines
+                anchors, absence = plan.anchors, plan.absence
+                rollback_fn = plan.rollback
+            else:
+                lines = preview_lines(profile, action, chain=chain)
+                anchors = (
+                    anchors_for(profile, "apply", chain=chain)
+                    if action == "apply" else ()
+                )
+                absence = (
+                    absence_check(profile, action, chain=chain)
+                    if action != "apply" else ()
+                )
+
+                def _normal_rollback(snapshot: str) -> list[str]:
+                    return rollback_for(
+                        profile, action, snapshot, chain=chain)
+
+                rollback_fn = _normal_rollback
+        except SdnValidationError as exc:
+            _ui.write(self._state.output, f"x  {exc}",
+                      self._ctx.dispatch)
+            return
+
+        def _persist(pre_state: str) -> bool:
+            if config_action == "delete":
+                return _delete_chain_preset(key, "internet")
+            ok = (
+                self._persist_block(action, profile, pre_state)
+                if config_action == "" else True
+            )
+            effective = chain or old_chain or suggested_chain(
+                "BLOQ", profile.acl_number)
+            applied = (
+                bool(old_preset.applied)
+                if config_action == "update" and old_preset is not None
+                else action == "apply"
+            )
+            preset_ok = _save_chain_preset(
+                key, "internet", acl_number=profile.acl_number,
+                interface=profile.interface, direction=profile.direction,
+                chain=effective, applied=applied, preexisting=preexisting,
+            )
+            return ok and preset_ok
 
         self._execute_block(
             lines=lines,
-            block_action="site-apply",
-            progress=f"Aplicando bloqueio de site ({decision.strategy})…",
-            verify_fn=verify_fn,
-            rollback_fn=lambda snapshot: site_rollback(
-                acl_number=decision.acl_number,
-                interface=decision.interface,
-                direction=decision.direction,
-                snapshot=snapshot,
-            ),
+            block_action=config_action or action,
+            progress=f"Aplicando bloqueio ({config_action or action})…",
+            verify_fn=lambda: self._verify_block(
+                anchors=anchors, absence=absence),
+            rollback_fn=rollback_fn,
             save=decision.save,
-            persist_fn=None,
-            event_command=f"Bloquear site ({decision.strategy})",
+            persist_fn=_persist,
+            event_command=f"Bloquear Internet ({config_action or action})",
+        )
+
+    def _run_block_site(self, decision: BlockSiteDecision, key: str = "") -> None:
+        """Executa a decisão do modal Bloquear site (thread de IO).
+
+        Além da startup-config (D3), grava/apaga o preset da cadeia por
+        device/fluxo. Operações de cadeia não removem a ACL.
+        """
+        chain = decision.chain
+        config_action = decision.config_action
+        old_preset = load_preset(key, "site") if key else None
+        old_chain = _chain_of(old_preset)
+        preexisting = bool(old_preset.preexisting) if old_preset else False
+
+        plan = _chain_plan(
+            config_action=config_action, old=old_chain,
+            new=chain or suggested_chain("SITE", decision.acl_number),
+            acl_number=decision.acl_number, interface=decision.interface,
+            direction=decision.direction, preexisting=preexisting,
+        )
+        if config_action in ("update", "delete") and plan is None:
+            _ui.write(
+                self._state.output,
+                "x  Cadeia anterior não encontrada — nada foi aplicado.",
+                self._ctx.dispatch,
+            )
+            return
+
+        rollback_fn: Callable[[str], list[str]]
+        try:
+            if plan is not None:
+                lines = plan.lines
+                anchors, absence = plan.anchors, plan.absence
+                rollback_fn = plan.rollback
+            else:
+                lines = preview_site_lines(
+                    strategy=decision.strategy,
+                    acl_number=decision.acl_number,
+                    interface=decision.interface,
+                    direction=decision.direction,
+                    resolved=decision.resolved,
+                    chain=chain,
+                )
+                anchors = site_anchors(
+                    strategy=decision.strategy,
+                    acl_number=decision.acl_number,
+                    interface=decision.interface,
+                    direction=decision.direction,
+                    resolved=decision.resolved,
+                    chain=chain,
+                )
+                absence = ()
+
+                def _normal_site_rollback(snapshot: str) -> list[str]:
+                    return site_rollback(
+                        strategy=decision.strategy,
+                        acl_number=decision.acl_number,
+                        interface=decision.interface,
+                        direction=decision.direction,
+                        resolved=decision.resolved,
+                        snapshot=snapshot,
+                        chain=chain,
+                    )
+
+                rollback_fn = _normal_site_rollback
+        except SdnValidationError as exc:
+            _ui.write(self._state.output, f"x  {exc}",
+                      self._ctx.dispatch)
+            return
+
+        def _persist(_pre_state: str) -> bool:
+            if config_action == "delete":
+                return _delete_chain_preset(key, "site")
+            effective = chain or old_chain or suggested_chain(
+                "SITE", decision.acl_number)
+            return _save_chain_preset(
+                key, "site", acl_number=decision.acl_number,
+                interface=decision.interface, direction=decision.direction,
+                chain=effective, applied=True, preexisting=preexisting,
+            )
+
+        block_action = (
+            f"site-{config_action}" if config_action else "site-apply"
+        )
+        self._execute_block(
+            lines=lines,
+            block_action=block_action,
+            progress=(
+                f"Aplicando bloqueio de site "
+                f"({config_action or decision.strategy})…"
+            ),
+            verify_fn=lambda: self._verify_block(
+                anchors=anchors, absence=absence),
+            rollback_fn=rollback_fn,
+            save=decision.save,
+            persist_fn=_persist,
+            event_command=f"Bloquear site ({config_action or decision.strategy})",
         )
 
     def _execute_block(

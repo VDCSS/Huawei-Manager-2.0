@@ -151,12 +151,13 @@ def _fake_dialog(monkeypatch, *, decision=None, reject: bool = False):
 
     class FakeDialog:
         def __init__(self, parent=None, *, profile=None, applied=False,
-                     applied_source="cache", can_save=True):
+                     applied_source="cache", can_save=True, chain=None):
             cap.update(
                 profile=profile,
                 applied=applied,
                 applied_source=applied_source,
                 can_save=can_save,
+                chain=chain,
             )
 
         def set_device_key(self, key: str) -> None:
@@ -294,7 +295,7 @@ class TestBlockInternetApply:
         lines = ctx.sb.send_config_block.call_args.args[0]
         assert lines[0] == "acl number 3000"
         assert any(ln.startswith("rule 5 deny") for ln in lines), lines
-        assert "traffic-filter outbound acl 3000" in lines
+        assert "traffic-policy P_BLOQ_3000 outbound" in lines
         ctx.sb.save_running_config.assert_called()
 
         saved = load_profile(None, _DEVICE_KEY)
@@ -352,7 +353,7 @@ class TestBlockInternetUnapplyDelete:
 
         assert ctx.sb.send_config_block.called
         lines = ctx.sb.send_config_block.call_args.args[0]
-        assert "undo traffic-filter outbound acl 3000" in lines
+        assert "undo traffic-policy P_BLOQ_3000 outbound" in lines
         assert not any("undo acl" in ln for ln in lines), lines
         ctx.sb.save_running_config.assert_called()
 
@@ -378,7 +379,7 @@ class TestBlockInternetUnapplyDelete:
 
         assert ctx.sb.send_config_block.called
         lines = ctx.sb.send_config_block.call_args.args[0]
-        assert "undo traffic-filter outbound acl 3000" in lines
+        assert "undo traffic-policy P_BLOQ_3000 outbound" in lines
         assert "undo acl number 3000" in lines
         ctx.sb.save_running_config.assert_called()
         assert load_profile(None, _DEVICE_KEY) is None, "D8: apagar remove o JSON"
@@ -401,6 +402,6 @@ class TestBlockInternetUnapplyDelete:
         _button(widget, "Bloquear Internet").click()
 
         lines = ctx.sb.send_config_block.call_args.args[0]
-        assert "undo traffic-filter outbound acl 3000" in lines
+        assert "undo traffic-policy P_BLOQ_3000 outbound" in lines
         assert not any("undo acl" in ln for ln in lines), lines
         assert load_profile(None, _DEVICE_KEY) is None
