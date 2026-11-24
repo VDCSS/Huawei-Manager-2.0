@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
+from PySide6.QtCore import QObject
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import QTextEdit, QWidget
+
+import huawei_manager.constants as C
+
+if TYPE_CHECKING:
+    from huawei_manager._protocols import AppCoreProtocol
+
+
+class ShortcutsMixin:
+    def _setup_bindings(self: AppCoreProtocol) -> None:
+        parent = cast(QObject, self)
+        QShortcut(QKeySequence("Return"), parent).activated.connect(self._on_enter)
+        QShortcut(QKeySequence("Ctrl+Shift+Return"), parent).activated.connect(
+            self._on_ctrl_shift_enter)
+        QShortcut(QKeySequence("Ctrl+D"), parent).activated.connect(self._on_ctrl_d)
+        QShortcut(QKeySequence("Ctrl+L"), parent).activated.connect(self._on_ctrl_l)
+        QShortcut(QKeySequence("Ctrl+Q"), parent).activated.connect(self._on_ctrl_q)
+        QShortcut(QKeySequence("Ctrl+Shift+A"), parent).activated.connect(
+            self._on_ctrl_shift_a)
+        QShortcut(QKeySequence("F5"), parent).activated.connect(self._on_f5)
+        QShortcut(QKeySequence("Ctrl+Tab"), parent).activated.connect(self._on_ctrl_tab)
+        QShortcut(QKeySequence("Ctrl+Shift+Tab"), parent).activated.connect(
+            self._on_ctrl_shift_tab)
+        QShortcut(QKeySequence("Escape"), parent).activated.connect(self._on_escape)
+        QShortcut(QKeySequence("Ctrl+K"), parent).activated.connect(self._toggle_command_palette)
+        for i, key in enumerate(self._PAGE_KEYS, 1):
+            seq = "Ctrl+0" if i == 10 else f"Ctrl+{i}"
+            QShortcut(QKeySequence(seq), parent).activated.connect(
+                lambda *args, k=key: self._show_page(k))
+
+    def _on_enter(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        focus = self.focusWidget()
+        if isinstance(focus, QTextEdit):
+            return
+        page = self._current_page
+        if page == "config":
+            self._fetch_config()
+        elif page == "route":
+            self._fetch_route()
+        elif page == "arp":
+            self._fetch_arp()
+        elif page == "info":
+            self._fetch_info()
+        elif page == "cmd":
+            cmd = self._get_editor_cmd()
+            if cmd:
+                self._run_cmd_safe(cmd)
+        elif page == "backup":
+            self._do_backup(C.BACKUP_FMT_TEXT)
+
+    def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        if self._current_page == "cmd":
+            cmd = self._get_editor_cmd()
+            if cmd:
+                self._run_config_safe(cmd)
+
+    def _on_ctrl_d(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        self._toggle_connect()
+
+    def _on_ctrl_l(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        page = self._current_page
+        if page == "config":
+            out = self._config_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "route":
+            out = self._route_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "arp":
+            out = self._arp_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "info":
+            out = self._info_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "cmd":
+            out = self._cmd_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "backup":
+            out = self._backup_out()
+            if out is not None:
+                self._write(out, "")
+        elif page == "services":
+            out = self._svc_out()
+            if out is not None:
+                self._write(out, "")
+
+    def _on_ctrl_q(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        self.close()
+
+    def _on_ctrl_shift_a(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        self._show_auth_dialog()
+
+    def _on_f5(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        page = self._current_page
+        if page == "topology":
+            self._spawn_io(self._refresh_devices)
+        elif page == "services":
+            self._refresh_service_list()
+        else:
+            self._on_enter()
+
+    def _on_ctrl_tab(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        if not self._current_page:
+            return
+        try:
+            idx = self._PAGE_KEYS.index(self._current_page)
+            self._show_page(self._PAGE_KEYS[(idx + 1) % len(self._PAGE_KEYS)])
+        except ValueError:
+            self._show_page(self._PAGE_KEYS[0])
+
+    def _on_ctrl_shift_tab(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        if not self._current_page:
+            return
+        try:
+            idx = self._PAGE_KEYS.index(self._current_page)
+            self._show_page(self._PAGE_KEYS[(idx - 1) % len(self._PAGE_KEYS)])
+        except ValueError:
+            self._show_page(self._PAGE_KEYS[0])
+
+    def _on_escape(self: AppCoreProtocol) -> None:
+        overlay = getattr(self, "_auth_overlay", None)
+        if isinstance(overlay, QWidget) and overlay.isVisible():
+            return
+        self._on_ctrl_l()

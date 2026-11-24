@@ -1,0 +1,33 @@
+#
+sysname CE6800-01
+#
+interface GigabitEthernet0/0/0
+ port link-type trunk
+ port trunk allow-pass vlan 10 20 30
+#
+interface GigabitEthernet0/0/1
+ port link-type access
+ port default vlan 10
+#
+interface GigabitEthernet0/0/2
+ port link-type trunk
+ port trunk allow-pass vlan 10
+#
+interface 40GE0/0/0
+ port link-type trunk
+ port trunk allow-pass vlan 100 200
+#
+interface LoopBack0
+ ip address 10.0.0.1 255.255.255.255
+#
+ospf 1 router-id 10.0.0.1
+ area 0.0.0.0
+  network 10.0.0.0 0.0.0.255
+#
+ip route-static 0.0.0.0 0.0.0.0 192.168.1.1
+#
+user-interface vty 0 4
+ authentication-mode aaa
+ protocol inbound ssh
+#
+return
