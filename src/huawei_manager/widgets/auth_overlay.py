@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as _C
-from huawei_manager.widgets.icons import icon, icon_pixmap
+from huawei_manager.widgets.icons import icon
 
 _ENTRY_STYLE = f"""QLineEdit {{
     background: {_C.BG_INPUT};
