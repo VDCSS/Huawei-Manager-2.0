@@ -442,6 +442,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         hdr_layout = QHBoxLayout(hdr)
         hdr_layout.setContentsMargins(20, 0, 20, 0)
         hdr_layout.setSpacing(18)
+        self.topbar_layout = hdr_layout
 
         # ── Marca / wordmark — caixa 38 px + texto display 17 px ──────
         wordmark = QWidget(hdr)
@@ -1311,6 +1312,13 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
                 self.topbar_crumb.setVisible(w >= 900)
             if hasattr(self, "status_lbl") and self.status_lbl is not None:
                 self.status_lbl.setVisible(w >= 600)
+            if hasattr(self, "conn_btn") and self.conn_btn is not None:
+                self.conn_btn.setText("  CONECTAR  " if w >= 600 else "")
+            if hasattr(self, "topbar_layout") and self.topbar_layout is not None:
+                margin = 10 if w < 600 else 20
+                spacing = 8 if w < 600 else 18
+                self.topbar_layout.setContentsMargins(margin, 0, margin, 0)
+                self.topbar_layout.setSpacing(spacing)
         except Exception:
             pass
 
