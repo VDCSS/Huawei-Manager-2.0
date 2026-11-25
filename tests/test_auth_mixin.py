@@ -106,7 +106,7 @@ class TestShowAuthDialog:
 
     @patch("huawei_manager.handlers.auth.AuthOverlay")
     def test_creates_overlay_when_user(self, mock_overlay_cls):
-        """Quando access_level=user e nao bloqueado, cria AuthOverlay."""
+        """Quando access_level=user e não bloqueado, cria AuthOverlay."""
         mixin = _make_mixin()
         mixin._show_auth_dialog()
         mock_overlay_cls.assert_called_once()

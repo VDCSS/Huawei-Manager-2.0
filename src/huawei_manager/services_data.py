@@ -3,7 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from huawei_manager.basic_config.builders import (
+    ACL_ADVANCED_RULE_SPECS,
+    ACL_ADVANCED_RULE_TEMPLATE,
+    ACL_BASIC_RULE_SPECS,
+    ACL_BASIC_RULE_TEMPLATE,
+    ACL_NUMBER_SPECS,
+    ACL_NUMBER_TEMPLATE,
+    TRAFFIC_FILTER_SPECS,
+    TRAFFIC_FILTER_TEMPLATE,
+    VTY_ACL_SPECS,
+    VTY_ACL_TEMPLATE,
+)
+
+if TYPE_CHECKING:
+    from huawei_manager.basic_config.params import ConfigTemplate, ParamSpec
 
 # ── Tipos suportados ──────────────────────────────────────────────────
 DEVICE_TYPES = {
@@ -26,6 +42,7 @@ DEVICE_CATEGORIES = {
     "SWITCH": [
         "vlan", "stp", "lacp", "mac", "lldp", "poe", "igmp",
         "dhcp", "interface", "security", "system", "troubleshoot",
+        "config-acl", "config-route",
     ],
     "FIREWALL": [
         "policy", "nat", "vpn", "ips", "antivirus", "url-filter",
@@ -58,6 +75,14 @@ class ServiceDef:
     output_format: str = "text"
     requires_privilege: bool = False
     config_mode: bool = False
+    params: tuple[ParamSpec, ...] = ()
+    config_template: ConfigTemplate | None = None
+    #: ``False`` esconde o serviço na lista da UI sem removê-lo do registro
+    #: (entradas legadas substituídas por formulários compostos).
+    visible: bool = True
+    #: Chave do formulário composto em :mod:`huawei_manager.services.form_registry`
+    #: (ex.: ``"acl"``, ``"static_route"``). ``None`` = serviço de comando único.
+    form_kind: str | None = None
 
     def cli(self) -> str:
         """Retorna os comandos CLI concatenados por ponto-e-vírgula."""
@@ -74,6 +99,10 @@ class _SvcSpec:
     types: list[str]
     cmds: list[str] | None = None
     config: bool = False
+    params: tuple[ParamSpec, ...] = ()
+    template: ConfigTemplate | None = None
+    visible: bool = True
+    form_kind: str | None = None
 
 
 def _svc(*args: Any, **kw: Any) -> ServiceDef:
@@ -85,11 +114,19 @@ def _svc(*args: Any, **kw: Any) -> ServiceDef:
         id_, name, desc, cat, types, *rest = args
         cmds = kw.pop("cmds", rest[0] if rest else None)
         config = kw.pop("config", rest[1] if len(rest) > 1 else False)
+        params = kw.pop("params", ())
+        template = kw.pop("template", None)
+        visible = kw.pop("visible", True)
+        form_kind = kw.pop("form_kind", None)
         return ServiceDef(
             id=id_, name=name, description=desc,
             category=cat, device_types=types,
             cli_commands=cmds or [desc],
             config_mode=config,
+            params=params,
+            config_template=template,
+            visible=visible,
+            form_kind=form_kind,
         )
     spec = _SvcSpec(**kw)
     return ServiceDef(
@@ -97,6 +134,10 @@ def _svc(*args: Any, **kw: Any) -> ServiceDef:
         category=spec.cat, device_types=spec.types,
         cli_commands=spec.cmds or [spec.desc],
         config_mode=spec.config,
+        params=spec.params,
+        config_template=spec.template,
+        visible=spec.visible,
+        form_kind=spec.form_kind,
     )
 
 
@@ -187,13 +228,49 @@ SERVICE_REGISTRY: list[ServiceDef] = [
          config=True),
     _svc('router-config-undo-shutdown', 'Undo Shutdown', 'undo shutdown', 'config-interface', ['ROUTER'],
          config=True),
+    # ── ACL: serviço único e composto (form_kind='acl') ──
+    # As entradas legadas abaixo permanecem no registro (visible=False) para
+    # compatibilidade de API/CLI, mas a UI usa apenas 'svc-acl'.
+    _svc('svc-acl', 'ACL (Criação e Aplicação)',
+         'acl number <id> | acl name <nome> — criação, regras e aplicação '
+         'em interface/VTY',
+         'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['acl number 3000'],
+         config=True,
+         visible=True,
+         form_kind='acl'),
     _svc('router-config-acl-number', 'ACL Number', 'acl number <id>', 'config-acl', ['ROUTER'],
          cmds=['acl number 3000'],
-         config=True),
+         config=True,
+         visible=False),
     _svc('router-config-acl-rule', 'ACL Rule',
          'rule <id> <permit|deny> ip source <ip> <wildcard>', 'config-acl', ['ROUTER'],
          cmds=['rule 5 permit ip source 10.0.0.0 0.0.0.255'],
-         config=True),
+         config=True,
+         visible=False),
+    _svc('router-config-acl-create', 'Criar ACL (Numérica)',
+         'acl number <acl>', 'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['acl number 2000'],
+         params=ACL_NUMBER_SPECS,
+         template=ACL_NUMBER_TEMPLATE,
+         config=True,
+         visible=False),
+    _svc('router-config-acl-rule-basic', 'Regra ACL Básica (2000-2999)',
+         'rule <rule> <permit|deny> source <source> <wildcard>', 'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['rule 5 permit source 10.0.0.0 0.0.0.255'],
+         params=ACL_BASIC_RULE_SPECS,
+         template=ACL_BASIC_RULE_TEMPLATE,
+         config=True,
+         visible=False),
+    _svc('router-config-acl-rule-advanced', 'Regra ACL Avançada (3000-3999)',
+         'rule <rule> <permit|deny> <protocol> source <source> <wildcard> '
+         'destination <destination> <destination_wildcard>',
+         'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['rule 5 permit ip source 10.0.0.0 0.0.0.255'],
+         params=ACL_ADVANCED_RULE_SPECS,
+         template=ACL_ADVANCED_RULE_TEMPLATE,
+         config=True,
+         visible=False),
     _svc('router-config-bgp', 'BGP', 'bgp <asn>', 'config-bgp', ['ROUTER'],
          cmds=['bgp 65000'],
          config=True),
@@ -247,19 +324,39 @@ SERVICE_REGISTRY: list[ServiceDef] = [
          'interface Vlanif <vlan-id>', 'config-interface', ['ROUTER', 'SWITCH'],
          cmds=['interface Vlanif 10'],
          config=True),
+    # ── Rota estática: serviço único e composto (form_kind='static_route') ──
+    _svc('svc-static-route', 'Rota Estática',
+         'ip route-static <destino> <mascara> — interface, next-hop, '
+         'preferência e descrição',
+         'config-route', ['ROUTER', 'SWITCH'],
+         cmds=['ip route-static 0.0.0.0 0.0.0.0 10.0.12.2'],
+         config=True,
+         visible=True,
+         form_kind='static_route'),
     _svc('router-config-route-static', 'Rota Estática',
          'ip route-static <destination> <mask> <next-hop>', 'config-route', ['ROUTER', 'SWITCH'],
          cmds=['ip route-static 0.0.0.0 0.0.0.0 10.0.12.2'],
-         config=True),
+         config=True,
+         visible=False),
     _svc('router-config-undo-ip-address', 'Undo IP Address', 'undo ip address',
          'config-interface', ['ROUTER', 'SWITCH'],
          cmds=['undo ip address'],
          config=True),
     # ── Cadeia ACL/traffic-filter + MQC (classifier → behavior → policy → interface) ──
     _svc('router-config-traffic-filter', 'Traffic Filter',
-         'traffic-filter <inbound|outbound> acl <acl-id>', 'config-acl', ['ROUTER', 'SWITCH'],
+         'traffic-filter <direction> acl <acl>', 'config-acl', ['ROUTER', 'SWITCH'],
          cmds=['traffic-filter outbound acl 3000'],
-         config=True),
+         params=TRAFFIC_FILTER_SPECS,
+         template=TRAFFIC_FILTER_TEMPLATE,
+         config=True,
+         visible=False),
+    _svc('router-config-vty-acl', 'ACL em VTY (Proteção de Acesso)',
+         'user-interface vty <vty_range> / acl <acl> inbound', 'config-acl', ['ROUTER', 'SWITCH'],
+         cmds=['acl 2000 inbound'],
+         params=VTY_ACL_SPECS,
+         template=VTY_ACL_TEMPLATE,
+         config=True,
+         visible=False),
     _svc('router-config-mqc-classifier', 'MQC Classifier',
          'traffic classifier <name>', 'config-qos', ['ROUTER', 'SWITCH'],
          cmds=['traffic classifier 1'],

@@ -117,15 +117,37 @@ class TestValidation:
         dialog._on_save()
         assert dialog.result() != QDialog.DialogCode.Accepted
 
-    def test_invalid_port_falls_back_to_22(self, dialog: DeviceDialog, qtbot):
-        """Porta inválida deve usar 22 como fallback."""
+    def test_invalid_port_rejected(self, dialog: DeviceDialog, qtbot):
+        """Porta texto não numerico deve rejeitar (não aceitar)."""
         dialog._name_entry.setText("test-device")
         dialog._form_fields["host"].setText("10.0.0.1")
         dialog._form_fields["port"].setText("invalid")
         dialog._on_save()
-        assert dialog.result() == QDialog.DialogCode.Accepted
-        # Fallback para 22
-        assert dialog._port_val == 22
+        assert dialog.result() != QDialog.DialogCode.Accepted
+
+    def test_port_zero_rejected(self, dialog: DeviceDialog, qtbot):
+        """Porta zero deve rejeitar."""
+        dialog._name_entry.setText("test-device")
+        dialog._form_fields["host"].setText("10.0.0.1")
+        dialog._form_fields["port"].setText("0")
+        dialog._on_save()
+        assert dialog.result() != QDialog.DialogCode.Accepted
+
+    def test_port_65536_rejected(self, dialog: DeviceDialog, qtbot):
+        """Porta acima de 65535 deve rejeitar."""
+        dialog._name_entry.setText("test-device")
+        dialog._form_fields["host"].setText("10.0.0.1")
+        dialog._form_fields["port"].setText("65536")
+        dialog._on_save()
+        assert dialog.result() != QDialog.DialogCode.Accepted
+
+    def test_negative_port_rejected(self, dialog: DeviceDialog, qtbot):
+        """Porta negativa deve rejeitar."""
+        dialog._name_entry.setText("test-device")
+        dialog._form_fields["host"].setText("10.0.0.1")
+        dialog._form_fields["port"].setText("-1")
+        dialog._on_save()
+        assert dialog.result() != QDialog.DialogCode.Accepted
 
 
 # ══════════════════════════════════════════════════════════════════════════

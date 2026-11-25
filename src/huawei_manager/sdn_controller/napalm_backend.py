@@ -32,6 +32,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from huawei_manager.exceptions import SdnCommandError, SdnConnectionError
+from huawei_manager.sdn_controller.vrp_errors import (
+    VRP_ERROR_PREFIXES as _VRP_ERROR_PREFIXES,
+)
+from huawei_manager.sdn_controller.vrp_errors import (
+    detect_vrp_errors,
+)
 
 if TYPE_CHECKING:
     # Só em tempo de análise: o pacote é opcional (extra `napalm`), mas os
@@ -45,41 +51,10 @@ BACKEND_NAPALM = "napalm"
 DEFAULT_BACKEND = BACKEND_NETMIKO
 _VALID_BACKENDS = (BACKEND_NETMIKO, BACKEND_NAPALM)
 
-# A VRP reporta erros começando com '% ...' na primeira coluna. O driver
-# NAPALM só procura a substring "error", o que engole '% Unrecognized command'
-# e dispara falso-positivo em strings legítimas. Marcadores extraídos do
-# Command Reference VRP5/VRP6/VRP8.
-_VRP_ERROR_PREFIXES = (
-    "% unrecognized",
-    "% wrong",
-    "% invalid",
-    "% incomplete",
-    "% ambiguous",
-    "% error",
-    "% no such",
-    "% no ",
-    "% unsupported",
-    "command not found",
-    "error:",
-)
-
-
-def detect_vrp_errors(output: str) -> list[str]:
-    """Retorna as linhas de erro detectadas na saída de comandos VRP.
-
-    Args:
-        output: Saída concatenada enviada de volta pelo dispositivo.
-
-    Returns:
-        Lista de linhas rejeitadas (vazia = tudo aceito).
-    """
-    found: list[str] = []
-    for line in output.splitlines():
-        stripped = line.strip()
-        low = stripped.lower()
-        if any(low.startswith(prefix) for prefix in _VRP_ERROR_PREFIXES):
-            found.append(stripped)
-    return found
+__all__ = [
+    "detect_vrp_errors",
+    "_VRP_ERROR_PREFIXES",
+]
 
 
 def napalm_status() -> tuple[bool, str]:
@@ -265,7 +240,7 @@ class NapalmVRPBackend:
                                                    read_timeout=30))
             return ret
         except Exception as exc:  # degradação fechada: o erro original segue visível
-            return f"\n[aviso] nao foi possivel sair do config mode: {exc}"
+            return f"\n[aviso] não foi possível sair do config mode: {exc}"
 
     def apply(self, commands: list[str], *, snapshot: str | None = None) -> ApplyResult:
         """Aplica um lote de comandos com snapshot pré-mudança e auditoria.

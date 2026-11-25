@@ -182,6 +182,7 @@ class HomeTab:
             bar_layout.addWidget(btn)
         bar_layout.addStretch()
 
+        self.refresh()
         return p
 
     def dispose(self) -> None:

@@ -206,8 +206,10 @@ def test_netmiko_config_takes_snapshot_before_apply(monkeypatch) -> None:
         "display current-configuration")
     ctx.sb.send_service_commands.assert_called_once_with(
         svc.cli_commands, config_mode=True, requires_privilege=False)
-    command = ctx.set_last_config_command.call_args[0][0]
+    command = st.last_config_command
+    assert command is not None
     assert command.snapshot == "baseline cfg"  # rollback disponível
+    ctx.set_last_config_command.assert_not_called()
 
 
 def test_netmiko_config_snapshot_failure_is_fail_closed(monkeypatch) -> None:
@@ -223,6 +225,7 @@ def test_netmiko_config_snapshot_failure_is_fail_closed(monkeypatch) -> None:
     ctx.sb.send_service_commands.assert_not_called()
     assert any("nada foi aplicado" in t for t in _writes(st))
     ctx.set_last_config_command.assert_not_called()
+    assert st.last_config_command is None
 
 
 # ══════════════════════════════════════════════════════════════════════

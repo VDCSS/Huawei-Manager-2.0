@@ -6,6 +6,7 @@ Database path: ~/.huawei_manager/inventory.db
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from pathlib import Path
 
@@ -57,9 +58,59 @@ _ALL_DDL = [_DEVICES_DDL, _USERS_DDL, _DB_META_DDL]
 # ── Connection ─────────────────────────────────────────────────────────
 
 def get_database_path() -> Path:
-    """Return ~/.huawei_manager/inventory.db, creating the directory if needed."""
-    db_dir = Path.home() / ".huawei_manager"
-    db_dir.mkdir(parents=True, exist_ok=True)
+    """Return ~/.huawei_manager/inventory.db, creating the directory if needed.
+
+    Fail-closed sob pytest: se o caminho resolvido for o banco real do usuário
+    (~/.huawei_manager/inventory.db) e estamos rodando testes
+    (``PYTEST_CURRENT_TEST`` definido), levantar ``RuntimeError`` em vez de
+    abri-lo silenciosamente. Isso evita que um teste com reconciliação
+    destrutiva (ex.: ``save_inventory`` com ``existing - current``) apague
+    devices do usuário, mesmo que ``HW_DATA_DIR``/``HUAWEI_MANAGER_DIR`` não
+    estejam definidos.
+    """
+    custom_dir = os.environ.get("HW_DATA_DIR") or os.environ.get("HUAWEI_MANAGER_DIR")
+    if custom_dir:
+        db_dir = Path(custom_dir)
+    else:
+        db_dir = Path.home() / ".huawei_manager"
+
+    result = db_dir / "inventory.db"
+
+    # Fail-closed sob pytest: nunca retornar o banco real do usuário.
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        real = Path.home() / ".huawei_manager" / "inventory.db"
+        try:
+            if result.resolve() == real.resolve():
+                raise RuntimeError(
+                    "get_database_path(): caminho resolvido é o banco real "
+                    f"do usuário ({real}) sob pytest — recusando. Defina "
+                    "HW_DATA_DIR/HUAWEI_MANAGER_DIR para um tmp_path no "
+                    "conftest ou no teste."
+                )
+        except OSError:
+            pass
+
+    try:
+        db_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        fallback = Path.cwd() / ".huawei_manager"
+        try:
+            fallback.mkdir(parents=True, exist_ok=True)
+            db_dir = fallback
+        except OSError:
+            db_dir = Path("/tmp/huawei_manager")
+            db_dir.mkdir(parents=True, exist_ok=True)
+    return db_dir / "inventory.db"
+    try:
+        db_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        fallback = Path.cwd() / ".huawei_manager"
+        try:
+            fallback.mkdir(parents=True, exist_ok=True)
+            db_dir = fallback
+        except OSError:
+            db_dir = Path("/tmp/huawei_manager")
+            db_dir.mkdir(parents=True, exist_ok=True)
     return db_dir / "inventory.db"
 
 

@@ -282,7 +282,7 @@ def test_backend_from_session_napalm_retorna_executor(
     monkeypatch.setenv(BACKEND_ENV, BACKEND_NAPALM)
     ok, reason = napalm_status()
     if not ok:
-        pytest.skip(f"napalm nao instalado: {reason}")
+        pytest.skip(f"napalm não instalado: {reason}")
     backend, warning, executor = backend_from_session(FakeConn(), user="op")
     assert backend == BACKEND_NAPALM
     assert executor is not None

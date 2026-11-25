@@ -114,11 +114,23 @@ class TopologyTab:
             on_delete=ctx.delete_device,
         )
         state.topo_canvas = canvas
+        current_devices = list(ctx.devices())
+        if current_devices:
+            canvas.set_access(access)
+            canvas.update_devices(current_devices)
+            status_lbl = _ui.chip(p, f"Inventário: {len(current_devices)} devices", C.NEON_AMBER)
+        else:
+            status_lbl = _ui.chip(p, "Inventário: 0 devices", C.NEON_AMBER)
+        status_lbl.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+
+        selected = ctx.device()
+        if selected:
+            canvas._selected = selected
+            info_lbl.setText(f"  {selected.name} ({selected.host})")
+
         _ui.page_layout(p).addWidget(canvas, stretch=1)
         _ui.page_layout(p).addSpacing(8)
 
-        status_lbl = _ui.chip(p, "Inventário: 0 devices", C.NEON_AMBER)
-        status_lbl.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         state.device_status_lbl = status_lbl
         _ui.page_layout(p).addWidget(status_lbl)
         _ui.page_layout(p).addSpacing(4)

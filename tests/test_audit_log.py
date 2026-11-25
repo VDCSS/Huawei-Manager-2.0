@@ -145,7 +145,7 @@ class TestHashChain:
     """M09 — Hash chain SHA-256 para auditoria inviolavel."""
 
     def test_verify_chain_no_file(self, tmp_audit_path):
-        """verify_chain retorna False se arquivo nao existe."""
+        """verify_chain retorna False se arquivo não existe."""
         assert AuditLogger.verify_chain(str(tmp_audit_path)) is False
 
     def test_verify_chain_single_entry(self, audit_logger):
@@ -175,7 +175,7 @@ class TestHashChain:
         assert AuditLogger.verify_chain(str(audit_logger._path)) is False
 
     def test_verify_chain_tampered_hmac_ignored(self, audit_logger):
-        """HMAC field nao participa do hash chain — alterar hmac nao quebra."""
+        """HMAC field não participa do hash chain — alterar hmac não quebra."""
         audit_logger.log_operation("op1", "u", "h")
         audit_logger.log_operation("op2", "u", "h")
 
@@ -185,7 +185,7 @@ class TestHashChain:
         lines[0] = json.dumps(entry1, ensure_ascii=False)
         audit_logger._path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-        # Alterar HMAC nao deve quebrar a cadeia (hmac é excluido do hash)
+        # Alterar HMAC não deve quebrar a cadeia (hmac é excluido do hash)
         assert AuditLogger.verify_chain(str(audit_logger._path)) is True
 
     def test_verify_chain_ok_with_key(self, tmp_audit_path):

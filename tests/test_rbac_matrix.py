@@ -17,7 +17,7 @@ from huawei_manager.tabs.services.handlers import ServicesHandlers
 
 ROLES = ("user", "tecnico", "admin")
 
-# user ❌ | tecnico ✅ | admin ✅
+# user falha | tecnico ok | admin ok
 ALLOWED = {"user": False, "tecnico": True, "admin": True}
 # sempre bloqueado, independente do papel
 DENIED = {"user": False, "tecnico": False, "admin": False}

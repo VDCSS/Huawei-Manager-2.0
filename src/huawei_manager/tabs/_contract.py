@@ -52,7 +52,7 @@ class TabContext:
     dispatch: Callable[..., None]   # agendamento na thread GUI (App._dispatch)
     # Fase 1 (piloto Manutenção) — serviços que a aba real consome:
     require_access: Callable[[str], bool]   # RBAC de ação (App._require_access)
-    spawn_io: Callable[..., None]           # thread de IO (App._spawn_io)
+    spawn_io: Callable[..., object]         # thread de IO (App._spawn_io)
     spawn_cpu: Callable[..., None]          # thread de CPU (App._spawn_cpu)
     watcher: Watcher                        # watcher global (is_active/start/stop)
     is_mock: Callable[[], bool]             # modo probe global (App._mock_mode)
@@ -67,7 +67,10 @@ class TabContext:
     touch_session: Callable[[], None]  # heartbeat de sessão (SessionTracker.touch)
     cmd_validator: CommandValidator | None   # RBAC por comando (None = desativado)
     dry_run: DryRunEngine | None             # pré-visualização de config (None = off)
-    # Snapshot de rollback compartilhado com Serviços (attribute do App):
+    # Snapshot de rollback do **Editor de Comandos** (attribute do App).
+    # As abas Config Básica e Serviços mantêm snapshots **próprios** (no
+    # state.py de cada aba) — o rollback de cada uma é independente: cada
+    # aba desfaz apenas o que ela mesma aplicou.
     get_last_config_command: Callable[[], ConfigCommand | None]
     set_last_config_command: Callable[[ConfigCommand | None], None]
     # Fase 2 (aba Roteamento — F2-route) — driver sob demanda: o App RE-CRIA

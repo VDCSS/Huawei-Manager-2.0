@@ -75,7 +75,7 @@ class TestSessionTracker:
         assert st.current_role is Role.ADMIN  # ainda dentro
 
     def test_timeout_after_inactivity(self) -> None:
-        """Nao tocar por mais que timeout reseta para USER."""
+        """Não tocar por mais que timeout reseta para USER."""
         st = SessionTracker(timeout_secs=0.05)
         st.set_role(Role.TECNICO)
         wait_until(lambda: st.current_role is Role.USER, timeout=2.0)
@@ -111,5 +111,5 @@ class TestSessionTracker:
         """Integracao: tracker pode ser usado sem touch manual."""
         st = SessionTracker(timeout_secs=0.05)
         st.set_role(Role.ADMIN)
-        # Nao chama touch — timeout deve ocorrer
+        # Não chama touch — timeout deve ocorrer
         wait_until(lambda: st.current_role is Role.USER, timeout=2.0)

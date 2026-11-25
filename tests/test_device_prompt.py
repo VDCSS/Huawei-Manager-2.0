@@ -1,7 +1,7 @@
 """Testes de caracterização — prompt de device vazio (handlers/devices.py).
 
 Cobre _ensure_device_ready e _prompt_no_devices: gate de acoes que exigem
-device cadastrado e selecionado, dialog modal para admin e aviso para nao-admin.
+device cadastrado e selecionado, dialog modal para admin e aviso para não-admin.
 """
 from __future__ import annotations
 

@@ -21,13 +21,21 @@ class AppStateMixin:
             return
         try:
             if ev.type is EventType.DEVICE_DISCONNECTED:
+                for d in self._devices:
+                    if d.id == ev.source:
+                        d.status = "offline"
                 canvas = self._topo_canvas_widget()
                 if canvas is not None:
                     canvas.set_device_status(ev.source, "offline")
+                self._tick_dashboard()
             elif ev.type is EventType.DEVICE_CONNECTED:
+                for d in self._devices:
+                    if d.id == ev.source:
+                        d.status = "online"
                 canvas = self._topo_canvas_widget()
                 if canvas is not None:
                     canvas.set_device_status(ev.source, "online")
+                self._tick_dashboard()
             elif ev.type is EventType.CONFIG_CHANGED:
                 self._tick_dashboard()
             elif ev.type is EventType.ALERT:

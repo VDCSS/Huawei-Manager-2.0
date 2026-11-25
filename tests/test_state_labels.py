@@ -118,6 +118,7 @@ class _FakeDevicesApp(DevicesMixin):
         self._controller.sync_from_devices = MagicMock()
         self._access_level = "user"
         self._device_status_lbl = QLabel()
+        self._refresh_dashboard = MagicMock()
 
     def _topo_canvas_widget(self):
         return None

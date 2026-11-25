@@ -116,7 +116,7 @@ class UiBridge(QObject):
             # justificativa: falha do diálogo vira "não confirmado" (fail-closed);
             # o finally abaixo ainda desbloqueia o worker.
             data["answer"] = False
-            _log.exception("UiBridge: falha ao exibir dialogo de confirmacao")
+            _log.exception("UiBridge: falha ao exibir dialogo de confirmação")
         finally:
             if isinstance(event, threading.Event):
                 event.set()

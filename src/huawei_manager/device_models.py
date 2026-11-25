@@ -12,7 +12,7 @@ log = logging.getLogger("huawei.device_models")
 
 @dataclass
 class Device:
-    """Representa um dispositivo de rede com dados de conexao e status."""
+    """Representa um dispositivo de rede com dados de conexão e status."""
     id:       str
     name:     str
     host:     str

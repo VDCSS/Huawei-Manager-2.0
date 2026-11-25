@@ -1,7 +1,7 @@
 """Menu de contexto da topologia sob RBAC (plano W3, C.6.2 item 4).
 
 Tecnico/admin veem as acoes Editar/Excluir e o handler libera
-(D5 revertida); user nao ve menu e nenhum handler e acionado.
+(D5 revertida); user não ve menu e nenhum handler e acionado.
 """
 from __future__ import annotations
 

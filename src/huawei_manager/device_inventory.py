@@ -33,7 +33,7 @@ def load_devices(filename: str = DEVICE_INVENTORY_FILE) -> list[Device]:
             return [Device.from_dict(d) for d in items]
         except (OSError, json.JSONDecodeError) as e:
             load_error = str(e)
-            log.warning("Arquivo %s nao pode ser lido/parseado: %s", filename, e)
+            log.warning("Arquivo %s não pode ser lido/parseado: %s", filename, e)
             return []
         except ValueError:
             raise

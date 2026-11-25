@@ -50,7 +50,7 @@ def _device_cache_key(device: Device) -> str:
 
 
 def _check_device(device: Device, timeout: int = 5) -> str:
-    """Tenta conexao TCP ao device; retorna 'online' ou lanca excecao."""
+    """Tenta conexão TCP ao device; retorna 'online' ou lanca exceção."""
     socket.create_connection((device.host, device.port or 22), timeout=timeout).close()
     return "online"
 

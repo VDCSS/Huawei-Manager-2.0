@@ -64,7 +64,7 @@ AN_ACTION           = "AN_ACTION"
 # ═══════════════════════════════════════════════════════════════════════
 @dataclass
 class AuditEntry:
-    """Entrada individual de auditoria — uma operacao CLI com metadados.
+    """Entrada individual de auditoria — uma operação CLI com metadados.
 
     Cada entrada pode conter um ``previous_hash`` SHA-256 que aponta
     para o registro anterior, formando uma cadeia inviolavel.
@@ -95,7 +95,7 @@ class _TimedCtx:
                  session_id: str | None,
                  extra: dict[str, Any],
                  category: str = "general") -> None:
-        """Inicializa o contexto com parametros da operacao a auditar."""
+        """Inicializa o contexto com parametros da operação a auditar."""
         self._logger     = logger
         self._op         = op
         self._user       = user
@@ -108,7 +108,7 @@ class _TimedCtx:
         self._t0         = 0.0
 
     def set_status(self, status: str) -> None:
-        """Define o status final da operacao (ok, error, timeout, ...)."""
+        """Define o status final da operação (ok, error, timeout, ...)."""
         self._status = status
 
     def _start(self) -> None:
@@ -258,7 +258,7 @@ class AuditLogger:
                     )
                     return False
             elif prev_hash:
-                # Primeira entrada com previous_hash nao vazio — so
+                # Primeira entrada com previous_hash não vazio — so
                 # se o log foi truncado/adulterado
                 log.warning("verify_chain: first entry has non-empty previous_hash")
                 return False

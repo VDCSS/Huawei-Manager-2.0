@@ -40,7 +40,7 @@ class CmdHandlers:
     #  EDITOR
     # ══════════════════════════════════════════════════════════════
     def confirm_destructive(self, cmd: str) -> bool:
-        """Valida o comando e pede confirmacao explicita para bypass de politica.
+        """Valida o comando e pede confirmação explicita para bypass de politica.
 
         Roda na UI thread (antes do run). Retorna False se o comando for
         bloqueado ou se o operador cancelar um comando destrutivo liberado
@@ -68,7 +68,7 @@ class CmdHandlers:
         return True
 
     def run_cmd_safe(self, cmd: str = "") -> None:
-        """Despacha exec_cmd apos validacao + confirmacao (UI thread)."""
+        """Despacha exec_cmd apos validação + confirmação (UI thread)."""
         if not cmd:
             return
         if not self.confirm_destructive(cmd):
@@ -76,7 +76,7 @@ class CmdHandlers:
         self._ctx.run(lambda: self.exec_cmd(cmd))
 
     def run_config_safe(self, cmd: str = "") -> None:
-        """Despacha exec_config apos validacao + confirmacao (UI thread)."""
+        """Despacha exec_config apos validação + confirmação (UI thread)."""
         if not cmd:
             return
         if not self.confirm_destructive(cmd):
@@ -126,7 +126,7 @@ class CmdHandlers:
                                           command=cmd.splitlines()[0])))
 
     def exec_config(self, cmd: str = "") -> None:
-        """Envia comandos de configuracao do editor via send_config.
+        """Envia comandos de configuração do editor via send_config.
 
         cmd deve ser extraido do editor ANTES de chamar este metodo
         (roda na IO thread).
@@ -162,7 +162,7 @@ class CmdHandlers:
                               dispatch)
                     return
             except Exception:
-                # Protecao falhou -> NAO aplicar: seguir sem preview violaria
+                # Proteção falhou -> NÃO aplicar: seguir sem preview violaria
                 # o contrato de dry-run (mudanca de estado sem visibilidade).
                 if _config.log is not None:
                     _config.log.exception("Dry-run falhou — abortando aplicação de config")

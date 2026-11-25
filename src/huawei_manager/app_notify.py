@@ -49,6 +49,10 @@ class NotifyMixin(_NotifyBase):
             t = getattr(self, attr, None)
             if t is not None:
                 t.stop()
+        polling_mgr = getattr(self, "_polling_mgr", None)
+        if polling_mgr is not None:
+            # Kill switch: impede novo tick em voo de abrir sessão após dispose.
+            polling_mgr.enabled = False
         if getattr(self, "_session_factory", None) is not None:
             self._session_factory.dispose()
         self._watcher.shutdown(wait=False)

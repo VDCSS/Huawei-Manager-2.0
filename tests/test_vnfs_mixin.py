@@ -54,6 +54,7 @@ def _make_mixin(**attrs) -> DevicesMixin:
         _refresh_service_list=MagicMock(),
         _require_access=MagicMock(return_value=True),
         _device_service=_make_device_service(),
+        _refresh_dashboard=MagicMock(),
     )
     for k, v in defaults.items():
         setattr(mixin, k, v)
@@ -284,7 +285,7 @@ class TestRefreshDevices:
     def test_save_failure_does_not_propagate(self):
         svc = _make_device_service(returns=[_make_device()])
         svc.save_inventory.side_effect = ValueError(
-            "DEVICE_ENCRYPT_KEY nao configurada"
+            "DEVICE_ENCRYPT_KEY não configurada"
         )
         lock = MagicMock()
         lock.acquire.return_value = True
