@@ -167,7 +167,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._init_common_attrs()
         self.setWindowTitle("HUAWEI MANAGER")
         self.resize(1220, 740)
-        self.setMinimumSize(800, 500)
+        self.setMinimumSize(400, 300)
 
         try:
             icon_path = PROJECT_ROOT / "share" / "icons" / "huawei-manager.png"
@@ -436,7 +436,8 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     def _build_header(self, parent: QWidget) -> None:
         hdr = QWidget(parent)
         hdr.setObjectName("topbar")
-        hdr.setFixedHeight(C.TOPBAR_HEIGHT)
+        self.topbar = hdr
+        hdr.setMinimumHeight(C.TOPBAR_HEIGHT)
         hdr.setStyleSheet(
             f"#topbar {{ background: {C.BG_BASE}; border-bottom: 1px solid {C.BORDER_NRM}; }}")
         hdr_layout = QHBoxLayout(hdr)
@@ -1319,6 +1320,13 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
                 spacing = 8 if w < 600 else 18
                 self.topbar_layout.setContentsMargins(margin, 0, margin, 0)
                 self.topbar_layout.setSpacing(spacing)
+                from PySide6.QtWidgets import QBoxLayout
+                if w < 600:
+                    self.topbar_layout.setDirection(QBoxLayout.Direction.TopToBottom)
+                    self.topbar.setMinimumHeight(120)
+                else:
+                    self.topbar_layout.setDirection(QBoxLayout.Direction.LeftToRight)
+                    self.topbar.setMinimumHeight(C.TOPBAR_HEIGHT)
         except Exception:
             pass
 
