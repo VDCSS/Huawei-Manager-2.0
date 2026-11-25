@@ -480,6 +480,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # ── Breadcrumb “Aplicativo › página” ──────────────────────────
         crumb = QWidget(hdr)
         crumb.setStyleSheet("background: transparent;")
+        self.topbar_crumb = crumb
         crumb_layout = QHBoxLayout(crumb)
         crumb_layout.setContentsMargins(0, 0, 0, 0)
         crumb_layout.setSpacing(6)
@@ -512,13 +513,16 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # Busca global — mesma ação do Ctrl+K (Command Palette).
         search_box = QFrame(right)
         search_box.setObjectName("searchBox")
-        search_box.setFixedSize(290, 38)
+        search_box.setMinimumWidth(140)
+        search_box.setMaximumWidth(290)
+        search_box.setFixedHeight(38)
         search_box.setCursor(Qt.CursorShape.PointingHandCursor)
         search_box.setStyleSheet(
             f"#searchBox {{ background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM};"
             f" border-radius: 6px; }}"
             f"#searchBox:hover {{ border-color: {C.rgba(C.NEON_CYAN, 0.34)}; }}")
         search_box.mousePressEvent = lambda _e: self._toggle_command_palette()
+        self.search_box = search_box
         sb_layout = QHBoxLayout(search_box)
         sb_layout.setContentsMargins(11, 0, 8, 0)
         sb_layout.setSpacing(8)
@@ -1298,6 +1302,17 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         drawer = getattr(self, "_drawer", None)
         if drawer is not None:
             drawer.sync_geometry()
+        # Responsividade do topbar: oculta elementos secundários em telas estreitas.
+        try:
+            w = self.width()
+            if hasattr(self, "search_box") and self.search_box is not None:
+                self.search_box.setVisible(w >= 720)
+            if hasattr(self, "topbar_crumb") and self.topbar_crumb is not None:
+                self.topbar_crumb.setVisible(w >= 900)
+            if hasattr(self, "status_lbl") and self.status_lbl is not None:
+                self.status_lbl.setVisible(w >= 600)
+        except Exception:
+            pass
 
     def _unlock_theme(self) -> None:
         self._theme_toggling = False
