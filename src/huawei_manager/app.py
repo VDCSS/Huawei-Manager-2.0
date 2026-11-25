@@ -211,7 +211,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._init_common_attrs()
         self.setWindowTitle("HUAWEI MANAGER")
         self.resize(1220, 740)
-        self.setMinimumSize(800, 500)
+        self.setMinimumSize(400, 300)
 
         try:
             icon_path = PROJECT_ROOT / "share" / "icons" / "huawei-manager.png"
@@ -481,12 +481,14 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     def _build_header(self, parent: QWidget) -> None:
         hdr = QWidget(parent)
         hdr.setObjectName("topbar")
-        hdr.setFixedHeight(C.TOPBAR_HEIGHT)
+        self.topbar = hdr
+        hdr.setMinimumHeight(C.TOPBAR_HEIGHT)
         hdr.setStyleSheet(
             f"#topbar {{ background: {C.BG_BASE}; border-bottom: 1px solid {C.BORDER_NRM}; }}")
         hdr_layout = QHBoxLayout(hdr)
         hdr_layout.setContentsMargins(20, 0, 20, 0)
         hdr_layout.setSpacing(18)
+        self.topbar_layout = hdr_layout
 
         # ── Marca / wordmark — caixa 38 px + texto display 17 px ──────
         wordmark = QWidget(hdr)
@@ -525,6 +527,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # ── Breadcrumb “Aplicativo › página” ──────────────────────────
         crumb = QWidget(hdr)
         crumb.setStyleSheet("background: transparent;")
+        self.topbar_crumb = crumb
         crumb_layout = QHBoxLayout(crumb)
         crumb_layout.setContentsMargins(0, 0, 0, 0)
         crumb_layout.setSpacing(6)
@@ -557,13 +560,16 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         # Busca global — mesma ação do Ctrl+K (Command Palette).
         search_box = QFrame(right)
         search_box.setObjectName("searchBox")
-        search_box.setFixedSize(290, 38)
+        search_box.setMinimumWidth(140)
+        search_box.setMaximumWidth(290)
+        search_box.setFixedHeight(38)
         search_box.setCursor(Qt.CursorShape.PointingHandCursor)
         search_box.setStyleSheet(
             f"#searchBox {{ background: {C.BG_INPUT}; border: 1px solid {C.BORDER_NRM};"
             f" border-radius: 6px; }}"
             f"#searchBox:hover {{ border-color: {C.rgba(C.NEON_CYAN, 0.34)}; }}")
         search_box.mousePressEvent = lambda _e: self._toggle_command_palette()
+        self.search_box = search_box
         sb_layout = QHBoxLayout(search_box)
         sb_layout.setContentsMargins(11, 0, 8, 0)
         sb_layout.setSpacing(8)
@@ -1366,6 +1372,39 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         drawer = getattr(self, "_drawer", None)
         if drawer is not None:
             drawer.sync_geometry()
+        # Responsividade do topbar: oculta elementos secundários em telas estreitas.
+        try:
+            w = self.width()
+            if hasattr(self, "search_box") and self.search_box is not None:
+                self.search_box.setVisible(w >= 720)
+            if hasattr(self, "topbar_crumb") and self.topbar_crumb is not None:
+                self.topbar_crumb.setVisible(w >= 900)
+            if hasattr(self, "status_lbl") and self.status_lbl is not None:
+                self.status_lbl.setVisible(w >= 600)
+            if hasattr(self, "conn_btn") and self.conn_btn is not None:
+                # Preserva o estado conectado: o resize não pode transformar
+                # "DESCONECTAR" em "CONECTAR" (is_alive é a fonte autoritativa).
+                sb = getattr(self, "_sb", None)
+                connected = (bool(sb.is_alive()) if sb is not None
+                             else "DESCONECTAR" in self.conn_btn.text())
+                self.conn_btn.setText(
+                    "" if w < 600
+                    else ("  DESCONECTAR  " if connected else "  CONECTAR  ")
+                )
+            if hasattr(self, "topbar_layout") and self.topbar_layout is not None:
+                margin = 10 if w < 600 else 20
+                spacing = 8 if w < 600 else 18
+                self.topbar_layout.setContentsMargins(margin, 0, margin, 0)
+                self.topbar_layout.setSpacing(spacing)
+                from PySide6.QtWidgets import QBoxLayout
+                if w < 600:
+                    self.topbar_layout.setDirection(QBoxLayout.Direction.TopToBottom)
+                    self.topbar.setMinimumHeight(120)
+                else:
+                    self.topbar_layout.setDirection(QBoxLayout.Direction.LeftToRight)
+                    self.topbar.setMinimumHeight(C.TOPBAR_HEIGHT)
+        except Exception:
+            pass
 
     def _unlock_theme(self) -> None:
         self._theme_toggling = False

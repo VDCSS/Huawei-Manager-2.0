@@ -152,3 +152,32 @@ class TestBootRegression:
         finally:
             window.close()
             qapp.processEvents()
+
+    def test_resize_preserves_connected_button_text(self):
+        """Responsividade do topbar não pode trocar DESCONECTAR por CONECTAR."""
+        import huawei_manager._config as cfg
+
+        if cfg._secrets is None or cfg.audit is None:
+            cfg._INITIALIZED = False
+            cfg.init()
+
+        from huawei_manager._app import get_app
+        qapp = get_app()
+
+        from huawei_manager.app import HuaweiRouterApp
+        window = HuaweiRouterApp()
+        try:
+            window.conn_btn.setText("  DESCONECTAR  ")
+            with patch.object(window._sb, "is_alive", return_value=True):
+                window.resize(900, 700)
+                qapp.processEvents()
+                assert window.conn_btn.text() == "  DESCONECTAR  "
+
+            window.conn_btn.setText("  CONECTAR  ")
+            with patch.object(window._sb, "is_alive", return_value=False):
+                window.resize(900, 720)
+                qapp.processEvents()
+                assert window.conn_btn.text() == "  CONECTAR  "
+        finally:
+            window.close()
+            qapp.processEvents()

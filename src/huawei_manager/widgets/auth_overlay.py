@@ -65,7 +65,8 @@ class AuthOverlay(QWidget):
         h_layout.addStretch()
 
         self._card = QFrame(self)
-        self._card.setFixedWidth(360)
+        self._card.setMinimumWidth(280)
+        self._card.setMaximumWidth(360)
         self._card.setStyleSheet(
             f"QFrame {{ background: {_C.BG_CARD}; border: 1px solid {_C.BORDER_STRONG};"
             f" border-radius: 14px; }}")
