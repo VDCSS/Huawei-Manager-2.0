@@ -109,7 +109,8 @@ class CommandPalette(QFrame):
         # Card central
         self._card = QFrame(self)
         self._card.setObjectName("CommandPaletteCard")
-        self._card.setFixedWidth(580)
+        self._card.setMinimumWidth(320)
+        self._card.setMaximumWidth(560)
         card_layout = QVBoxLayout(self._card)
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)

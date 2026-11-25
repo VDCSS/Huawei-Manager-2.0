@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 import huawei_manager.constants as _C
-from huawei_manager.widgets.icons import icon, icon_pixmap
+from huawei_manager.widgets.icons import icon
 
 _ENTRY_STYLE = f"""QLineEdit {{
     background: {_C.BG_INPUT};
@@ -65,7 +65,8 @@ class AuthOverlay(QWidget):
         h_layout.addStretch()
 
         self._card = QFrame(self)
-        self._card.setFixedWidth(360)
+        self._card.setMinimumWidth(280)
+        self._card.setMaximumWidth(360)
         self._card.setStyleSheet(
             f"QFrame {{ background: {_C.BG_CARD}; border: 1px solid {_C.BORDER_STRONG};"
             f" border-radius: 14px; }}")
