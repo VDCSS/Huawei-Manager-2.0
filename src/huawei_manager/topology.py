@@ -35,8 +35,8 @@ from huawei_manager.topology_items import (
     ITEM_DATA_KEY,
     _build_tooltip_text,
     _color_for,
-    _status_color,
     _to_qfont,
+    node_color,
 )
 from huawei_manager.topology_nodes import _DeviceNodeRect
 
@@ -95,6 +95,7 @@ class TopologyCanvas(QWidget):
         self._delete_cb = on_delete
         self._devices: list[Device] = []
         self._selected: Device | None = None
+        self._connected_id: str | None = None
         self._access_level: str = "user"
         self._device_map: dict[str, Device] = {}
 
@@ -147,6 +148,13 @@ class TopologyCanvas(QWidget):
             log.warning("set_device_status: device %s não encontrado no canvas", device_id)
             return
         node.status = status
+        self._draw()
+
+    def set_connected_device(self, device_id: str | None) -> None:
+        """Marca o device conectado (azul neon) e redesenha o canvas."""
+        if self._connected_id == device_id:
+            return
+        self._connected_id = device_id
         self._draw()
 
     # ── Drawing ─────────────────────────────────────────────────────
@@ -224,7 +232,7 @@ class TopologyCanvas(QWidget):
         admin = role_meets(self._access_level, "tecnico")
 
         type_color_str = _color_for(device)
-        st_color_str = _status_color(device, type_color_str)
+        st_color_str = node_color(device, self._connected_id)
         st_color_q = QColor(st_color_str)
 
         border_w = 3 if is_selected else 2
@@ -251,6 +259,17 @@ class TopologyCanvas(QWidget):
             sel.setBrush(Qt.BrushStyle.NoBrush)
             sel.setData(ITEM_DATA_KEY, device.id)
             self._scene.addItem(sel)
+
+        # ── Halo do device conectado (azul neon) ────────────────────
+        if device.id == self._connected_id:
+            halo = QGraphicsRectItem(
+                x - nw / 2 - 6, y - nh / 2 - 6, nw + 12, nh + 12,
+            )
+            halo.setPen(QPen(QColor(C.NEON_CYAN), 4))
+            halo.setBrush(Qt.BrushStyle.NoBrush)
+            halo.setOpacity(0.18)
+            halo.setData(ITEM_DATA_KEY, device.id)
+            self._scene.addItem(halo)
 
         # ── Rect principal com sombra ───────────────────────────────
         rect = _DeviceNodeRect(

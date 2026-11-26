@@ -19,7 +19,8 @@ def _to_qfont(tk_font: tuple[str, int, *tuple[str, ...]]) -> QFont:
     family = tk_font[0] if len(tk_font) > 0 else "Consolas"
     size   = tk_font[1] if len(tk_font) > 1 else 11
     bold   = len(tk_font) > 2 and tk_font[2] == "bold"
-    qf = QFont(family, size)
+    scaled = max(1, round(C.scaled_font_size(size)))
+    qf = QFont(family, scaled)
     qf.setBold(bold)
     return qf
 
@@ -65,6 +66,17 @@ def _color_for(device: Device) -> str:
 def _status_color(device: Device, type_color: str) -> str:
     return {
         "online":  type_color,
+        "offline": C.NEON_RED,
+        "unknown": C.NEON_AMBER,
+    }.get(device.status, C.NEON_AMBER)
+
+
+def node_color(device: Device, connected_id: str | None) -> str:
+    """Cor do nó: conectado > up > down. O tipo só rotula, não pinta."""
+    if connected_id is not None and connected_id == device.id:
+        return C.NEON_CYAN
+    return {
+        "online":  C.NEON_GREEN,
         "offline": C.NEON_RED,
         "unknown": C.NEON_AMBER,
     }.get(device.status, C.NEON_AMBER)

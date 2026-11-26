@@ -103,12 +103,11 @@ class TestDisconnectColor:
 
         src = (Path(__file__).resolve().parents[1] / "src"
                / "huawei_manager" / "app.py").read_text(encoding="utf-8")
-        assert "status_dot.setStyleSheet" in src
         lines = src.splitlines()
         start = next(i for i, ln in enumerate(lines)
-                     if "status_dot.setStyleSheet" in ln)
-        dot_block = "\n".join(lines[start:start + 3])
-        assert "NEON_RED" in dot_block
+                     if "self._conn_state" in ln)
+        dot_block = "\n".join(lines[start:start + 8])
+        assert '"color": C.NEON_RED' in dot_block
         assert "NEON_PURP" not in dot_block
 
     def test_dashboard_conn_status_uses_red(self):

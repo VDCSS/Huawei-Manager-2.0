@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from PySide6.QtCore import QSettings, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QStackedWidget,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -85,6 +86,7 @@ from huawei_manager.widgets.confirm_drawer import ConfirmDrawer
 from huawei_manager.widgets.icons import icon as svg_icon
 from huawei_manager.widgets.icons import icon_pixmap
 from huawei_manager.widgets.neon_button import ActionButton, NeonButton, action_button, neon_button
+from huawei_manager.widgets.zoom_control import ZoomControl
 
 log = logging.getLogger("huawei_manager")
 
@@ -172,6 +174,12 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         ) -> None: ...
         def _rebuild_manutencao_if_active(self: AppCoreProtocol) -> None: ...
         def _setup_bindings(self: AppCoreProtocol) -> None: ...
+
+        def _zoom_step_plus(self: AppCoreProtocol) -> None: ...
+
+        def _zoom_step_minus(self: AppCoreProtocol) -> None: ...
+
+        def _zoom_reset(self: AppCoreProtocol) -> None: ...
         def _on_enter(self: AppCoreProtocol) -> None: ...
         def _on_ctrl_shift_enter(self: AppCoreProtocol) -> None: ...
         def _on_ctrl_d(self: AppCoreProtocol) -> None: ...
@@ -226,7 +234,14 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             saved_theme = "dark"
         self._theme: str = str(saved_theme)
         set_theme(self._theme)
-        apply_theme(self._theme)
+        raw_zoom = settings.value("ui_zoom", 100)
+        try:
+            initial_zoom = int(str(raw_zoom))
+        except (TypeError, ValueError):
+            initial_zoom = 100
+        initial_zoom = max(50, min(150, initial_zoom))
+        C.set_ui_zoom(initial_zoom / 100)
+        apply_theme(self._theme, zoom=initial_zoom / 100)
 
         # Globais de _config lidos em tempo de uso (não fixados no import):
         # um `from _config import _secrets` capturaria None se app.py fosse
@@ -362,6 +377,22 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
     def _init_common_attrs(self) -> None:
         """Garante que todos os atributos dos mixins existem antes do uso."""
         self._logo_pixmap: QPixmap | None = None
+        # Estado centralizado da conexão: os widgets reais vivem na aba
+        # Topologia; estes placeholders atendem chamadas antes do build.
+        self._conn_state: dict[str, object] = {
+            "text": "Desconectado",
+            "color": C.NEON_RED,
+            "btn": "  CONECTAR  ",
+            "disabled": False,
+        }
+        self.status_dot = QLabel(self)
+        self.status_dot.setFixedSize(6, 6)
+        self.status_dot.hide()
+        self.status_lbl = QLabel("Desconectado", self)
+        self.status_lbl.hide()
+        self.conn_btn = QPushButton("  CONECTAR  ", self)
+        self.conn_btn.hide()
+        self.zoom_control: ZoomControl | None = None
         self.theme_btn: ActionButton | None = None
         self._page_container: QStackedWidget | None = None
         self._auth_overlay: QWidget | None = None
@@ -466,6 +497,8 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             delete_device=self._delete_device,
             on_device_selected=self._on_device_selected,
             clear_device_target=self._clear_device_target,
+            # lambda mantém a resolução dinâmica (patch/teste e rebuild)
+            toggle_connect=lambda: self._toggle_connect(),
         )
 
         self._build_sidebar()
@@ -476,6 +509,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._page_builders: dict[str, Callable[[], None]] = {
             td.key: (lambda key=td.key: self._build_tab(key)) for td in self._tabs
         }
+        self._update_profile_labels()
 
     # ── Header ───────────────────────────────────────────────────────
     def _build_header(self, parent: QWidget) -> None:
@@ -592,89 +626,34 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         sb_layout.addWidget(kbd)
         right_layout.addWidget(search_box)
 
-        # Estado da conexão — dot 6 px + label 12.5 px
-        conn = QWidget(right)
-        conn.setStyleSheet("background: transparent;")
-        conn_layout = QHBoxLayout(conn)
-        conn_layout.setContentsMargins(0, 0, 0, 0)
-        conn_layout.setSpacing(6)
-
-        self.status_dot = QLabel(conn)
-        self.status_dot.setFixedSize(6, 6)
-        self.status_dot.setStyleSheet(
-            f"color: {C.NEON_RED}; background: {C.NEON_RED};"
-            f" border-radius: 3px;")
-        conn_layout.addWidget(self.status_dot)
-
-        self.status_lbl = QLabel("Desconectado", conn)
-        self.status_lbl.setStyleSheet(
-            f"color: {C.FG_DIM}; background: transparent;"
-            f" font: 12.5px '{C.FONT_UI_FAMILY}';")
-        conn_layout.addWidget(self.status_lbl)
-        right_layout.addWidget(conn)
-
-        self.conn_btn = action_button(
-            right, "  CONECTAR  ", self._toggle_connect, C.NEON_CYAN,
-            variant="outline")
-        self.conn_btn.setIcon(svg_icon("i-power", C.NEON_CYAN, 16))
-        self.conn_btn.setIconSize(QSize(16, 16))
-        right_layout.addWidget(self.conn_btn)
-
+        # Conexão vive na aba Topologia (Ciclo 2); topbar fica só com
+        # busca, zoom, tema e perfil.
         self.theme_btn = action_button(
             right, "", self._toggle_theme, C.NEON_PURP, variant="ghost")
         self.theme_btn.setIconSize(QSize(16, 16))
         self._update_theme_btn_label()
         right_layout.addWidget(self.theme_btn)
 
-        avatar = QLabel("HM", right)
+        # Zoom global: slot de 34 px sempre reservado evita salto no topbar.
+        self.zoom_control = ZoomControl(settings=_preferences())
+        self.zoom_control.slot.setObjectName("zoomSlot")
+        self.zoom_control.zoomChanged.connect(self._on_zoom_changed)
+        right_layout.addWidget(self.zoom_control.slot)
+        C.set_ui_zoom(self.zoom_control.zoom() / 100)
+
+        avatar = QToolButton(right)
         avatar.setObjectName("avatar")
+        avatar.setText("HM")
         avatar.setFixedSize(32, 32)
-        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setToolTip("Perfil / login")
+        avatar.setCursor(Qt.CursorShape.PointingHandCursor)
+        avatar.clicked.connect(self._show_auth_dialog)
         avatar.setStyleSheet(
             f"#avatar {{ background: {C.rgba(C.NEON_CYAN, 0.09)}; color: {C.NEON_CYAN};"
-            f" font: 700 12px '{C.FONT_MONO_FAMILY}';"
+            f" font: bold 12px '{C.FONT_MONO_FAMILY}';"
             f" border: 1px solid {C.rgba(C.NEON_CYAN, 0.34)}; border-radius: 16px; }}")
         right_layout.addWidget(avatar)
 
-        # ── Controles de janela (icon-btn 34 px + SVG) ────────────────
-        win_controls = QWidget(right)
-        win_controls.setObjectName("windowControls")
-        win_controls.setStyleSheet("background: transparent;")
-        win_layout = QHBoxLayout(win_controls)
-        win_layout.setContentsMargins(0, 0, 0, 0)
-        win_layout.setSpacing(4)
-
-        self.btn_min = QPushButton(win_controls)
-        self.btn_min.setObjectName("winMinimizeBtn")
-        self.btn_min.setFixedSize(34, 34)
-        self.btn_min.setIcon(svg_icon("i-minus", C.FG_DIM, 18))
-        self.btn_min.setIconSize(QSize(18, 18))
-        self.btn_min.setToolTip("Minimizar janela")
-        self.btn_min.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_min.clicked.connect(self.showMinimized)
-        win_layout.addWidget(self.btn_min)
-
-        self.btn_max = QPushButton(win_controls)
-        self.btn_max.setObjectName("winMaximizeBtn")
-        self.btn_max.setFixedSize(34, 34)
-        self.btn_max.setIcon(svg_icon("i-square", C.FG_DIM, 18))
-        self.btn_max.setIconSize(QSize(18, 18))
-        self.btn_max.setToolTip("Maximizar / Restaurar janela")
-        self.btn_max.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_max.clicked.connect(self._toggle_maximize)
-        win_layout.addWidget(self.btn_max)
-
-        self.btn_close = QPushButton(win_controls)
-        self.btn_close.setObjectName("winCloseBtn")
-        self.btn_close.setFixedSize(34, 34)
-        self.btn_close.setIcon(svg_icon("i-x", C.FG_DIM, 18))
-        self.btn_close.setIconSize(QSize(18, 18))
-        self.btn_close.setToolTip("Fechar aplicativo")
-        self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_close.clicked.connect(self.close)
-        win_layout.addWidget(self.btn_close)
-
-        right_layout.addWidget(win_controls)
         hdr_layout.addWidget(right)
 
         # ── Garantir que hdr seja adicionado ao layout do parent ──
@@ -834,6 +813,9 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
 
         user_card = QWidget(foot)
         user_card.setObjectName("userCard")
+        user_card.setCursor(Qt.CursorShape.PointingHandCursor)
+        user_card.setToolTip("Perfil / login")
+        user_card.installEventFilter(self)
         user_card.setStyleSheet(
             f"#userCard {{ background: transparent;"
             f" border-top: 1px solid {C.BORDER_SOFT}; }}")
@@ -855,17 +837,30 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         user_copy_layout = QVBoxLayout(user_copy)
         user_copy_layout.setContentsMargins(0, 0, 0, 0)
         user_copy_layout.setSpacing(0)
-        user_name = QLabel("Sessão local", user_copy)
+        user_name = QLabel("Operador", user_copy)
+        user_name.setObjectName("profileName")
         user_name.setStyleSheet(
             f"color: {C.FG_CODE}; background: transparent;"
-            f" font: 600 12.5px '{C.FONT_UI_FAMILY}';")
+            f" font: bold 12.5px '{C.FONT_UI_FAMILY}';")
         user_copy_layout.addWidget(user_name)
-        user_role = QLabel("perfil RBAC", user_copy)
+        user_role = QLabel("user · Sessão ativa", user_copy)
+        user_role.setObjectName("profileRole")
         user_role.setStyleSheet(
             f"color: {C.FG_FAINT}; background: transparent;"
             f" font: 10.5px '{C.FONT_UI_FAMILY}';")
         user_copy_layout.addWidget(user_role)
         user_layout.addWidget(user_copy, stretch=1)
+
+        switch_btn = QToolButton(user_card)
+        switch_btn.setObjectName("profileSwitchBtn")
+        switch_btn.setText("Trocar perfil")
+        switch_btn.setToolTip("Trocar perfil / login")
+        switch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        switch_btn.clicked.connect(self._show_auth_dialog)
+        switch_btn.setStyleSheet(
+            f"color: {C.NEON_CYAN}; background: transparent; border: none;"
+            f" font: 10px '{C.FONT_UI_FAMILY}';")
+        user_layout.addWidget(switch_btn)
 
         online_dot = QLabel(user_card)
         online_dot.setFixedSize(5, 5)
@@ -957,6 +952,43 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self.pages[key] = page
             if self._page_container is not None:
                 self._page_container.addWidget(page)
+        if key == "topology":
+            self._wire_connection_widgets()
+
+    def _wire_connection_widgets(self) -> None:
+        """Faz status_dot/lbl/conn_btn apontarem para a faixa da Topologia."""
+        topo = self._topology_tab()
+        if topo is None:
+            return
+        state = topo.state
+        if state.conn_dot is not None:
+            self.status_dot = state.conn_dot
+        if state.conn_lbl is not None:
+            self.status_lbl = state.conn_lbl
+        if state.conn_btn is not None:
+            self.conn_btn = state.conn_btn
+        self._apply_conn_state()
+
+    def _apply_conn_state(self) -> None:
+        state = self._conn_state
+        color = str(state["color"])
+        self.status_dot.setStyleSheet(
+            f"color: {color}; background: {color}; border-radius: 3px;")
+        self.status_lbl.setText(str(state["text"]))
+        self.conn_btn.setText(str(state["btn"]))
+        self.conn_btn.setEnabled(not bool(state["disabled"]))
+
+        # Cor dos nós: azul neon para o device conectado (PR #4).
+        canvas = None
+        if getattr(self, "_tabs", None):
+            canvas = self._topo_canvas_widget()
+        if canvas is not None:
+            connected_id = None
+            if "DESCONECTAR" in str(state["btn"]).upper():
+                device = self._get_selected_device()
+                if device is not None:
+                    connected_id = device.id
+            canvas.set_connected_device(connected_id)
 
     def _toggle_mock_mode(self) -> bool:
         """Alterna o modo probe global (Real/Mock) — injetado no TabContext."""
@@ -1262,7 +1294,34 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
                     return
         self._rearm_adaptive_timer()
 
+    # ── Perfil / login ────────────────────────────────────────────────
+    def _update_profile_labels(self) -> None:
+        """Sincroniza topbar/sidebar com o papel RBAC atual."""
+        role = getattr(self, "_access_level", "user") or "user"
+        name = self.findChild(QLabel, "profileName")
+        role_lbl = self.findChild(QLabel, "profileRole")
+        if name is not None:
+            name.setText("Operador")
+        if role_lbl is not None:
+            role_lbl.setText(f"{role} · Sessão ativa")
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """O card inteiro da sidebar abre o login de perfil."""
+        if (
+            isinstance(watched, QWidget)
+            and watched.objectName() == "userCard"
+            and event.type() == QEvent.Type.MouseButtonPress
+        ):
+            self._show_auth_dialog()
+            return True
+        return super().eventFilter(watched, event)
+
     # ── Tema ──────────────────────────────────────────────────────────
+    def _on_zoom_changed(self, value: int) -> None:
+        factor = max(50, min(150, value)) / 100
+        C.set_ui_zoom(factor)
+        apply_theme(self._theme, zoom=factor)
+
     def _toggle_theme(self) -> None:
         if self._theme_toggling:
             return
@@ -1288,7 +1347,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             pass
 
         set_theme(self._theme)
-        apply_theme(self._theme)
+        apply_theme(self._theme, zoom=C.ui_zoom())
         # Feedback visual durante rebuild
         if status_lbl:
             status_lbl.setText("Reconstruindo tema…")

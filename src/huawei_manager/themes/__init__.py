@@ -8,6 +8,7 @@ alterar nenhuma mecânica das abas.
 """
 from __future__ import annotations
 
+import re
 from string import Template
 
 import huawei_manager.constants as C
@@ -704,34 +705,6 @@ QFrame[frameShape="4"], QFrame[frameShape="5"] {
     background: $border;
 }
 
-/* ═══════════════ CONTROLES DE JANELA (TITLEBAR) ═══════════════ */
-#winMinimizeBtn, #winMaximizeBtn {
-    background: transparent;
-    color: $dim;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    padding: 0;
-    min-height: 34px;
-}
-#winMinimizeBtn:hover, #winMaximizeBtn:hover {
-    background: $surface_hover;
-    color: $text;
-    border-color: $border_soft;
-}
-#winCloseBtn {
-    background: transparent;
-    color: $dim;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    padding: 0;
-    min-height: 34px;
-}
-#winCloseBtn:hover {
-    background: #c42b1c;
-    color: #ffffff;
-    border-color: #c42b1c;
-}
-
 /* ═══════════════ DRAWER LATERAL ═══════════════ */
 #drawerPanel {
     background-color: $bg;
@@ -748,4 +721,22 @@ QSS_DARK = _qss(_DARK_TOKENS)
 QSS_LIGHT = _qss(_LIGHT_TOKENS)
 QSS_HUAWEI = _qss(_HUAWEI_TOKENS)
 
-__all__ = ["QSS_DARK", "QSS_LIGHT", "QSS_HUAWEI"]
+_FONT_SIZE_RE = re.compile(r"(font-size:\s*)([0-9]+(?:\.[0-9]+)?)(px)")
+
+
+def scale_qss(qss: str, factor: float) -> str:
+    """Escala todos os ``font-size`` do QSS por ``factor``.
+
+    Usado pelo zoom global da aplicação. Valores são formatados com ``:g``
+    para evitar casas decimais desnecessárias (10px × 1.5 → 15px).
+    """
+    factor = max(0.5, min(1.5, factor))
+
+    def _replace(match: re.Match[str]) -> str:
+        scaled = float(match.group(2)) * factor
+        return f"{match.group(1)}{scaled:g}{match.group(3)}"
+
+    return _FONT_SIZE_RE.sub(_replace, qss)
+
+
+__all__ = ["QSS_DARK", "QSS_LIGHT", "QSS_HUAWEI", "scale_qss"]

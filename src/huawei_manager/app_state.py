@@ -70,19 +70,21 @@ class AppStateMixin:
             log.info("Acesso: timeout de sessao — resetado para user")
 
     def _set_status(self: AppCoreProtocol, text: str, color: str) -> None:
-        # Dot de 6 px: ``color`` mantém a leitura usada pelo toggle de tema;
-        # ``background`` pinta o círculo de verdade (o QLabel não tem texto).
-        self.status_dot.setStyleSheet(
-            f"color: {color}; background: {color}; border-radius: 3px;")
-        self.status_lbl.setText(text)
+        # Estado centralizado: os widgets reais pertencem à aba Topologia
+        # (os atributos do App são redirecionados quando ela é construída).
+        state = getattr(self, "_conn_state", None)
+        if isinstance(state, dict):
+            state["text"] = text
+            state["color"] = color
+        self._dispatch(self._apply_conn_state)
 
     def _set_conn_btn(self: AppCoreProtocol, text: str = "  CONECTAR  ",
                       disabled: bool = False) -> None:
-        btn = self.conn_btn
-        self._dispatch(lambda: (
-            btn.setText(text),
-            btn.setEnabled(not disabled),
-        ))
+        state = getattr(self, "_conn_state", None)
+        if isinstance(state, dict):
+            state["btn"] = text
+            state["disabled"] = disabled
+        self._dispatch(self._apply_conn_state)
 
     def _on_watcher_update(self: AppCoreProtocol,
                            results: Sequence[AgentResult]) -> None:

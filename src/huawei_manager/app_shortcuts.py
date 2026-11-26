@@ -29,6 +29,10 @@ class ShortcutsMixin:
             self._on_ctrl_shift_tab)
         QShortcut(QKeySequence("Escape"), parent).activated.connect(self._on_escape)
         QShortcut(QKeySequence("Ctrl+K"), parent).activated.connect(self._toggle_command_palette)
+        QShortcut(QKeySequence("Ctrl+="), parent).activated.connect(self._zoom_step_plus)
+        QShortcut(QKeySequence("Ctrl++"), parent).activated.connect(self._zoom_step_plus)
+        QShortcut(QKeySequence("Ctrl+-"), parent).activated.connect(self._zoom_step_minus)
+        QShortcut(QKeySequence("Ctrl+Shift+0"), parent).activated.connect(self._zoom_reset)
         for i, key in enumerate(self._PAGE_KEYS, 1):
             seq = "Ctrl+0" if i == 10 else f"Ctrl+{i}"
             QShortcut(QKeySequence(seq), parent).activated.connect(
@@ -71,6 +75,21 @@ class ShortcutsMixin:
         if isinstance(overlay, QWidget) and overlay.isVisible():
             return
         self._toggle_connect()
+
+    def _zoom_step_plus(self) -> None:
+        zc = getattr(self, "zoom_control", None)
+        if zc is not None:
+            zc.step(10)
+
+    def _zoom_step_minus(self) -> None:
+        zc = getattr(self, "zoom_control", None)
+        if zc is not None:
+            zc.step(-10)
+
+    def _zoom_reset(self) -> None:
+        zc = getattr(self, "zoom_control", None)
+        if zc is not None:
+            zc.reset()
 
     def _on_ctrl_l(self: AppCoreProtocol) -> None:
         overlay = getattr(self, "_auth_overlay", None)

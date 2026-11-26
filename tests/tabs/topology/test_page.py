@@ -9,7 +9,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from huawei_manager.tabs._contract import TabContext
 from huawei_manager.tabs.topology import TopologyTab
@@ -60,6 +60,7 @@ def _fake_ctx(**overrides) -> TabContext:
         delete_device=MagicMock(),
         on_device_selected=MagicMock(),
         clear_device_target=MagicMock(),
+        toggle_connect=MagicMock(),
     )
     fields.update(overrides)
     return TabContext(**fields)
@@ -74,21 +75,24 @@ class TestBuild:
         assert tab.state.device_status_lbl is not None
         assert tab.state.device_status_lbl.text() == "Inventário: 0 devices"
         assert tab.state.device_info_lbl is not None
-        assert tab.state.admin_btn is not None
+        assert tab.state.conn_dot is not None
+        assert tab.state.conn_lbl is not None
+        assert tab.state.conn_btn is not None
+        assert tab.state.conn_btn.text() == "  CONECTAR  "
 
-    def test_admin_btn_label_for_admin(self):
+    def test_connection_button_has_no_access_label(self):
         tab = TopologyTab()
-        page = tab.build(_fake_ctx())  # role default "admin"; page mantém
-        assert tab.state.admin_btn is not None       # a árvore Qt viva
-        assert "Sair (Admin)" in tab.state.admin_btn.text()
-        assert page is not None
+        page = tab.build(_fake_ctx(role=lambda: "admin"))
+        assert not hasattr(tab.state, "admin_btn")
+        assert not any("Sair" in b.text() for b in page.findChildren(QPushButton))
 
-    def test_admin_btn_label_for_user(self):
+    def test_connection_button_toggles_through_context(self):
+        ctx = _fake_ctx()
         tab = TopologyTab()
-        page = tab.build(_fake_ctx(role=lambda: "user"))
-        assert tab.state.admin_btn is not None
-        assert "Acesso" in tab.state.admin_btn.text()
+        page = tab.build(ctx)
         assert page is not None
+        tab.state.conn_btn.click()
+        ctx.toggle_connect.assert_called_once_with()
 
     def test_build_spawns_initial_refresh(self):
         ctx = _fake_ctx()
@@ -111,5 +115,7 @@ class TestDispose:
         assert tab.state.topo_canvas is None
         assert tab.state.device_info_lbl is None
         assert tab.state.device_status_lbl is None
-        assert tab.state.admin_btn is None
+        assert tab.state.conn_dot is None
+        assert tab.state.conn_lbl is None
+        assert tab.state.conn_btn is None
         assert tab._ctx is None

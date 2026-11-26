@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 import huawei_manager.constants as C
 from huawei_manager.sdn_controller.authz import role_meets
@@ -60,20 +60,6 @@ class TopologyTab:
         _ui.page_layout(p).addSpacing(10)
 
         access = ctx.role()
-        admin_label = "Acesso"
-        if role_meets(access, "tecnico"):
-            admin_label = ("Sair (Admin)" if access == "admin"
-                           else "Sair (Técnico)")
-        admin_btn = action_button(ctrl, admin_label,
-                                  ctx.show_auth_dialog, C.NEON_PURP,
-                                  variant="ghost")
-        admin_btn.setIcon(icon(
-            "i-user" if role_meets(access, "tecnico") else "i-lock",
-            C.NEON_PURP, 16))
-        admin_btn.setIconSize(QSize(16, 16))
-        state.admin_btn = admin_btn
-        ctrl_layout.addWidget(admin_btn)
-        ctrl_layout.addSpacing(8)
 
         if role_meets(access, "tecnico"):
             cad_btn = action_button(ctrl, "Cadastrar Dispositivo",
@@ -135,6 +121,42 @@ class TopologyTab:
         _ui.page_layout(p).addWidget(status_lbl)
         _ui.page_layout(p).addSpacing(4)
 
+        # Faixa única de conexão — vive somente nesta aba (Ciclo 2).
+        conn_bar = QFrame(p)
+        conn_bar.setObjectName("topoConnBar")
+        conn_bar.setFixedHeight(44)
+        conn_layout = QHBoxLayout(conn_bar)
+        conn_layout.setContentsMargins(12, 0, 12, 0)
+        conn_layout.setSpacing(8)
+        conn_layout.addStretch()
+
+        conn_dot = QLabel(conn_bar)
+        conn_dot.setObjectName("topologyConnDot")
+        conn_dot.setFixedSize(6, 6)
+        state.conn_dot = conn_dot
+        conn_layout.addWidget(conn_dot)
+
+        conn_lbl = QLabel("Desconectado", conn_bar)
+        conn_lbl.setObjectName("topologyConnLbl")
+        conn_lbl.setStyleSheet(_ui.css_label(C.FG_DIM, "", 12.5))
+        conn_lbl.setMinimumWidth(220)
+        state.conn_lbl = conn_lbl
+        conn_layout.addWidget(conn_lbl)
+        conn_layout.addSpacing(8)
+
+        toggle = ctx.toggle_connect
+        conn_btn = action_button(
+            conn_bar, "  CONECTAR  ",
+            (lambda: toggle()) if toggle else (lambda: None),
+            C.NEON_CYAN, variant="outline")
+        conn_btn.setObjectName("topologyConnBtn")
+        conn_btn.setIcon(icon("i-power", C.NEON_CYAN, 16))
+        conn_btn.setIconSize(QSize(16, 16))
+        state.conn_btn = conn_btn
+        conn_layout.addWidget(conn_btn)
+
+        _ui.page_layout(p).addWidget(conn_bar)
+
         ctx.spawn_io(ctx.refresh_devices)
         return p
 
@@ -143,5 +165,7 @@ class TopologyTab:
         self.state.topo_canvas = None
         self.state.device_info_lbl = None
         self.state.device_status_lbl = None
-        self.state.admin_btn = None
+        self.state.conn_dot = None
+        self.state.conn_lbl = None
+        self.state.conn_btn = None
         self._ctx = None

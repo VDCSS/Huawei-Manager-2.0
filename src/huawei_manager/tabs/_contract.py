@@ -89,6 +89,7 @@ class TabContext:
     on_device_selected: Callable[[Device], None]   # seleção no canvas (App._on_device_selected)
     delete_device: Callable[[Device], None]        # remoção via canvas (App._delete_device)
     clear_device_target: Callable[[], None]        # limpa alvo SSH (App._clear_device_target)
+    toggle_connect: Callable[[], None] | None = None  # conectar/desconectar (App._toggle_connect)
 
 
 @runtime_checkable

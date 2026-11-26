@@ -224,7 +224,8 @@ class TestTopologyBarResize:
         from huawei_manager.tabs.topology import TopologyTab
 
         tab = TopologyTab()
-        # role=tecnico p/ label "Sair (Tecnico)" + botão Cadastrar
+        # role=tecnico habilita "Cadastrar Dispositivo"; o antigo botão
+        # "Acesso / Sair (Tecnico)" foi movido para o perfil do topbar.
         page = tab.build(replace(_fake_ctx(), role=lambda: "tecnico"))
         builder._page_container.addWidget(page)
         return tab, page
@@ -235,12 +236,12 @@ class TestTopologyBarResize:
         builder._page_container.resize(800, 600)
         _show_page(builder)
 
-        labels = ("Técnico", "Cadastrar Dispositivo", "Atualizar", "Voltar")
+        labels = ("Cadastrar Dispositivo", "Atualizar", "Voltar")
         buttons = [
             b for b in page.findChildren(ActionButton)
             if any(lbl in b.text() for lbl in labels)
         ]
-        assert len(buttons) == 4
+        assert len(buttons) == 3
         for btn in buttons:
             assert btn.isVisible()
             assert btn.geometry().right() <= page.width() + 1

@@ -99,6 +99,9 @@ class AuthMixin:
         self._rebuild_page(current)
         if current != "topology":
             self._rebuild_page("topology")
+        updater = getattr(self, "_update_profile_labels", None)
+        if callable(updater):
+            updater()
 
     def _require_access(self: AppCoreProtocol, level: str = "admin") -> bool:
         """Verifica se o nivel de acesso atual atende ao requisito.

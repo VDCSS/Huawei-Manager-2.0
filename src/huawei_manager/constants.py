@@ -243,6 +243,25 @@ def set_theme(name: str) -> None:
     THEME.clear()
     THEME.update(pal)
 
+
+# ── Zoom global ─────────────────────────────────────────────────────
+# Fator aplicado também à tipografia desenhada no canvas (QGraphicsScene
+# não é alcançada pelo QSS). 1.0 = 100%.
+_ui_zoom: float = 1.0
+
+
+def set_ui_zoom(factor: float) -> None:
+    global _ui_zoom
+    _ui_zoom = max(0.5, min(1.5, factor))
+
+
+def ui_zoom() -> float:
+    return _ui_zoom
+
+
+def scaled_font_size(size: float) -> float:
+    return size * _ui_zoom
+
 # ─── COMANDOS CLI — filtros da aba Roteamento ───────────────────────
 CLI_FILTERS: dict[str, str] = {
     "interfaces":          "display interface",
