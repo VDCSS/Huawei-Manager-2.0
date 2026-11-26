@@ -108,14 +108,14 @@ class ZoomControl(QWidget):
 
         self.popup = QFrame(None, Qt.WindowType.Popup)
         self.popup.setObjectName("zoomPopup")
-        self.popup.setFixedSize(232, 68)
+        self.popup.setFixedSize(236, 68)
         self.popup.setStyleSheet(
             f"#zoomPopup {{ background: {C.BG_SURFACE_2};"
             f" border: 1px solid {C.BORDER_NRM}; border-radius: 10px; }}"
         )
         row = QHBoxLayout(self.popup)
         # 9 px laterais: o frame de 1 px do popup consome 2 px da largura;
-        # 9 + 62 + 6 + 32 + 6 + 32 + 6 + 68 + 9 = 230 px úteis em 232.
+        # 9 + 62 + 6 + 32 + 6 + 32 + 6 + 72 + 9 = 234 px úteis em 236.
         row.setContentsMargins(9, 9, 9, 9)
         row.setSpacing(6)
         row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
@@ -144,7 +144,7 @@ class ZoomControl(QWidget):
         row.addWidget(self.plus_btn)
 
         self.reset_btn = self._make_circle(
-            "Redefinir", "zoomResetBtn", 68, 18, 10, height=36
+            "Redefinir", "zoomResetBtn", 72, 18, 10, height=36
         )
         self.reset_btn.clicked.connect(self.reset)
         row.addWidget(self.reset_btn)

@@ -129,7 +129,7 @@ def test_all_modal_buttons_are_round(qtbot, tmp_path):
     plus, minus = zc.plus_btn, zc.minus_btn
     assert plus.width() == plus.height() == 32
     assert minus.width() == minus.height() == 32
-    assert zc.reset_btn.width() == 68
+    assert zc.reset_btn.width() == 72
     assert zc.reset_btn.height() == 36
 
 
@@ -149,11 +149,11 @@ def test_no_child_overlap_in_popup(qtbot, tmp_path):
     QApplication.processEvents()
 
     seq = [zc.spin, zc.minus_btn, zc.plus_btn, zc.reset_btn]
-    assert zc.popup.width() == 232
+    assert zc.popup.width() == 236
     assert zc.spin.width() == 62
     assert zc.minus_btn.width() == 32
     assert zc.plus_btn.width() == 32
-    assert zc.reset_btn.width() == 68
+    assert zc.reset_btn.width() == 72
     for first, second in zip(seq, seq[1:]):
         assert not first.geometry().intersects(second.geometry())
         gap = second.geometry().left() - first.geometry().right()
