@@ -17,7 +17,7 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QGuiApplication, QIcon, QMouseEvent
+from PySide6.QtGui import QFont, QGuiApplication, QIcon, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -37,7 +37,7 @@ DEFAULT_ZOOM = 100
 
 _CIRCLE_CSS = (
     "{sel} {{ background: {bg}; color: {fg};"
-    " border: 2px solid {border}; border-radius: {radius}px;"
+    " border: 2px solid {border}; border-radius: {radius}px; padding: 0;"
     " font: bold {font}px \"{family}\"; }}"
 )
 _HOVER_CSS = (
@@ -108,16 +108,16 @@ class ZoomControl(QWidget):
 
         self.popup = QFrame(None, Qt.WindowType.Popup)
         self.popup.setObjectName("zoomPopup")
-        self.popup.setFixedSize(256, 98)
+        self.popup.setFixedSize(232, 68)
         self.popup.setStyleSheet(
             f"#zoomPopup {{ background: {C.BG_SURFACE_2};"
             f" border: 1px solid {C.BORDER_NRM}; border-radius: 10px; }}"
         )
         row = QHBoxLayout(self.popup)
-        # 11 px laterais: o frame de 1 px do popup consome 2 px da largura;
-        # 11 + 72 + 8 + 40 + 8 + 40 + 8 + 56 + 11 = 254 px úteis.
-        row.setContentsMargins(11, 12, 11, 12)
-        row.setSpacing(8)
+        # 9 px laterais: o frame de 1 px do popup consome 2 px da largura;
+        # 9 + 62 + 6 + 32 + 6 + 32 + 6 + 68 + 9 = 230 px úteis em 232.
+        row.setContentsMargins(9, 9, 9, 9)
+        row.setSpacing(6)
         row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         self.spin = QSpinBox(self.popup)
@@ -125,7 +125,7 @@ class ZoomControl(QWidget):
         self.spin.setRange(MIN_ZOOM, MAX_ZOOM)
         self.spin.setSuffix("%")
         self.spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        self.spin.setFixedWidth(72)
+        self.spin.setFixedWidth(62)
         self.spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.spin.setStyleSheet(
             f"#zoomSpin {{ background: {C.BG_INPUT}; color: {C.FG_MAIN};"
@@ -135,15 +135,17 @@ class ZoomControl(QWidget):
         self.spin.valueChanged.connect(self.set_zoom)
         row.addWidget(self.spin)
 
-        self.plus_btn = self._make_circle("+", "zoomPlusBtn", 40, 20)
-        self.plus_btn.clicked.connect(lambda: self.step(10))
-        row.addWidget(self.plus_btn)
-
-        self.minus_btn = self._make_circle("−", "zoomMinusBtn", 40, 20)
+        self.minus_btn = self._make_circle("−", "zoomMinusBtn", 32, 16)
         self.minus_btn.clicked.connect(lambda: self.step(-10))
         row.addWidget(self.minus_btn)
 
-        self.reset_btn = self._make_circle("Redefinir", "zoomResetBtn", 56, 28, 9)
+        self.plus_btn = self._make_circle("+", "zoomPlusBtn", 32, 16)
+        self.plus_btn.clicked.connect(lambda: self.step(10))
+        row.addWidget(self.plus_btn)
+
+        self.reset_btn = self._make_circle(
+            "Redefinir", "zoomResetBtn", 68, 18, 10, height=36
+        )
         self.reset_btn.clicked.connect(self.reset)
         row.addWidget(self.reset_btn)
 
@@ -230,10 +232,13 @@ class ZoomControl(QWidget):
         size: int,
         radius: int,
         font: int = 16,
+        *,
+        height: int | None = None,
     ) -> QPushButton:
         btn = QPushButton(text, self.popup)
         btn.setObjectName(object_name)
-        btn.setFixedSize(size, size)
+        btn.setFixedSize(size, size if height is None else height)
+        btn.setFont(QFont(C.FONT_UI_FAMILY, font))
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         css = _CIRCLE_CSS.format(
             sel=f"#{object_name}",

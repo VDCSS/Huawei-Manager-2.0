@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 from PySide6.QtCore import QEvent, QPointF, QSettings, Qt
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QFontMetrics, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -127,9 +127,10 @@ def test_all_modal_buttons_are_round(qtbot, tmp_path):
         assert re.search(r"border-radius:\s*\d+px", btn.styleSheet())
 
     plus, minus = zc.plus_btn, zc.minus_btn
-    assert plus.width() == plus.height() == 40
-    assert minus.width() == minus.height() == 40
-    assert zc.reset_btn.width() == zc.reset_btn.height() == 56
+    assert plus.width() == plus.height() == 32
+    assert minus.width() == minus.height() == 32
+    assert zc.reset_btn.width() == 68
+    assert zc.reset_btn.height() == 36
 
 
 def test_popup_buttons_order_plus_minus_reset(qtbot, tmp_path):
@@ -138,7 +139,7 @@ def test_popup_buttons_order_plus_minus_reset(qtbot, tmp_path):
         zc.popup.layout().itemAt(i).widget()
         for i in range(zc.popup.layout().count())
     ]
-    assert widgets == [zc.spin, zc.plus_btn, zc.minus_btn, zc.reset_btn]
+    assert widgets == [zc.spin, zc.minus_btn, zc.plus_btn, zc.reset_btn]
 
 
 def test_no_child_overlap_in_popup(qtbot, tmp_path):
@@ -147,16 +148,16 @@ def test_no_child_overlap_in_popup(qtbot, tmp_path):
     qtbot.waitExposed(zc.popup)
     QApplication.processEvents()
 
-    seq = [zc.spin, zc.plus_btn, zc.minus_btn, zc.reset_btn]
-    assert zc.popup.width() == 256
-    assert zc.spin.width() == 72
-    assert zc.plus_btn.width() == 40
-    assert zc.minus_btn.width() == 40
-    assert zc.reset_btn.width() == 56
+    seq = [zc.spin, zc.minus_btn, zc.plus_btn, zc.reset_btn]
+    assert zc.popup.width() == 232
+    assert zc.spin.width() == 62
+    assert zc.minus_btn.width() == 32
+    assert zc.plus_btn.width() == 32
+    assert zc.reset_btn.width() == 68
     for first, second in zip(seq, seq[1:]):
         assert not first.geometry().intersects(second.geometry())
         gap = second.geometry().left() - first.geometry().right()
-        assert gap >= 8
+        assert gap >= 6
     zc.popup.hide()
 
 
@@ -165,14 +166,14 @@ def test_plus_and_minus_have_2px_border_and_radius_half(qtbot, tmp_path):
     for btn in (zc.plus_btn, zc.minus_btn):
         css = btn.styleSheet()
         assert re.search(r"border:\s*2px solid", css)
-        assert re.search(r"border-radius:\s*20px", css)
+        assert re.search(r"border-radius:\s*16px", css)
 
 
 def test_hover_rule_keeps_circular_radius_and_thickens_border(qtbot, tmp_path):
     zc, _ = _make_control(qtbot, tmp_path)
     css = zc.plus_btn.styleSheet() + zc.minus_btn.styleSheet()
     assert re.search(r":hover\s*\{[^}]*border:\s*2px solid", css)
-    assert re.search(r":hover\s*\{[^}]*border-radius:\s*20px", css)
+    assert re.search(r":hover\s*\{[^}]*border-radius:\s*16px", css)
 
 
 def test_hover_does_not_change_geometry(qtbot, tmp_path):
@@ -189,6 +190,12 @@ def test_hover_does_not_change_geometry(qtbot, tmp_path):
     after = [w.geometry() for w in (zc.plus_btn, zc.minus_btn, zc.reset_btn)]
     assert after == before
     zc.popup.hide()
+
+
+def test_reset_button_text_fits(qtbot, tmp_path):
+    zc, _ = _make_control(qtbot, tmp_path)
+    metrics = QFontMetrics(zc.reset_btn.font())
+    assert metrics.horizontalAdvance("Redefinir") + 8 <= zc.reset_btn.width()
 
 
 def test_popup_anchored_and_inside_screen(qtbot, tmp_path):
