@@ -4,6 +4,7 @@
 VENV      = .venv
 PY        = $(VENV)/bin/python3
 PIP       = $(PY) -m pip
+export QT_QPA_PLATFORM := offscreen
 HUAWEI    = $(VENV)/bin/huawei-manager
 INSTALLER = ./setup/install.sh
 
@@ -79,7 +80,7 @@ typecheck:
 coverage:
 	$(PY) -m pytest --cov=src/huawei_manager --cov-report=term-missing --cov-fail-under=60
 
-ci: lint test typecheck
+ci: lint coverage typecheck
 
 # ── Limpeza ─────────────────────────────────────────────────────────
 # clean remove APENAS caches e artefatos de cobertura.
