@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 import huawei_manager.constants as C
 from huawei_manager import _config
-from huawei_manager._app import apply_theme
+from huawei_manager._app import apply_theme, scale_all_inline_styles
 from huawei_manager._config import PROJECT_ROOT, _s
 from huawei_manager.agents.watcher import Watcher
 from huawei_manager.app_notify import NotifyMixin
@@ -368,6 +368,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
         self._session_timer.start(30000)  # check every 30s
 
         self._build_layout()
+        scale_all_inline_styles(C.ui_zoom())
         # Command Palette (Ctrl+K) - lazy init
         self._command_palette = None
         self._setup_bindings()
@@ -952,6 +953,7 @@ class AppCore(NotifyMixin, QMainWindow, ThreadingMixin):
             self.pages[key] = page
             if self._page_container is not None:
                 self._page_container.addWidget(page)
+            scale_all_inline_styles(C.ui_zoom())
         if key == "topology":
             self._wire_connection_widgets()
 

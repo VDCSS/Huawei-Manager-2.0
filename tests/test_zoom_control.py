@@ -255,6 +255,15 @@ def test_qss_font_sizes_scale():
     assert scale_qss("QWidget { font-size: 10px; }", 0.5).count("font-size: 5px") == 1
 
 
+def test_qss_font_shorthand_scales():
+    from huawei_manager.themes import scale_qss
+
+    css = "QLabel { font: 700 12px 'Family'; } #x { font: bold 10.5px 'F'; }"
+    scaled = scale_qss(css, 1.25)
+    assert "font: 700 15px" in scaled
+    assert "font: bold 13.125px" in scaled
+
+
 class TestZoomAppIntegration:
     @staticmethod
     def _boot():
@@ -308,3 +317,29 @@ class TestZoomAppIntegration:
             finally:
                 window.close()
                 qapp.processEvents()
+
+    def test_inline_fonts_scale_with_zoom(self, tmp_path):
+        """Inline stylesheet tem precedência sobre o QSS global."""
+        from unittest.mock import patch
+
+        from PySide6.QtWidgets import QLabel
+
+        from huawei_manager import _app as appmod
+        from huawei_manager.app import HuaweiRouterApp
+
+        qapp = self._boot()
+        appmod.apply_theme("dark", zoom=1.0)
+        settings = QSettings(str(tmp_path / "prefs.ini"), QSettings.Format.IniFormat)
+        with patch("huawei_manager.app._preferences", return_value=settings):
+            window = HuaweiRouterApp()
+        label = QLabel("zoom")
+        try:
+            label.setStyleSheet("font: 12px 'Family';")
+            window.zoom_control.set_zoom(125)
+            assert "font: 15px" in label.styleSheet()
+            window.zoom_control.set_zoom(100)
+            assert "font: 12px" in label.styleSheet()
+        finally:
+            label.deleteLater()
+            window.close()
+            qapp.processEvents()

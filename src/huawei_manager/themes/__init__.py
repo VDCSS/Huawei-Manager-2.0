@@ -721,22 +721,36 @@ QSS_DARK = _qss(_DARK_TOKENS)
 QSS_LIGHT = _qss(_LIGHT_TOKENS)
 QSS_HUAWEI = _qss(_HUAWEI_TOKENS)
 
-_FONT_SIZE_RE = re.compile(r"(font-size:\s*)([0-9]+(?:\.[0-9]+)?)(px)")
+# Cobre ``font-size: 12px`` e o shorthand ``font: 700 12px 'Família'``.
+# O prefixo aceita weight/style antes do tamanho; ``font-family`` não casas
+# porque não é seguido de um número com unidade px.
+_FONT_RE = re.compile(
+    r"(?P<prefix>(?:font-size|font):\s*(?:(?:\d{1,3}|bold|normal|italic|oblique)\s+)*)"
+    r"(?P<size>[0-9]+(?:\.[0-9]+)?)(?P<unit>px)"
+)
+
+
+def scale_css(css: str, factor: float, *, clamp: bool = True) -> str:
+    """Escala tamanhos de fonte em CSS/QSS por ``factor``.
+
+    ``clamp=False`` é usado para reescalar stylesheets inline já aplicadas,
+    onde o fator é uma razão incremental (novo/antigo) e não uma escala
+    absoluta. Valores são formatados com ``:g`` para evitar casas decimais
+    desnecessárias (10px × 1.5 → 15px).
+    """
+    if clamp:
+        factor = max(0.5, min(1.5, factor))
+
+    def _replace(match: re.Match[str]) -> str:
+        scaled = float(match.group("size")) * factor
+        return f"{match.group('prefix')}{scaled:g}{match.group('unit')}"
+
+    return _FONT_RE.sub(_replace, css)
 
 
 def scale_qss(qss: str, factor: float) -> str:
-    """Escala todos os ``font-size`` do QSS por ``factor``.
-
-    Usado pelo zoom global da aplicação. Valores são formatados com ``:g``
-    para evitar casas decimais desnecessárias (10px × 1.5 → 15px).
-    """
-    factor = max(0.5, min(1.5, factor))
-
-    def _replace(match: re.Match[str]) -> str:
-        scaled = float(match.group(2)) * factor
-        return f"{match.group(1)}{scaled:g}{match.group(3)}"
-
-    return _FONT_SIZE_RE.sub(_replace, qss)
+    """Escala todos os tamanhos de fonte do QSS por ``factor`` (50%–150%)."""
+    return scale_css(qss, factor)
 
 
-__all__ = ["QSS_DARK", "QSS_LIGHT", "QSS_HUAWEI", "scale_qss"]
+__all__ = ["QSS_DARK", "QSS_LIGHT", "QSS_HUAWEI", "scale_css", "scale_qss"]
